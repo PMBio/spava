@@ -1,5 +1,6 @@
 a = '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5'
 
+import pickle
 import h5py
 import os
 from torch.utils.data import Dataset
@@ -9,10 +10,59 @@ import skimage
 import skimage.io
 import numpy as np
 import torch
+import math
 
 print(os.path.isfile(a))
 with h5py.File(a, 'r') as f:
     print(f['BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_100_239_X12Y3_177_a0_full.tiff'].keys())
+
+
+def filter_expression_tensor(ome_filename, t, split):
+    f = os.path.join('data/spatial_uzh_processed/a', f'ok_cells_{split}.npy')
+    d = pickle.load(open(f, 'rb'))
+    list_of_cells = d['list_of_cells']
+    list_of_ome_filenames = d['list_of_ome_filenames']
+    list_of_ome_indices = d['list_of_ome_indices']
+    list_of_cell_ids = d['list_of_cell_ids']
+    cell_is_ok = d['cell_is_ok']
+    begin = list_of_ome_filenames.index(ome_filename)
+    end = len(list_of_ome_filenames) - list_of_ome_filenames[::-1].index(ome_filename)
+    # print(list_of_ome_filenames[begin])
+    # print(list_of_ome_filenames[end - 1])
+    # print(list_of_ome_filenames[end])
+    # print(list_of_ome_filenames[end + 1])
+    oks = cell_is_ok[begin: end]
+    # labels = list_of_cell_ids[begin: end]
+    # print(oks.shape)
+    # print(t.shape)
+    ok = t[oks, :]
+    return ok
+
+
+def get_filtered_labels_mapping(ome_filename, split):
+    f = os.path.join('data/spatial_uzh_processed/a', f'ok_cells_{split}.npy')
+    d = pickle.load(open(f, 'rb'))
+    list_of_cells = d['list_of_cells']
+    list_of_ome_filenames = d['list_of_ome_filenames']
+    list_of_ome_indices = d['list_of_ome_indices']
+    list_of_cell_ids = d['list_of_cell_ids']
+    cell_is_ok = d['cell_is_ok']
+    begin = list_of_ome_filenames.index(ome_filename)
+    end = len(list_of_ome_filenames) - list_of_ome_filenames[::-1].index(ome_filename)
+    # print(list_of_ome_filenames[begin])
+    # print(list_of_ome_filenames[end - 1])
+    # print(list_of_ome_filenames[end])
+    # print(list_of_ome_filenames[end + 1])
+    oks = cell_is_ok[begin: end]
+    # labels = list_of_cell_ids[begin: end]
+    # print(oks.shape)
+    # print(t.shape)
+    l0 = list(range(end - begin))
+    l1 = list_of_cell_ids
+    print(f'l0 = {l0}, l1 = {l1}')
+    d = dict(zip(l0, l1))
+    # ok = t[oks, :]
+    return d
 
 
 class OmeDataset(Dataset):
@@ -74,9 +124,10 @@ class MasksDataset(torch.utils.data.Dataset):
         return masks
 
 
-class RawMeanDataset(Dataset):
-    def __init__(self, split):
+class RawDataset(Dataset):
+    def __init__(self, split, filter_by_area=False):
         self.split = split
+        self.filter_by_area = filter_by_area
         assert split in ['train', 'validation', 'test']
         if split == 'train':
             self.filenames = train
@@ -90,42 +141,102 @@ class RawMeanDataset(Dataset):
     def __len__(self):
         return len(self.filenames)
 
-    def __getitem__(self, i):
+    def get_item(self, i, feature):
         with h5py.File(
                 '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5',
                 'r') as f5:
-            x = f5[self.filenames[i] + f'/mean'][...]
+            x = f5[self.filenames[i] + f'/{feature}'][...]
             x = x.astype(np.float32)
             x = torch.from_numpy(x)
             return x
         # return self.scale(x, i)
 
 
-class GraphDataset(Dataset):
+class RawCountDataset(RawDataset):
+    def __init__(self, split, filter_by_area=False):
+        super().__init__(split, filter_by_area)
+
+    def __getitem__(self, item):
+        t = self.get_item(item, 'count')
+        ome_filename = self.filenames[item]
+        filtered_t = filter_expression_tensor(ome_filename, t, self.split)
+        return filtered_t
+
+
+class AreaDataset(RawDataset):
+    def __init__(self, split):
+        super().__init__(split)
+        self.masks_dataset = MasksDataset(split)
+
+    def __getitem__(self, item):
+        assert self.filter_by_area is False
+        masks = self.masks_dataset[item]
+        label, count = np.unique(masks.ravel(), return_counts=True)
+        return count
+
+
+class RawMeanDataset(RawDataset):
+    def __init__(self, split, filter_by_area=False):
+        super().__init__(split, filter_by_area)
+
+    def __getitem__(self, item):
+        t = self.get_item(item, 'mean')
+        ome_filename = self.filenames[item]
+        filtered_t = filter_expression_tensor(ome_filename, t, self.split)
+        return filtered_t
+
+
+class TransformedMeanDataset(Dataset):
     def __init__(self, split):
         self.split = split
-        assert split in ['train', 'validation', 'test']
-        if split == 'train':
-            self.filenames = train
-        elif split == 'validation':
-            self.filenames = validation
-        elif split == 'test':
-            self.filenames = test
+        self.raw_mean_dataset = RawMeanDataset(split, filter_by_area=True)
+        f = os.path.join('data/spatial_uzh_processed/a', f'scaler_{split}.pickle')
+        self.d = pickle.load(open(f, 'rb'))
+        self.filenames = self.raw_mean_dataset.filenames
 
     def __len__(self):
-        return len(self.filenames)
+        return len(self.raw_mean_dataset)
 
-    def __getitem__(self, i):
-        with h5py.File('/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/region_centers.hdf5', 'r') as f5:
-            # regions_centers = f5[self.filenames[i] + f'/region_center'][...]
-            f = f'graphs/{self.filenames[i]}'
-            data = torch.load(f)
-            edge_index = data.edge_index
-            return edge_index
+    def __getitem__(self, item):
+        o = self.filenames[item]
+        q0 = self.d[o]['q0']
+        q1 = self.d[o]['q1']
+        t = self.raw_mean_dataset[item]
+        t0 = t / q0
+        cofactor = q1 / math.sinh(1)
+        z = np.arcsinh(t0 / cofactor)
+        return z
+
+
+# class GraphDataset(Dataset):
+#     def __init__(self, split):
+#         self.split = split
+#         assert split in ['train', 'validation', 'test']
+#         if split == 'train':
+#             self.filenames = train
+#         elif split == 'validation':
+#             self.filenames = validation
+#         elif split == 'test':
+#             self.filenames = test
+#
+#     def __len__(self):
+#         return len(self.filenames)
+#
+#     def __getitem__(self, i):
+#         with h5py.File('/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/region_centers.hdf5', 'r') as f5:
+#             # regions_centers = f5[self.filenames[i] + f'/region_center'][...]
+#             f = f'graphs/{self.filenames[i]}'
+#             data = torch.load(f)
+#             edge_index = data.edge_index
+#             return edge_index
 
 
 if __name__ == '__main__':
-    for f in [OmeDataset, MasksDataset, MeanDataset, GraphDataset]:
-        for a in ['train', 'validation', 'test']:
-            ds = f(a)
-            print(ds[12].shape)
+    ds = TransformedMeanDataset('train')
+    print(ds[2].shape)
+    # ds = RawMeanDataset('train')
+    # print(ds[2].shape)
+    # for f in [OmeDataset, MasksDataset, RawMeanDataset, GraphDataset, AreaDataset]:
+    #     for a in ['train', 'validation', 'test']:
+    #         ds = f(a)
+    #         print(ds[12].shape)
