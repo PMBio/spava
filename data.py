@@ -12,19 +12,45 @@ import numpy as np
 import torch
 import math
 
+import pathlib
+
+current_file_path = pathlib.Path(__file__).parent.absolute()
+
+channel_names = ['H3tot', 'H3met', 'CK5', 'Fibronectin', 'CK19', 'CK8/18', 'TWIST1', 'CD68', 'CK14', 'SMA',
+                 'Vimentin', 'Myc', 'HER2', 'CD3', 'H3phospho', 'ERK1/2', 'SLUG', 'ER', 'PR', 'p53', 'CD44',
+                 'EpCAM', 'CD45', 'GATA3', 'CD20', 'betaCatenin', 'CAIX', 'Ecadherin', 'Ki67', 'EGFR', 'S6',
+                 'Sox9', 'vWf_CD31', 'mTOR', 'CK7', 'panCK', 'cPARP_cCasp3', 'DNA1', 'DNA2']
+
+
+def file_path(f):
+    return os.path.join(current_file_path, 'data/spatial_uzh_processed/a', f)
+
+
 print(os.path.isfile(a))
 with h5py.File(a, 'r') as f:
     print(f['BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_100_239_X12Y3_177_a0_full.tiff'].keys())
 
+f = file_path(f'ok_cells_train.npy')
+filter_expression_tensor_d_train = pickle.load(open(f, 'rb'))
+f = file_path(f'ok_cells_validation.npy')
+filter_expression_tensor_d_validation = pickle.load(open(f, 'rb'))
+f = file_path(f'ok_cells_test.npy')
+filter_expression_tensor_d_test = pickle.load(open(f, 'rb'))
+
 
 def filter_expression_tensor(ome_filename, t, split):
-    f = os.path.join('data/spatial_uzh_processed/a', f'ok_cells_{split}.npy')
-    d = pickle.load(open(f, 'rb'))
-    list_of_cells = d['list_of_cells']
-    list_of_ome_filenames = d['list_of_ome_filenames']
-    list_of_ome_indices = d['list_of_ome_indices']
-    list_of_cell_ids = d['list_of_cell_ids']
-    cell_is_ok = d['cell_is_ok']
+    assert split in ['train', 'validation', 'test']
+    if split == 'train':
+        filter_expression_tensor_d = filter_expression_tensor_d_train
+    if split == 'validation':
+        filter_expression_tensor_d = filter_expression_tensor_d_validation
+    if split == 'test':
+        filter_expression_tensor_d = filter_expression_tensor_d_test
+    list_of_cells = filter_expression_tensor_d['list_of_cells']
+    list_of_ome_filenames = filter_expression_tensor_d['list_of_ome_filenames']
+    list_of_ome_indices = filter_expression_tensor_d['list_of_ome_indices']
+    list_of_cell_ids = filter_expression_tensor_d['list_of_cell_ids']
+    cell_is_ok = filter_expression_tensor_d['cell_is_ok']
     begin = list_of_ome_filenames.index(ome_filename)
     end = len(list_of_ome_filenames) - list_of_ome_filenames[::-1].index(ome_filename)
     # print(list_of_ome_filenames[begin])
@@ -40,7 +66,7 @@ def filter_expression_tensor(ome_filename, t, split):
 
 
 def get_filtered_labels_mapping(ome_filename, split):
-    f = os.path.join('data/spatial_uzh_processed/a', f'ok_cells_{split}.npy')
+    f = file_path(f'ok_cells_{split}.npy')
     d = pickle.load(open(f, 'rb'))
     list_of_cells = d['list_of_cells']
     list_of_ome_filenames = d['list_of_ome_filenames']
@@ -182,7 +208,10 @@ class RawMeanDataset(RawDataset):
     def __getitem__(self, item):
         t = self.get_item(item, 'mean')
         ome_filename = self.filenames[item]
+        import time
+        # start = time.time()
         filtered_t = filter_expression_tensor(ome_filename, t, self.split)
+        # print(f'filtering: {time.time() - start}')
         return filtered_t
 
 
@@ -190,7 +219,7 @@ class TransformedMeanDataset(Dataset):
     def __init__(self, split):
         self.split = split
         self.raw_mean_dataset = RawMeanDataset(split, filter_by_area=True)
-        f = os.path.join('data/spatial_uzh_processed/a', f'scaler_{split}.pickle')
+        f = file_path(f'scaler_{split}.pickle')
         self.d = pickle.load(open(f, 'rb'))
         self.filenames = self.raw_mean_dataset.filenames
 
@@ -205,7 +234,49 @@ class TransformedMeanDataset(Dataset):
         t0 = t / q0
         cofactor = q1 / math.sinh(1)
         z = np.arcsinh(t0 / cofactor)
-        return z
+        return torch.tensor(z, dtype=torch.float)
+
+
+class RawMean12(RawDataset):
+    def __init__(self, split):
+        super().__init__(split)
+        self.raw_mean_ds = RawMeanDataset(split, filter_by_area=True)
+
+    def __getitem__(self, item):
+        t = self.raw_mean_ds[item]
+        return torch.asinh(t)
+
+
+class NatureBOriginal(RawDataset):
+    def __init__(self, split):
+        super().__init__(split)
+        self.ds = RawMeanDataset(split, filter_by_area=True)
+        self.list_of_z = []
+        self.list_of_patient_index = []
+        from tqdm import tqdm
+        for i, x in enumerate(tqdm(self.ds)):
+            q0 = np.quantile(x.numpy(), q=0.99, axis=0)
+            x0 = x / q0
+            x0 = torch.tensor(x0, dtype=torch.float)
+            ii = torch.tensor([i] * len(x))
+            self.list_of_patient_index.append(ii)
+            self.list_of_z.append(x0)
+        self.t_train_raw2 = torch.cat(self.list_of_z, dim=0)
+        self.patient_indexes = torch.cat(self.list_of_patient_index)
+
+    def __getitem__(self, item):
+        t = self.list_of_z[item]
+        return t
+
+
+class NatureBImproved(RawDataset):
+    def __init__(self, split):
+        super().__init__(split)
+        self.nature_b_ds = NatureBOriginal(split)
+
+    def __getitem__(self, item):
+        t = self.nature_b_ds[item]
+        return torch.asinh(t)
 
 
 # class GraphDataset(Dataset):
