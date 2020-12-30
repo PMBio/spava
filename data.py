@@ -11,6 +11,7 @@ import skimage.io
 import numpy as np
 import torch
 import math
+import cv2
 
 import pathlib
 
@@ -119,6 +120,43 @@ class OmeDataset(Dataset):
                    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]
         ome = ome[:, :, to_keep]
         ome = ome.float()
+        return ome
+
+
+class OmeDatasetHotPixelsRemoved(Dataset):
+    # ome_normalization_method -1 for raw data
+    def __init__(self, split):
+        super().__init__()
+        self.split = split
+        assert split in ['train', 'validation', 'test']
+        if split == 'train':
+            self.filenames = train
+        elif split == 'validation':
+            self.filenames = validation
+        elif split == 'test':
+            self.filenames = test
+        self.channels_count = self.__getitem__(0).shape[2]
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, i):
+        filename = self.filenames[i]
+        f = os.path.join('data/OMEandSingleCellMasks/ome/', filename)
+        ome = skimage.io.imread(f)
+        ome = np.moveaxis(ome, 0, 2)
+        to_keep = [8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                   23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+                   36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]
+        ome = ome[:, :, to_keep]
+
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        kernel[1, 1] = 0
+        maxs = cv2.dilate(ome, kernel, iterations=1, borderType=cv2.BORDER_REFLECT101)
+        mask = ome - maxs >= 50
+        ome[mask] = maxs[mask]
+
+        ome = torch.from_numpy(ome).float()
         return ome
 
 
@@ -303,7 +341,8 @@ class NatureBImproved(RawDataset):
 
 
 if __name__ == '__main__':
-    ds = TransformedMeanDataset('train')
+    # ds = TransformedMeanDataset('train')
+    ds = OmeDatasetHotPixelsRemoved('train')
     print(ds[2].shape)
     # ds = RawMeanDataset('train')
     # print(ds[2].shape)

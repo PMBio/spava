@@ -303,6 +303,8 @@ def training(local_rank):
     model = model.to(idist.device())
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     optimizer = idist.auto_optim(optimizer)
+    if SCHEDULER:
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[35, 45], gamma=0.1)
 
     trainer = model.create_trainer(optimizer)
     ProgressBar().attach(trainer, output_transform=lambda x: {'batch loss': x[0]})
@@ -383,27 +385,38 @@ if __name__ == '__main__':
     # MODEL_ID = 'nature_b_improved'
     # MODEL_ID = 'nature_b_original'
     # MODEL_ID = 'transformed_mean_dataset'
-    for MODEL_ID in ['raw_mean12', 'transformed_mean_dataset']:
-        DETECT_ANOMALY = False
-        OVERLAY_TRAINING_AND_VALIDATION_IN_TENSORBOARD = True
-        LEARNING_RATE = 1e-4
-        MAX_EPOCHS = 50
-        VAE_BETA = 1e-6
-        # ----------------------------------------
-        model_name = 'vae'
-        if MODEL_ID == 'raw_mean_dataset':
-            dataset = RawMeanDataset
-        elif MODEL_ID == 'raw_mean12':
-            dataset = RawMean12
-        elif MODEL_ID == 'nature_b_improved':
-            dataset = NatureBImproved
-        elif MODEL_ID == 'nature_b_original':
-            dataset = NatureBOriginal
-        elif MODEL_ID == 'transformed_mean_dataset':
-            dataset = TransformedMeanDataset
+    for jj in range(2):
+        if jj == 0:
+            LEARNING_RATE = 1e-4
+            VAE_BETA = 1e-6
+            SCHEDULER = False
         else:
-            raise ValueError()
-        train_loader = get_data_loader(dataset('train'))
-        val_loader = get_data_loader(dataset('validation'))
+            LEARNING_RATE = 10 ** np.random.uniform(-6, -2)
+            VAE_BETA = 10 ** np.random.uniform(-9, -2)
+            SCHEDULER = np.random.random_integers(0, 1)
+        for MODEL_ID in ['raw_mean12', 'transformed_mean_dataset']:
+            DETECT_ANOMALY = False
+            OVERLAY_TRAINING_AND_VALIDATION_IN_TENSORBOARD = True
+            MAX_EPOCHS = 50
+            # ----------------------------------------
+            model_name = 'vae'
+            if MODEL_ID == 'raw_mean_dataset':
+                dataset = RawMeanDataset
+            elif MODEL_ID == 'raw_mean12':
+                dataset = RawMean12
+            elif MODEL_ID == 'nature_b_improved':
+                dataset = NatureBImproved
+            elif MODEL_ID == 'nature_b_original':
+                dataset = NatureBOriginal
+            elif MODEL_ID == 'transformed_mean_dataset':
+                dataset = TransformedMeanDataset
+            else:
+                raise ValueError()
+            import numpy as np
 
-        train_model()
+            MODEL_ID += '_LR_VB_S_'
+            MODEL_ID += '__'.join([str(x) for x in [LEARNING_RATE, VAE_BETA, SCHEDULER]])
+            train_loader = get_data_loader(dataset('train'))
+            val_loader = get_data_loader(dataset('validation'))
+
+            train_model()
