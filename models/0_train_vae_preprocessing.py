@@ -383,7 +383,8 @@ if __name__ == '__main__':
     # MODEL_ID = 'nature_b_improved'
     # MODEL_ID = 'nature_b_original'
     # MODEL_ID = 'transformed_mean_dataset'
-    for MODEL_ID in ['nature_b_improved']:
+    for MODEL_ID in ['transformed_mean_dataset']:
+    # for MODEL_ID in ['nature_b_improved']:
         DETECT_ANOMALY = False
         OVERLAY_TRAINING_AND_VALIDATION_IN_TENSORBOARD = True
         LEARNING_RATE = 1e-4
