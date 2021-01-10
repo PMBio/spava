@@ -45,7 +45,9 @@ from loaders import get_data_loader
 def get_model_output_data_file(f):
     root = file_path(f'{model_name}_{MODEL_ID}')
     os.makedirs(root, exist_ok=True)
-    return os.path.join(root, f)
+    a = os.path.join(root, f)
+    ff.append(a)
+    return a
 
 
 def get_detect_anomaly_cm():
@@ -299,12 +301,10 @@ class Vae(nn.Module):
 def training(local_rank):
     # local_rank is unsused for the moment
     print(f'local_rank = {local_rank}')
-    model = Vae(in_channels=39, hidden_layer_dimensions=5, out_channels=39)
+    model = Vae(in_channels=39, hidden_layer_dimensions=LATENT_DIMENSIONS, out_channels=39)
     model = model.to(idist.device())
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     optimizer = idist.auto_optim(optimizer)
-    if SCHEDULER:
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[35, 45], gamma=0.1)
 
     trainer = model.create_trainer(optimizer)
     ProgressBar().attach(trainer, output_transform=lambda x: {'batch loss': x[0]})
@@ -316,6 +316,7 @@ def training(local_rank):
     if idist.get_rank() == 0:
         log_dir_root = os.path.expanduser('~/runs/')
         log_dir = os.path.join(log_dir_root, f'{model_name}_{MODEL_ID}_{str(datetime.now())}/')
+        gg.append(log_dir)
         # this works only if the tensorboard process is dead
         # if os.path.isdir(log_dir_root):
         #     print('removing', log_dir_root)
@@ -359,15 +360,21 @@ def training(local_rank):
 
     trainer.run(train_loader, max_epochs=MAX_EPOCHS)
 
+    if SCHEDULER:
+        # this stuff does not work
+        scheduler = ignite.contrib.handlers.PiecewiseLinear(optimizer, 'lr', milestones_values=[
+            (2, LEARNING_RATE),
+            (4, LEARNING_RATE / 4),
+            (60, LEARNING_RATE / 16)])
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, scheduler)
+        print('added scheduler!')
+
     if idist.get_rank() == 0:
         tb_logger.close()
 
 
 def train_model():
     # when I will load the session the seed must be tested
-    manual_seed(0)
-    torch.manual_seed(0)
-    np.random.seed(0)
 
     backend = None  # or "nccl", "gloo", "xla-tpu" ...
 
@@ -378,6 +385,10 @@ def train_model():
 
 if __name__ == '__main__':
     # ---------- hyperparmeters and stuff ----------
+    manual_seed(0)
+    torch.manual_seed(0)
+    np.random.seed(0)
+
     from data import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
 
     # MODEL_ID = 'raw_mean_dataset'
@@ -385,16 +396,18 @@ if __name__ == '__main__':
     # MODEL_ID = 'nature_b_improved'
     # MODEL_ID = 'nature_b_original'
     # MODEL_ID = 'transformed_mean_dataset'
-    for jj in range(2):
-        if jj == 0:
-            LEARNING_RATE = 1e-4
-            VAE_BETA = 1e-6
-            SCHEDULER = False
-        else:
-            LEARNING_RATE = 10 ** np.random.uniform(-6, -2)
-            VAE_BETA = 10 ** np.random.uniform(-9, -2)
-            SCHEDULER = np.random.random_integers(0, 1)
-        for MODEL_ID in ['raw_mean12', 'transformed_mean_dataset']:
+    ff = []
+    gg = []
+    # for jj in range(1):
+    #     LEARNING_RATE = 1e-4
+    #     VAE_BETA = 1e-6
+    #     SCHEDULER = True
+    LEARNING_RATE = 0.0014685885989200848
+    VAE_BETA = 3.8608662714605464e-08
+    SCHEDULER = False
+    for LATENT_DIMENSIONS in [2, 3]:
+        for MODEL_ID in ['transformed_mean_dataset']:
+        # for MODEL_ID in ['raw_mean12', 'transformed_mean_dataset']:
             DETECT_ANOMALY = False
             OVERLAY_TRAINING_AND_VALIDATION_IN_TENSORBOARD = True
             MAX_EPOCHS = 50
@@ -414,9 +427,12 @@ if __name__ == '__main__':
                 raise ValueError()
             import numpy as np
 
-            MODEL_ID += '_LR_VB_S_'
-            MODEL_ID += '__'.join([str(x) for x in [LEARNING_RATE, VAE_BETA, SCHEDULER]])
+            MODEL_ID += '_LD_'
+            MODEL_ID += '__'.join([str(x) for x in [LATENT_DIMENSIONS]])
+            # MODEL_ID += '_LR_VB_S_'
+            # MODEL_ID += '__'.join([str(x) for x in [LEARNING_RATE, VAE_BETA, SCHEDULER]])
             train_loader = get_data_loader(dataset('train'))
             val_loader = get_data_loader(dataset('validation'))
-
             train_model()
+    print('\n'.join(sorted(ff)))
+    print('\n'.join(sorted(gg)))

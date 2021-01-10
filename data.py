@@ -271,8 +271,14 @@ class TransformedMeanDataset(Dataset):
         t = self.raw_mean_dataset[item]
         t0 = t / q0
         cofactor = q1 / math.sinh(1)
-        z = np.arcsinh(t0 / cofactor)
-        return torch.tensor(z, dtype=torch.float)
+        # not tested yet
+        z = torch.asinh(t0 / cofactor)
+        # z = np.arcsinh(t0 / cofactor)
+        assert type(z) == torch.Tensor
+        if z.dtype != torch.float:
+            z = z.float()
+        return z
+        # return torch.tensor(z, dtype=torch.float)
 
 
 class RawMean12(RawDataset):
