@@ -189,9 +189,8 @@ class MasksDataset(torch.utils.data.Dataset):
 
 
 class RawDataset(Dataset):
-    def __init__(self, split, filter_by_area=False):
+    def __init__(self, split):
         self.split = split
-        self.filter_by_area = filter_by_area
         assert split in ['train', 'validation', 'test']
         if split == 'train':
             self.filenames = train
@@ -217,8 +216,8 @@ class RawDataset(Dataset):
 
 
 class RawCountDataset(RawDataset):
-    def __init__(self, split, filter_by_area=False):
-        super().__init__(split, filter_by_area)
+    def __init__(self, split):
+        super().__init__(split)
 
     def __getitem__(self, item):
         t = self.get_item(item, 'count')
@@ -233,15 +232,14 @@ class AreaDataset(RawDataset):
         self.masks_dataset = MasksDataset(split)
 
     def __getitem__(self, item):
-        assert self.filter_by_area is False
         masks = self.masks_dataset[item]
         label, count = np.unique(masks.ravel(), return_counts=True)
         return count
 
 
 class RawMeanDataset(RawDataset):
-    def __init__(self, split, filter_by_area=False):
-        super().__init__(split, filter_by_area)
+    def __init__(self, split):
+        super().__init__(split)
 
     def __getitem__(self, item):
         t = self.get_item(item, 'mean')
@@ -256,7 +254,7 @@ class RawMeanDataset(RawDataset):
 class TransformedMeanDataset(Dataset):
     def __init__(self, split):
         self.split = split
-        self.raw_mean_dataset = RawMeanDataset(split, filter_by_area=True)
+        self.raw_mean_dataset = RawMeanDataset(split)
         f = file_path(f'scaler_{split}.pickle')
         self.d = pickle.load(open(f, 'rb'))
         self.filenames = self.raw_mean_dataset.filenames
@@ -284,7 +282,7 @@ class TransformedMeanDataset(Dataset):
 class RawMean12(RawDataset):
     def __init__(self, split):
         super().__init__(split)
-        self.raw_mean_ds = RawMeanDataset(split, filter_by_area=True)
+        self.raw_mean_ds = RawMeanDataset(split)
 
     def __getitem__(self, item):
         t = self.raw_mean_ds[item]
@@ -294,7 +292,7 @@ class RawMean12(RawDataset):
 class NatureBOriginal(RawDataset):
     def __init__(self, split):
         super().__init__(split)
-        self.ds = RawMeanDataset(split, filter_by_area=True)
+        self.ds = RawMeanDataset(split)
         self.list_of_z = []
         self.list_of_patient_index = []
         from tqdm import tqdm
