@@ -1,4 +1,3 @@
-a = '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5'
 
 import pickle
 import h5py
@@ -29,6 +28,7 @@ def file_path_old_data(f):
 def file_path(f):
     return os.path.join(current_file_path, 'data/spatial_uzh_processed/a', f)
 
+a = file_path_old_data('phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5')
 
 print(os.path.isfile(a))
 with h5py.File(a, 'r') as f:

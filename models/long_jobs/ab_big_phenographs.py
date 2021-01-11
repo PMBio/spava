@@ -1,21 +1,17 @@
-# cluster commands
-
-## env stuff
-# scp /data/l989o/deployed/spatial_uzh/install_env.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-# scp /data/l989o/deployed/spatial_uzh/requirements_cuda.yml l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-# scp /data/l989o/deployed/spatial_uzh/pip.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-
-## data transfer
-# /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features\
-# /b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf
-
 ## test
 # python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test
 
+## test bsub
+# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test"
+# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed --test"
+# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu --test"
 
-# run
-
+## bsub (time: ?m, ?m, 15m)
+# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw"
+# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed"
+# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu"
 # ----------------------------------------------------------------------------------------------------
+
 import os
 from tqdm import tqdm
 import numpy as np
@@ -32,7 +28,6 @@ parser.add_argument('--test', action='store_const', const=True)
 args = parser.parse_args()
 
 assert args.normalization_method in ['raw', 'transformed', 'vae_mu']
-args.normalization_method = 'vae_mu'
 
 merged = merge_cells(args.normalization_method)
 print(merged.shape)

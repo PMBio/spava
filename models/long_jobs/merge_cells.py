@@ -7,7 +7,6 @@ from data import RawMeanDataset, TransformedMeanDataset, file_path
 import pickle
 from splits import train, validation, test
 
-
 def merge_cells(which: str):
     assert which in ['raw', 'transformed', 'vae_mu']
     cells_list = []
@@ -30,8 +29,8 @@ def merge_cells(which: str):
         #     cells_list.append(x.numpy())
     else:
         assert which == 'vae_mu'
-        model_path = '/data/l989o/deployed/a/data/spatial_uzh_processed/a/vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e-08__False'
-        from data import file_path
+        model_path = file_path('vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e'
+                               '-08__False')
 
         def the_path(instance, f):
             root = file_path(instance)
@@ -45,7 +44,6 @@ def merge_cells(which: str):
             import ignite.distributed as idist
             from h5_logger import H5Logger
             import torch
-            from tqdm import tqdm
 
             ds_train = TransformedMeanDataset('train')
             ds_validation = TransformedMeanDataset('validation')
@@ -53,7 +51,10 @@ def merge_cells(which: str):
             n = 5
             model = Vae(in_channels=39, hidden_layer_dimensions=n, out_channels=39)
             model = model.to(idist.device())
-            model.load_state_dict(torch.load(the_path(model_path, 'model.torch')))
+            if not torch.cuda.is_available():
+                model.load_state_dict(torch.load(the_path(model_path, 'model.torch'), map_location=torch.device('cpu')))
+            else:
+                model.load_state_dict(torch.load(the_path(model_path, 'model.torch')))
 
             path = the_path(model_path, f'embedding_{split}.hdf5')
             if os.path.isfile(path):
