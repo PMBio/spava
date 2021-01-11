@@ -1,9 +1,16 @@
 # cluster commands
 
+## env stuff
+# scp /data/l989o/deployed/spatial_uzh/install_env.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+# scp /data/l989o/deployed/spatial_uzh/requirements_cuda.yml l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+# scp /data/l989o/deployed/spatial_uzh/pip.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+
+## data transfer
+# /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features\
+# /b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf
+
 ## test
 # python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test
-
-## dkfz cluster
 
 
 # run
@@ -63,3 +70,5 @@ pickle.dump({'communities': communities,
              'index_info_omes': index_info_omes,
              'index_info_begins': index_info_begins,
              'index_info_ends': index_info_ends}, open(f1, 'wb'))
+
+

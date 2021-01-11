@@ -5,7 +5,6 @@ import h5py
 import os
 from torch.utils.data import Dataset
 from splits import *
-import vigra
 import skimage
 import skimage.io
 import numpy as np
@@ -21,6 +20,10 @@ channel_names = ['H3tot', 'H3met', 'CK5', 'Fibronectin', 'CK19', 'CK8/18', 'TWIS
                  'Vimentin', 'Myc', 'HER2', 'CD3', 'H3phospho', 'ERK1/2', 'SLUG', 'ER', 'PR', 'p53', 'CD44',
                  'EpCAM', 'CD45', 'GATA3', 'CD20', 'betaCatenin', 'CAIX', 'Ecadherin', 'Ki67', 'EGFR', 'S6',
                  'Sox9', 'vWf_CD31', 'mTOR', 'CK7', 'panCK', 'cPARP_cCasp3', 'DNA1', 'DNA2']
+
+
+def file_path_old_data(f):
+    return os.path.join(current_file_path, 'data/spatial_uzh_processed', f)
 
 
 def file_path(f):
@@ -182,7 +185,7 @@ class MasksDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         ome_filename = self.filenames[i]
-        masks_file = '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/relabelled_masks.hdf5'
+        masks_file = file_path_old_data('relabelled_masks.hdf5')
         with h5py.File(masks_file, 'r') as f5:
             masks = f5[ome_filename + '/masks'][...]
         return masks
@@ -205,9 +208,8 @@ class RawDataset(Dataset):
         return len(self.filenames)
 
     def get_item(self, i, feature):
-        with h5py.File(
-                '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5',
-                'r') as f5:
+        f = file_path_old_data('phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5')
+        with h5py.File(f, 'r') as f5:
             x = f5[self.filenames[i] + f'/{feature}'][...]
             x = x.astype(np.float32)
             x = torch.from_numpy(x)
