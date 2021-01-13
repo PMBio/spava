@@ -1,11 +1,9 @@
-a = '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5'
 
 import pickle
 import h5py
 import os
 from torch.utils.data import Dataset
 from splits import *
-import vigra
 import skimage
 import skimage.io
 import numpy as np
@@ -23,9 +21,14 @@ channel_names = ['H3tot', 'H3met', 'CK5', 'Fibronectin', 'CK19', 'CK8/18', 'TWIS
                  'Sox9', 'vWf_CD31', 'mTOR', 'CK7', 'panCK', 'cPARP_cCasp3', 'DNA1', 'DNA2']
 
 
+def file_path_old_data(f):
+    return os.path.join(current_file_path, 'data/spatial_uzh_processed', f)
+
+
 def file_path(f):
     return os.path.join(current_file_path, 'data/spatial_uzh_processed/a', f)
 
+a = file_path_old_data('phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5')
 
 print(os.path.isfile(a))
 with h5py.File(a, 'r') as f:
@@ -182,16 +185,15 @@ class MasksDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         ome_filename = self.filenames[i]
-        masks_file = '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/relabelled_masks.hdf5'
+        masks_file = file_path_old_data('relabelled_masks.hdf5')
         with h5py.File(masks_file, 'r') as f5:
             masks = f5[ome_filename + '/masks'][...]
         return masks
 
 
 class RawDataset(Dataset):
-    def __init__(self, split, filter_by_area=False):
+    def __init__(self, split):
         self.split = split
-        self.filter_by_area = filter_by_area
         assert split in ['train', 'validation', 'test']
         if split == 'train':
             self.filenames = train
@@ -206,9 +208,8 @@ class RawDataset(Dataset):
         return len(self.filenames)
 
     def get_item(self, i, feature):
-        with h5py.File(
-                '/data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5',
-                'r') as f5:
+        f = file_path_old_data('phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5')
+        with h5py.File(f, 'r') as f5:
             x = f5[self.filenames[i] + f'/{feature}'][...]
             x = x.astype(np.float32)
             x = torch.from_numpy(x)
@@ -217,8 +218,8 @@ class RawDataset(Dataset):
 
 
 class RawCountDataset(RawDataset):
-    def __init__(self, split, filter_by_area=False):
-        super().__init__(split, filter_by_area)
+    def __init__(self, split):
+        super().__init__(split)
 
     def __getitem__(self, item):
         t = self.get_item(item, 'count')
@@ -233,15 +234,14 @@ class AreaDataset(RawDataset):
         self.masks_dataset = MasksDataset(split)
 
     def __getitem__(self, item):
-        assert self.filter_by_area is False
         masks = self.masks_dataset[item]
         label, count = np.unique(masks.ravel(), return_counts=True)
         return count
 
 
 class RawMeanDataset(RawDataset):
-    def __init__(self, split, filter_by_area=False):
-        super().__init__(split, filter_by_area)
+    def __init__(self, split):
+        super().__init__(split)
 
     def __getitem__(self, item):
         t = self.get_item(item, 'mean')
@@ -256,7 +256,7 @@ class RawMeanDataset(RawDataset):
 class TransformedMeanDataset(Dataset):
     def __init__(self, split):
         self.split = split
-        self.raw_mean_dataset = RawMeanDataset(split, filter_by_area=True)
+        self.raw_mean_dataset = RawMeanDataset(split)
         f = file_path(f'scaler_{split}.pickle')
         self.d = pickle.load(open(f, 'rb'))
         self.filenames = self.raw_mean_dataset.filenames
@@ -284,7 +284,7 @@ class TransformedMeanDataset(Dataset):
 class RawMean12(RawDataset):
     def __init__(self, split):
         super().__init__(split)
-        self.raw_mean_ds = RawMeanDataset(split, filter_by_area=True)
+        self.raw_mean_ds = RawMeanDataset(split)
 
     def __getitem__(self, item):
         t = self.raw_mean_ds[item]
@@ -294,7 +294,7 @@ class RawMean12(RawDataset):
 class NatureBOriginal(RawDataset):
     def __init__(self, split):
         super().__init__(split)
-        self.ds = RawMeanDataset(split, filter_by_area=True)
+        self.ds = RawMeanDataset(split)
         self.list_of_z = []
         self.list_of_patient_index = []
         from tqdm import tqdm
