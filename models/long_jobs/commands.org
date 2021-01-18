@@ -1,0 +1,59 @@
+#+STARTUP:showall
+
+* env stuff
+- scp /data/l989o/deployed/spatial_uzh/install_env.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+- scp /data/l989o/deployed/spatial_uzh/requirements_cuda.yml l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+- scp /data/l989o/deployed/spatial_uzh/pip.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
+
+* data transfer
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5 l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_train.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_train.npy
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_validation.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_validation.npy
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_test.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_test.npy
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_train.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_train.pickle
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_validation.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_validation.pickle
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_test.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_test.pickle
+- rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e-08__False l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e-08__False
+
+* test
+** big umaps
+- python -m models.long_jobs.aa_big_umaps --normalization-method raw --test
+** phenogram
+- python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test
+
+* test bsub
+** big umaps
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.a --normalization-method raw --test"
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.aa_big_umaps --normalization-method transformed --test"
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.aa_big_umaps --normalization-method vae_mu --test"
+** phenograph
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test"
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed --test"
+- bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu --test"
+
+* bsub
+** big umaps
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method raw"
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method transformed"
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method vae_mu"
+** phenograph
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw"
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed"
+- bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu"
+
+* getting results back
+** big umaps
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/umap_raw.adata l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/umap_transformed.adata l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/umap_vae_mu.adata l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+** phenograph
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_extra_raw.pickle l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_extra_transformed.pickle l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_extra_vae_mu.pickle l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_raw.hdf5 l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_transformed.hdf5 l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+- rsync -avh /icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/phenograph_vae_mu.hdf5 l989o@b260-pc01.inet.dkfz-heidelberg.de:/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/
+
+;; Local Variables:
+;; eval: (spacemacs/toggle-auto-fill-mode-off)
+;; End:

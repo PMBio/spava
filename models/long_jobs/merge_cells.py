@@ -114,6 +114,7 @@ def merge_cells(which: str):
     cell_count = 669652
     assert all_cells.shape == (cell_count, 39) or all_cells.shape == (cell_count, 5), all_cells.shape
 
+    # TODO:::::::::::::::::::::::::::::::::: to add also cells from validation set ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     index_info_omes = []
     index_info_begins = []
     index_info_ends = []
