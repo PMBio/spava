@@ -1,17 +1,3 @@
-## test
-# python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test
-
-## test bsub
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw --test"
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed --test"
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu --test"
-
-## bsub (time: ?m, ?m, 15m)
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method raw"
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method transformed"
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.ab_big_phenographs --normalization-method vae_mu"
-# ----------------------------------------------------------------------------------------------------
-
 import os
 from tqdm import tqdm
 import numpy as np

@@ -1,32 +1,3 @@
-## env stuff
-# scp /data/l989o/deployed/spatial_uzh/install_env.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-# scp /data/l989o/deployed/spatial_uzh/requirements_cuda.yml l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-# scp /data/l989o/deployed/spatial_uzh/pip.sh l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/
-
-## data transfer
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5 l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_train.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_train.npy
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_validation.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_validation.npy
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/ok_cells_test.npy l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/ok_cells_test.npy
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_train.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_train.pickle
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_validation.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_validation.pickle
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/scaler_test.pickle l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/scaler_test.pickle
-# rsync -avh /data/l989o/deployed/spatial_uzh/data/spatial_uzh_processed/a/vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e-08__False l989o@odcf-lsf01.dkfz.de:/icgc/dkfzlsdf/analysis/B260/projects/spatial_a/data/spatial_uzh_processed/a/vae_transformed_mean_dataset_LR_VB_S_0.0014685885989200848__3.8608662714605464e-08__False
-
-## test
-# python -m models.long_jobs.aa_big_umaps --normalization-method raw --test
-
-## test bsub
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.a --normalization-method raw --test"
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.aa_big_umaps --normalization-method transformed --test"
-# bsub -q short -n 4 -M 8000 -R "rusage[mem=8000]" "python -m models.long_jobs.aa_big_umaps --normalization-method vae_mu --test"
-
-## bsub
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method raw"
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method transformed"
-# bsub -q verylong -n 32 -M 25000 -R "rusage[mem=25000]" "python -m models.long_jobs.aa_big_umaps --normalization-method vae_mu"
-# ----------------------------------------------------------------------------------------------------
-
 import os
 from tqdm import tqdm
 import numpy as np
