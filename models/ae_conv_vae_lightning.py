@@ -1,12 +1,17 @@
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import TensorBoardLogger
 
 pl.seed_everything(1234)
+
+import itertools
 from torch import nn
 import torch
-from pl_bolts.models.autoencoders.components import (
-    resnet18_decoder,
-    resnet18_encoder,
-)
+
+from models.ae_resnet_vae import resnet_encoder, resnet_decoder
+# from pl_bolts.models.autoencoders.components import (
+# resnet18_decoder,
+# resnet18_encoder,
+# )
 from pl_bolts.datamodules import CIFAR10DataModule, ImagenetDataModule
 from argparse import ArgumentParser
 
@@ -15,7 +20,9 @@ import functools
 import numpy as np
 from torchvision.utils import make_grid
 import pytorch_lightning as pl
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Sampler, Subset
+from torch import autograd
+import contextlib
 import torch
 import torch.nn.functional as F
 # import torchvision.transforms.functional as F_vision
@@ -25,7 +32,6 @@ from pl_bolts.utils.warnings import warn_missing_pkg
 
 from torchvision import transforms
 from data2 import CellDataset
-
 
 # def imagenet_normalization():
 #     if not _TORCHVISION_AVAILABLE:  # pragma: no cover
@@ -37,6 +43,18 @@ from data2 import CellDataset
 #     return normalize
 #
 #
+COOL_CHANNELS = np.array([0, 10, 20])
+BATCH_SIZE = 1024
+# DEBUG = True
+DEBUG = False
+if DEBUG:
+    NUM_WORKERS = 0
+    DETECT_ANOMALY = True
+else:
+    NUM_WORKERS = 16
+    DETECT_ANOMALY = False
+
+
 def ome_normalization():
     mean = np.array([1.29137214, 0.12204645, 0.04746121, 1.17126412, 0.24452078,
                      0.427998, 0.07071735, 0.11199224, 0.04566163, 0.63347302,
@@ -56,6 +74,8 @@ def ome_normalization():
                             2.24749223e+00, 8.06681989e+00, 5.34230461e+00, 8.48350188e+00,
                             9.04868194e-02, 3.58260224e+00, 1.58120290e+00, 2.32770610e+02,
                             6.65773423e-01, 6.49080885e+00, 2.20182966e+01]))
+    mean = mean[COOL_CHANNELS]
+    std = std[COOL_CHANNELS]
     normalize = transforms.Normalize(mean=mean, std=std)
     return normalize
 
@@ -66,7 +86,7 @@ class ImageSampler(pl.Callback):
         self.img_size = None
         self.num_preds = 16
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
+    def on_train_epoch_end(self, trainer: pl.Trainer, pl_module, outputs):
         figure(figsize=(8, 3), dpi=300)
 
         # Z COMES FROM NORMAL(0, 1)
@@ -81,22 +101,31 @@ class ImageSampler(pl.Callback):
 
         # UNDO DATA NORMALIZATION
         normalize = ome_normalization()
-        mean, std = np.array(normalize.mean), np.array(normalize.std)
-        img = make_grid(pred).permute(1, 2, 0).numpy() * std + mean
+        # mean, std = np.array(normalize.mean), np.array(normalize.std)
+        img = make_grid(pred).permute(1, 2, 0).numpy() * normalize.std + normalize.mean
 
         # PLOT IMAGES
         trainer.logger.experiment.add_image('img', torch.tensor(img).permute(2, 0, 1), global_step=trainer.global_step)
 
 
+def get_detect_anomaly_cm():
+    global DETECT_ANOMALY
+    if DETECT_ANOMALY:
+        cm = autograd.detect_anomaly()
+    else:
+        cm = contextlib.nullcontext()
+    return cm
+
+
 class VAE(pl.LightningModule):
-    def __init__(self, enc_out_dim=512, latent_dim=256, input_height=32):
+    def __init__(self, enc_out_dim=512, latent_dim=64, input_height=32):
         super().__init__()
 
         self.save_hyperparameters()
 
         # encoder, decoder
-        self.encoder = resnet18_encoder(first_conv=False, maxpool1=False)
-        self.decoder = resnet18_decoder(
+        self.encoder = resnet_encoder(first_conv=False, maxpool1=False)
+        self.decoder = resnet_decoder(
             latent_dim=latent_dim,
             input_height=input_height,
             first_conv=False,
@@ -139,27 +168,31 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
+    def forward(self, x):
+        cm = get_detect_anomaly_cm()
+        with cm:
+            x_encoded = self.encoder(x)
+            mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
+
+            # sample z from q
+            std = torch.exp(log_var / 2)
+            q = torch.distributions.Normal(mu, std)
+            z = q.rsample()
+
+            # decoded
+            x_hat = self.decoder(z)
+            return x_hat, mu, std, z
+
     def training_step(self, batch, batch_idx):
+        # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         x = batch
-
         # encode x to get the mu and variance parameters
-        x_encoded = self.encoder(x)
-        mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
-
-        # sample z from q
-        std = torch.exp(log_var / 2)
-        q = torch.distributions.Normal(mu, std)
-        z = q.rsample()
-
-        # decoded
-        x_hat = self.decoder(z)
+        x_hat, mu, std, z = self.forward(x)
 
         # reconstruction loss
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
-
         # kl
         kl = self.kl_divergence(z, mu, std)
-
         # elbo
         elbo = (kl - recon_loss)
         elbo = elbo.mean()
@@ -167,34 +200,61 @@ class VAE(pl.LightningModule):
         self.log_dict({
             'elbo': elbo,
             'kl': kl.mean(),
-            'recon_loss': recon_loss.mean(),
-            'reconstruction': recon_loss.mean()
+            'reconstruction': recon_loss.mean(),
         })
+        if torch.isnan(elbo).any():
+            print('nan in loss detected!')
 
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
         x = batch
-        x_encoded = self.encoder(x)
-        mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
-        std = torch.exp(log_var / 2)
-        q = torch.distributions.Normal(mu, std)
-        z = q.rsample()
-        x_hat = self.decoder(z)
+        x_hat, mu, std, z = self.forward(x)
 
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
         kl = self.kl_divergence(z, mu, std)
         elbo = (kl - recon_loss)
         elbo = elbo.mean()
+        # logs = {'loss_elbo': elbo}
 
         self.log_dict({
+            # 'loss': elbo,
             'elbo': elbo,
             'kl': kl.mean(),
-            'recon_loss': recon_loss.mean(),
-            'reconstruction': recon_loss.mean()
-        })
-
+            'reconstruction': recon_loss.mean(),
+            # 'log': logs
+        }, on_epoch=True, prog_bar=True)
         return elbo
+
+
+# from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
+class LogComputationalGraph(pl.Callback):
+    def __init__(self):
+        self.already_logged = False
+    def on_validation_start(self, trainer: pl.Trainer, pl_module):
+        if not self.already_logged:
+            # this code causes a TracerWarning
+            self.already_logged = True
+            sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
+            pl_module.logger.experiment.add_graph(VAE(), sample_image)
+        # pl_module.train()
+        # n = 0
+        #
+        # example_input = torch.rand(64, len(COOL_CHANNELS), 32, 32, requires_grad=True).to(pl_module.device)
+        # pl_module.zero_grad()
+        # # x_hat, _, _, _ = pl_module(example_input)
+        # x_encoded = pl_module.encoder(example_input)
+        #
+        # y = x_encoded
+        # example_input.retain_grad()
+        # y[n].abs().sum().backward()
+        #
+        # zero_grad_inds = list(range(example_input.size(0)))
+        # zero_grad_inds.pop(n)
+        #
+        # s = example_input.grad[zero_grad_inds].abs().sum().item()
+        # if s > 0:
+        #     raise RuntimeError("Your model mixes data across the batch dimension!")
 
 
 def train():
@@ -221,29 +281,61 @@ def train():
                 transforms.ToTensor(),
                 PadByOne()
             ])
+            self.normalize = ome_normalization()
 
         def __len__(self):
             return len(self.ds)
 
         def __getitem__(self, item):
-            x = self.ds[item]
+            x = self.ds[item][0]
             x = self.transform(x)
+            x = x[COOL_CHANNELS, :, :]
+            x = x.permute(1, 2, 0)
+            x = (x - self.normalize.mean) / self.normalize.std
+            x = x.permute(2, 0, 1)
+            x = torch.asinh(x)
+            x = x.float()
             return x
 
     train_ds = RGBCells('train')
     val_ds = RGBCells('validation')
-    BATCH_SIZE = 128
-    num_workers = 0
 
-    sampler = ImageSampler()
+    logger = TensorBoardLogger('tb_logs', name='resnet_vae')
+    trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
+                         check_val_every_n_epoch=1, log_every_n_steps=10, logger=logger)
+    n = BATCH_SIZE * 10
+    indices = np.random.choice(len(train_ds), n, replace=False)
+    train_subset = Subset(train_ds, indices)
 
+    train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+                              shuffle=True)
+    train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+
+    n = BATCH_SIZE * 5
+    indices = np.random.choice(len(val_ds), n, replace=False)
+    val_subset = Subset(val_ds, indices)
+    val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+    #
+    # class MySampler(Sampler):
+    #     def __init__(self, my_ordered_indices):
+    #         self.my_ordered_indices = my_ordered_indices
+    #
+    #     def __iter__(self):
+    #         return self.my_ordered_indices.__iter__()
+    #
+    #     def __len__(self):
+    #         return len(self.my_ordered_indices)
+    #
+    # faulty_epoch = 181
+    # l = list(range(len(train_ds)))
+    # indices = l[n:] + l[:n]
+    # indices = indices[:10]
+    # debug_sampler = MySampler(indices)
+
+    # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+    #                                 sampler=debug_sampler)
     vae = VAE()
-    trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[sampler], check_val_every_n_epoch=2)
-
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=num_workers, pin_memory=True, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, num_workers=num_workers, pin_memory=True)
-
-    trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=val_loader)
+    trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
 
 
 if __name__ == '__main__':
