@@ -15,10 +15,14 @@ from models.ae_resnet_vae import resnet_encoder, resnet_decoder
 from pl_bolts.datamodules import CIFAR10DataModule, ImagenetDataModule
 from argparse import ArgumentParser
 
-from matplotlib.pyplot import imshow, figure
+import matplotlib.pyplot as plt
+import matplotlib
+
+matplotlib.use('Agg')
 import functools
 import numpy as np
 from torchvision.utils import make_grid
+import PIL
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, Sampler, Subset
 from torch import autograd
@@ -87,25 +91,54 @@ class ImageSampler(pl.Callback):
         self.num_preds = 16
 
     def on_train_epoch_end(self, trainer: pl.Trainer, pl_module, outputs):
-        figure(figsize=(8, 3), dpi=300)
-
         # Z COMES FROM NORMAL(0, 1)
-        rand_v = torch.rand((self.num_preds, pl_module.hparams.latent_dim), device=pl_module.device)
-        p = torch.distributions.Normal(torch.zeros_like(rand_v), torch.ones_like(rand_v))
-        # p = torch.distributions.Normal(torch.zeros_like(rand_v), torch.zeros_like(rand_v))
-        z = p.rsample()
+        # rand_v = torch.rand((self.num_preds, pl_module.hparams.latent_dim), device=pl_module.device)
+        # p = torch.distributions.Normal(torch.zeros_like(rand_v), torch.ones_like(rand_v))
+        # z = p.rsample()
 
-        # SAMPLE IMAGES
-        with torch.no_grad():
-            pred = pl_module.decoder(z.to(pl_module.device)).cpu()
-
-        # UNDO DATA NORMALIZATION
         normalize = ome_normalization()
-        # mean, std = np.array(normalize.mean), np.array(normalize.std)
-        img = make_grid(pred).permute(1, 2, 0).numpy() * normalize.std + normalize.mean
+        loader = trainer.val_dataloaders[-1]
+        all_originals = []
+        all_reconstructed = []
+        n = 5
+        with torch.no_grad():
+            batch = loader.__iter__().__next__()
+            assert len(batch.shape) == 4
+            assert len(batch) >= n
+            data = batch[:n]
+            pred = pl_module.forward(data.to(pl_module.device))[0]
+        for i in range(n):
+            def back_to_original(x):
+                x = x.permute(1, 2, 0)
+                x = x * normalize.std + normalize.mean
+                x = x.permute(2, 0, 1)
+                return x
 
-        # PLOT IMAGES
-        trainer.logger.experiment.add_image('img', torch.tensor(img).permute(2, 0, 1), global_step=trainer.global_step)
+            original = back_to_original(data[i].cpu())
+            reconstructed = back_to_original(pred[i].cpu())
+            a_original = torch.amin(original, dim=(1, 2))
+            b_original = torch.amax(original, dim=(1, 2))
+            a_reconstructed = reconstructed.amin(dim=(1, 2))
+            b_reconstructed = reconstructed.amax(dim=(1, 2))
+            a = torch.min(a_original, a_reconstructed)
+            b = torch.max(b_original, b_reconstructed)
+            f = lambda t, a, b: ((t.permute(1, 2, 0) - a) / (b - a)).permute(2, 0, 1)
+            original = f(original, a, b)
+            reconstructed = f(reconstructed, a, b)
+
+            new_size = (128, 128)
+            compose = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
+                transforms.ToTensor()
+            ])
+            original = compose(original)
+            reconstructed = compose(reconstructed)
+            all_originals.append(original)
+            all_reconstructed.append(reconstructed)
+        l = all_originals + all_reconstructed
+        img = make_grid(l, nrow=n)
+        trainer.logger.experiment.add_image('img', img, trainer.current_epoch)
 
 
 def get_detect_anomaly_cm():
@@ -138,6 +171,7 @@ class VAE(pl.LightningModule):
 
         # for the gaussian likelihood
         self.log_scale = nn.Parameter(torch.Tensor([0.0]))
+        self.beta = 10.
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-4)
@@ -183,19 +217,22 @@ class VAE(pl.LightningModule):
             x_hat = self.decoder(z)
             return x_hat, mu, std, z
 
-    def training_step(self, batch, batch_idx):
-        # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        x = batch
-        # encode x to get the mu and variance parameters
-        x_hat, mu, std, z = self.forward(x)
-
+    def loss_function(self, x, x_hat, mu, std, z):
         # reconstruction loss
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
         # kl
         kl = self.kl_divergence(z, mu, std)
         # elbo
-        elbo = (kl - recon_loss)
+        elbo = (self.beta * kl - recon_loss)
         elbo = elbo.mean()
+        return elbo, kl, recon_loss
+
+    def training_step(self, batch, batch_idx):
+        # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
+        x = batch
+        # encode x to get the mu and variance parameters
+        x_hat, mu, std, z = self.forward(x)
+        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z)
 
         self.log_dict({
             'elbo': elbo,
@@ -210,64 +247,46 @@ class VAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx):
         x = batch
         x_hat, mu, std, z = self.forward(x)
+        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z)
 
-        recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
-        kl = self.kl_divergence(z, mu, std)
-        elbo = (kl - recon_loss)
-        elbo = elbo.mean()
-        # logs = {'loss_elbo': elbo}
-
-        self.log_dict({
-            # 'loss': elbo,
+        d = {
             'elbo': elbo,
             'kl': kl.mean(),
-            'reconstruction': recon_loss.mean(),
-            # 'log': logs
-        }, on_epoch=True, prog_bar=True)
-        return elbo
+            'reconstruction': recon_loss.mean()
+        }
+        return d
+
+    def validation_epoch_end(self, outputs):
+        if not self.trainer.running_sanity_check:
+            assert type(outputs) is list
+            for i, o in enumerate(outputs):
+                for k in ['elbo', 'kl', 'reconstruction']:
+                    avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
+                    phase = 'training' if i == 0 else 'validation'
+                    self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.current_epoch)
+                    # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
+                # return {'log': d}
 
 
 # from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
 class LogComputationalGraph(pl.Callback):
     def __init__(self):
         self.already_logged = False
+
     def on_validation_start(self, trainer: pl.Trainer, pl_module):
-        if not self.already_logged:
-            # this code causes a TracerWarning
-            self.already_logged = True
-            sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
-            pl_module.logger.experiment.add_graph(VAE(), sample_image)
-        # pl_module.train()
-        # n = 0
-        #
-        # example_input = torch.rand(64, len(COOL_CHANNELS), 32, 32, requires_grad=True).to(pl_module.device)
-        # pl_module.zero_grad()
-        # # x_hat, _, _, _ = pl_module(example_input)
-        # x_encoded = pl_module.encoder(example_input)
-        #
-        # y = x_encoded
-        # example_input.retain_grad()
-        # y[n].abs().sum().backward()
-        #
-        # zero_grad_inds = list(range(example_input.size(0)))
-        # zero_grad_inds.pop(n)
-        #
-        # s = example_input.grad[zero_grad_inds].abs().sum().item()
-        # if s > 0:
-        #     raise RuntimeError("Your model mixes data across the batch dimension!")
+        if not trainer.running_sanity_check:
+            if not self.already_logged:
+                return
+                # this code causes a TracerWarning
+                self.already_logged = True
+                sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
+                pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
 def train():
     parser = ArgumentParser()
     parser.add_argument('--gpus', type=int, default=1)
-
-    # parser.add_argument('--dataset', type=str, default='cifar10')
     args = parser.parse_args()
-
-    # if args.dataset == 'cifar10':
-    #     dataset = CIFAR10DataModule('.')
-    # if args.dataset == 'imagenet':
-    #     dataset = ImagenetDataModule('.')
 
     class PadByOne:
         def __call__(self, image):
@@ -300,10 +319,12 @@ def train():
     train_ds = RGBCells('train')
     val_ds = RGBCells('validation')
 
-    logger = TensorBoardLogger('tb_logs', name='resnet_vae')
+    logger = TensorBoardLogger(save_dir='/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/checkpoints',
+                               name='resnet_vae')
     trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
-                         check_val_every_n_epoch=1, log_every_n_steps=10, logger=logger)
-    n = BATCH_SIZE * 10
+                         logger=logger, log_every_n_steps=5, val_check_interval=2)
+
+    n = BATCH_SIZE * 2
     indices = np.random.choice(len(train_ds), n, replace=False)
     train_subset = Subset(train_ds, indices)
 
@@ -311,7 +332,7 @@ def train():
                               shuffle=True)
     train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
 
-    n = BATCH_SIZE * 5
+    n = BATCH_SIZE * 2
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
     val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
