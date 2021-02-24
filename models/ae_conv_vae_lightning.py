@@ -105,10 +105,13 @@ class ImageSampler(pl.Callback):
             n = 5
             with torch.no_grad():
                 batch = loader.__iter__().__next__()
-                assert len(batch.shape) == 4
-                assert len(batch) >= n
-                data = batch[:n]
-                pred = pl_module.forward(data.to(pl_module.device))[0]
+                omes = batch[0]
+                masks = batch[1]
+                assert len(omes.shape) == 4
+                assert len(omes) >= n
+                data = omes[:n].to(pl_module.device)
+                masks_data = masks[:n].to(pl_module.device)
+                pred = pl_module.forward(data, masks_data)[0]
             for i in range(n):
                 def back_to_original(x):
                     x = x.permute(1, 2, 0)
@@ -179,14 +182,17 @@ class VAE(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-4)
 
-    def gaussian_likelihood(self, x_hat, logscale, x):
+    def gaussian_likelihood(self, x_hat, logscale, x, mask):
         scale = torch.exp(logscale)
         mean = x_hat
         dist = torch.distributions.Normal(mean, scale)
 
         # measure prob of seeing image under p(x|z)
         log_pxz = dist.log_prob(x)
-        return log_pxz.sum(dim=(1, 2, 3))
+        if mask is None:
+            mask = torch.ones_like(log_pxz)
+        s = (mask * log_pxz).mean(dim=(1, 2, 3))
+        return s
 
     def kl_divergence(self, z, mu, std):
         # --------------------------
@@ -205,10 +211,10 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
-    def forward(self, x):
+    def forward(self, x, mask):
         cm = get_detect_anomaly_cm()
         with cm:
-            x_encoded = self.encoder(x)
+            x_encoded = self.encoder(x, mask)
             mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
 
             # sample z from q
@@ -217,13 +223,14 @@ class VAE(pl.LightningModule):
             z = q.rsample()
 
             # decoded
-            x_hat = self.decoder(z)
+            x_hat = self.decoder(z, mask)
             x_hat = self.softplus(x_hat)
             return x_hat, mu, std, z
 
-    def loss_function(self, x, x_hat, mu, std, z):
+    def loss_function(self, x, x_hat, mu, std, z, mask):
         # reconstruction loss
-        recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
+        # print(x_hat.shape)
+        recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x, mask)
         # kl
         kl = self.kl_divergence(z, mu, std)
         # elbo
@@ -233,10 +240,11 @@ class VAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        x = batch
+        x = batch[0]
+        mask = batch[1]
         # encode x to get the mu and variance parameters
-        x_hat, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z)
+        x_hat, mu, std, z = self.forward(x, mask)
+        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z, mask)
 
         self.log_dict({
             'elbo': elbo,
@@ -249,9 +257,10 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        x = batch
-        x_hat, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z)
+        x = batch[0]
+        mask = batch[1]
+        x_hat, mu, std, z = self.forward(x, mask)
+        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z, mask)
 
         d = {
             'elbo': elbo,
@@ -282,9 +291,9 @@ class LogComputationalGraph(pl.Callback):
             if not self.already_logged:
                 return
                 # this code causes a TracerWarning
-                self.already_logged = True
-                sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
-                pl_module.logger.experiment.add_graph(VAE(), sample_image)
+                # self.already_logged = True
+                # sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
+                # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
 def train():
@@ -309,7 +318,7 @@ def train():
     class RGBCells(Dataset):
         def __init__(self, split, augment=False, aggressive_rotation=False):
             assert not (augment is False and aggressive_rotation is True)
-            d = {'expression': False, 'center': False, 'ome': True, 'mask': False}
+            d = {'expression': False, 'center': False, 'ome': True, 'mask': True}
             self.ds = CellDataset(split, d)
             self.augment = augment
             self.aggressive_rotation = aggressive_rotation
@@ -330,6 +339,14 @@ def train():
 
         def __getitem__(self, item):
             x = self.ds[item][0]
+            if len(self.ds[item]) == 2:
+                mask = self.ds[item][1]
+                mask = self.transform(mask)
+                mask = mask.float()
+            elif len(self.ds[item]) == 1:
+                mask = None
+            else:
+                raise ValueError()
             x = self.transform(x)
             if self.augment:
                 x = self.augment_transform(x)
@@ -339,7 +356,7 @@ def train():
             x = (x - self.normalize.mean) / self.normalize.std
             x = x.permute(2, 0, 1)
             x = x.float()
-            return x
+            return x, mask
 
     train_ds = RGBCells('train', augment=True)
     train_ds_validation = RGBCells('train')

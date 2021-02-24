@@ -114,8 +114,18 @@ class DecoderBlock(nn.Module):
         return out
 
 
-class ResNetEncoder(nn.Module):
+# # adapted from https://stackoverflow.com/questions/51980654/pytorch-element-wise-filter-layer/51980918
+# class TrainableEltwiseLayer(nn.Module):
+#     def __init__(self, c, h, w):
+#         super().__init__()
+#         self.weights = nn.Parameter(torch.Tensor(1, c, h, w))  # define the trainable parameter
+#
+#     def forward(self, x):
+#         # assuming x is of size b-1-h-w
+#         return x * self.weights  # element-wise multiplication
 
+
+class ResNetEncoder(nn.Module):
     def __init__(self, block, layers, first_conv=False, maxpool1=False):
         super().__init__()
 
@@ -141,6 +151,25 @@ class ResNetEncoder(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
+        # using the mask for conditioning the answer
+        self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=1, bias=False)
+        self.mask_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1, bias=False)
+        dummy_image = torch.zeros(1, 3, 32, 32)
+        with torch.no_grad():
+            x = self.conv1(dummy_image)
+            x = self.bn1(x)
+
+            x = self.relu(x)
+            x = self.maxpool(x)
+
+            x = self.layer1(x)
+            x = self.layer2(x)
+            output = self.layer3(x)
+            c, h, w = output.shape[1:]
+        self.mask_conv1x1 = nn.Conv2d(8, 1, kernel_size=1)
+        self.mask_adaptive = nn.AdaptiveAvgPool2d((h, w))
+        # self.mask_eltwise = TrainableEltwiseLayer(c, h, w)
+
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -157,15 +186,23 @@ class ResNetEncoder(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         x = self.conv1(x)
         x = self.bn1(x)
+
         x = self.relu(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+
+        if mask is not None:
+            z = self.mask_conv1(mask)
+            z = self.mask_conv2(z)
+            z = self.mask_conv1x1(z)
+            z = self.mask_adaptive(z)
+            x = z * x
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
@@ -210,6 +247,16 @@ class ResNetDecoder(nn.Module):
 
         self.conv1 = nn.Conv2d(64 * block.expansion, 3, kernel_size=3, stride=1, padding=1, bias=False)
 
+        # using the mask for conditioning the answer
+        self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, padding=1)
+        self.mask_conv2 = nn.Conv2d(4, 8, kernel_size=3, padding=1)
+        dummy_image = torch.zeros(1, 256 * self.expansion, 4, 4)
+        with torch.no_grad():
+            output = self.upscale1(dummy_image)
+            c, h, w = output.shape[1:]
+        self.mask_conv1x1 = nn.Conv2d(8, 1, kernel_size=1)
+        self.mask_adaptive = nn.AdaptiveAvgPool2d((h, w))
+
     def _make_layer(self, block, planes, blocks, scale=1):
         upsample = None
         if scale != 1 or self.inplanes != planes * block.expansion:
@@ -226,7 +273,7 @@ class ResNetDecoder(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         x = self.linear(x)
 
         # NOTE: replaced this by Linear(in_channels, 514 * 4 * 4)
@@ -234,6 +281,13 @@ class ResNetDecoder(nn.Module):
 
         x = x.view(x.size(0), 256 * self.expansion, 4, 4)
         x = self.upscale1(x)
+
+        if mask is not None:
+            z = self.mask_conv1(mask)
+            z = self.mask_conv2(z)
+            z = self.mask_conv1x1(z)
+            z = self.mask_adaptive(z)
+            x = z * x
 
         x = self.layer1(x)
         x = self.layer2(x)
