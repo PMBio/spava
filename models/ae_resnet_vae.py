@@ -139,7 +139,6 @@ class ResNetEncoder(nn.Module):
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -167,7 +166,6 @@ class ResNetEncoder(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.layer4(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
@@ -183,24 +181,23 @@ class ResNetDecoder(nn.Module):
         super().__init__()
 
         self.expansion = block.expansion
-        self.inplanes = 512 * block.expansion
+        self.inplanes = 256 * block.expansion
         self.first_conv = first_conv
         self.maxpool1 = maxpool1
         self.input_height = input_height
 
-        self.upscale_factor = 8
+        self.upscale_factor = 4
 
         self.linear = nn.Linear(latent_dim, self.inplanes * 4 * 4)
 
-        self.layer1 = self._make_layer(block, 256, layers[0], scale=2)
-        self.layer2 = self._make_layer(block, 128, layers[1], scale=2)
-        self.layer3 = self._make_layer(block, 64, layers[2], scale=2)
+        self.layer1 = self._make_layer(block, 128, layers[0], scale=2)
+        self.layer2 = self._make_layer(block, 64, layers[1], scale=2)
 
         if self.maxpool1:
-            self.layer4 = self._make_layer(block, 64, layers[3], scale=2)
+            self.layer3 = self._make_layer(block, 64, layers[2], scale=2)
             self.upscale_factor *= 2
         else:
-            self.layer4 = self._make_layer(block, 64, layers[3])
+            self.layer3 = self._make_layer(block, 64, layers[2])
 
         if self.first_conv:
             self.upscale = Interpolate(scale_factor=2)
@@ -235,13 +232,12 @@ class ResNetDecoder(nn.Module):
         # NOTE: replaced this by Linear(in_channels, 514 * 4 * 4)
         # x = F.interpolate(x, scale_factor=4)
 
-        x = x.view(x.size(0), 512 * self.expansion, 4, 4)
+        x = x.view(x.size(0), 256 * self.expansion, 4, 4)
         x = self.upscale1(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.layer4(x)
         x = self.upscale(x)
 
         x = self.conv1(x)
@@ -249,8 +245,8 @@ class ResNetDecoder(nn.Module):
 
 
 def resnet_encoder(first_conv, maxpool1):
-    return ResNetEncoder(EncoderBlock, [2, 2, 2, 2], first_conv, maxpool1)
+    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1)
 
 
 def resnet_decoder(latent_dim, input_height, first_conv, maxpool1):
-    return ResNetDecoder(DecoderBlock, [2, 2, 2, 2], latent_dim, input_height, first_conv, maxpool1)
+    return ResNetDecoder(DecoderBlock, [2, 2, 2], latent_dim, input_height, first_conv, maxpool1)

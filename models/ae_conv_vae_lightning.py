@@ -29,7 +29,8 @@ from torch import autograd
 import contextlib
 import torch
 import torch.nn.functional as F
-# import torchvision.transforms.functional as F_vision
+import torchvision.transforms.functional as TF
+import random
 
 from pl_bolts.utils import _TORCHVISION_AVAILABLE
 from pl_bolts.utils.warnings import warn_missing_pkg
@@ -60,24 +61,22 @@ else:
 
 
 def ome_normalization():
-    mean = np.array([1.29137214, 0.12204645, 0.04746121, 1.17126412, 0.24452078,
-                     0.427998, 0.07071735, 0.11199224, 0.04566163, 0.63347302,
-                     0.62917786, 0.13072797, 0.27373635, 0.02843522, 0.06192851,
-                     0.38788928, 0.11424681, 0.07840189, 0.2078604, 0.02232897,
-                     4.8215692, 0.13145834, 0.05435668, 0.17872389, 0.0315007,
-                     0.03429091, 0.20750708, 0.6714512, 0.09881951, 0.12434302,
-                     0.51898777, 0.18728622, 0.03190125, 0.28144336, 0.11512508,
-                     2.50877083, 0.16205379, 0.52616125, 0.99683675])
-    std = np.sqrt(np.array([3.17532575e+01, 3.66818966e-01, 6.65207711e-01, 3.33794102e+01,
-                            4.22485386e+00, 9.36283163e+00, 2.23369604e-01, 7.86815906e+00,
-                            5.32690521e-01, 4.84695307e+01, 2.08140218e+01, 7.09183370e+00,
-                            1.92951659e+00, 9.45509177e-01, 9.75673669e-01, 2.01367976e+02,
-                            1.37284794e+00, 3.73569237e-01, 4.87192135e+00, 5.64851603e-01,
-                            5.69273662e+02, 6.52422796e+01, 3.68515530e-01, 1.66068873e+00,
-                            1.29575157e-01, 6.50012842e-01, 2.25449424e+01, 1.09436277e+01,
-                            2.24749223e+00, 8.06681989e+00, 5.34230461e+00, 8.48350188e+00,
-                            9.04868194e-02, 3.58260224e+00, 1.58120290e+00, 2.32770610e+02,
-                            6.65773423e-01, 6.49080885e+00, 2.20182966e+01]))
+    mean = np.array([0.3128328, 0.08154685, 0.02617499, 0.31149776, 0.10011313,
+                     0.13143819, 0.04897958, 0.05522078, 0.02628855, 0.12524123,
+                     0.15552816, 0.08004793, 0.13349437, 0.02045013, 0.04155505,
+                     0.07637688, 0.05526352, 0.04818857, 0.11221485, 0.01779799,
+                     0.53215206, 0.08219107, 0.03510931, 0.08550659, 0.02237169,
+                     0.02657647, 0.09854327, 0.22031476, 0.04274541, 0.06778383,
+                     0.24079644, 0.09004467, 0.0234197, 0.13312621, 0.04914724,
+                     0.29719813, 0.10172928, 0.18843424, 0.25893724])
+    std = np.sqrt(np.array([0.81152901, 0.11195328, 0.03844969, 0.76020458, 0.19636732,
+                            0.30648388, 0.06448294, 0.08879372, 0.03747649, 0.32956727,
+                            0.40133228, 0.11878445, 0.24177647, 0.02510913, 0.05398327,
+                            0.15110854, 0.09525968, 0.07278724, 0.17972434, 0.01950939,
+                            1.73329118, 0.11334923, 0.04934192, 0.15689578, 0.02762272,
+                            0.03045641, 0.16039316, 0.49438282, 0.07485281, 0.10151964,
+                            0.45035213, 0.15424273, 0.02854364, 0.23177609, 0.09494518,
+                            0.98995058, 0.14861627, 0.41785507, 0.66190155]))
     mean = mean[COOL_CHANNELS]
     std = std[COOL_CHANNELS]
     normalize = transforms.Normalize(mean=mean, std=std)
@@ -90,55 +89,58 @@ class ImageSampler(pl.Callback):
         self.img_size = None
         self.num_preds = 16
 
-    def on_train_epoch_end(self, trainer: pl.Trainer, pl_module, outputs):
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
+        # def on_train_epoch_end(self, trainer: pl.Trainer, pl_module, outputs):
         # Z COMES FROM NORMAL(0, 1)
         # rand_v = torch.rand((self.num_preds, pl_module.hparams.latent_dim), device=pl_module.device)
         # p = torch.distributions.Normal(torch.zeros_like(rand_v), torch.ones_like(rand_v))
         # z = p.rsample()
 
         normalize = ome_normalization()
-        loader = trainer.val_dataloaders[-1]
-        all_originals = []
-        all_reconstructed = []
-        n = 5
-        with torch.no_grad():
-            batch = loader.__iter__().__next__()
-            assert len(batch.shape) == 4
-            assert len(batch) >= n
-            data = batch[:n]
-            pred = pl_module.forward(data.to(pl_module.device))[0]
-        for i in range(n):
-            def back_to_original(x):
-                x = x.permute(1, 2, 0)
-                x = x * normalize.std + normalize.mean
-                x = x.permute(2, 0, 1)
-                return x
+        for dataloader_idx in [0, 1]:
+            loader = trainer.val_dataloaders[dataloader_idx]
+            dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
+            all_originals = []
+            all_reconstructed = []
+            n = 5
+            with torch.no_grad():
+                batch = loader.__iter__().__next__()
+                assert len(batch.shape) == 4
+                assert len(batch) >= n
+                data = batch[:n]
+                pred = pl_module.forward(data.to(pl_module.device))[0]
+            for i in range(n):
+                def back_to_original(x):
+                    x = x.permute(1, 2, 0)
+                    x = x * normalize.std + normalize.mean
+                    x = x.permute(2, 0, 1)
+                    return x
 
-            original = back_to_original(data[i].cpu())
-            reconstructed = back_to_original(pred[i].cpu())
-            a_original = torch.amin(original, dim=(1, 2))
-            b_original = torch.amax(original, dim=(1, 2))
-            a_reconstructed = reconstructed.amin(dim=(1, 2))
-            b_reconstructed = reconstructed.amax(dim=(1, 2))
-            a = torch.min(a_original, a_reconstructed)
-            b = torch.max(b_original, b_reconstructed)
-            f = lambda t, a, b: ((t.permute(1, 2, 0) - a) / (b - a)).permute(2, 0, 1)
-            original = f(original, a, b)
-            reconstructed = f(reconstructed, a, b)
+                original = back_to_original(data[i].cpu())
+                reconstructed = back_to_original(pred[i].cpu())
+                a_original = original.amin(dim=(1, 2))
+                b_original = original.amax(dim=(1, 2))
+                a_reconstructed = reconstructed.amin(dim=(1, 2))
+                b_reconstructed = reconstructed.amax(dim=(1, 2))
+                a = torch.min(a_original, a_reconstructed)
+                b = torch.max(b_original, b_reconstructed)
+                f = lambda t, a, b: ((t.permute(1, 2, 0) - a) / (b - a)).permute(2, 0, 1)
+                original = f(original, a, b)
+                reconstructed = f(reconstructed, a, b)
 
-            new_size = (128, 128)
-            compose = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
-                transforms.ToTensor()
-            ])
-            original = compose(original)
-            reconstructed = compose(reconstructed)
-            all_originals.append(original)
-            all_reconstructed.append(reconstructed)
-        l = all_originals + all_reconstructed
-        img = make_grid(l, nrow=n)
-        trainer.logger.experiment.add_image('img', img, trainer.current_epoch)
+                new_size = (128, 128)
+                compose = transforms.Compose([
+                    transforms.ToPILImage(),
+                    transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
+                    transforms.ToTensor()
+                ])
+                original = compose(original)
+                reconstructed = compose(reconstructed)
+                all_originals.append(original)
+                all_reconstructed.append(reconstructed)
+            l = all_originals + all_reconstructed
+            img = make_grid(l, nrow=n)
+            trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img, trainer.global_step)
 
 
 def get_detect_anomaly_cm():
@@ -151,7 +153,7 @@ def get_detect_anomaly_cm():
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, enc_out_dim=512, latent_dim=64, input_height=32):
+    def __init__(self, enc_out_dim=256, latent_dim=64, input_height=32):
         super().__init__()
 
         self.save_hyperparameters()
@@ -168,6 +170,7 @@ class VAE(pl.LightningModule):
         # distribution parameters
         self.fc_mu = nn.Linear(enc_out_dim, latent_dim)
         self.fc_var = nn.Linear(enc_out_dim, latent_dim)
+        self.softplus = nn.Softplus()
 
         # for the gaussian likelihood
         self.log_scale = nn.Parameter(torch.Tensor([0.0]))
@@ -215,6 +218,7 @@ class VAE(pl.LightningModule):
 
             # decoded
             x_hat = self.decoder(z)
+            x_hat = self.softplus(x_hat)
             return x_hat, mu, std, z
 
     def loss_function(self, x, x_hat, mu, std, z):
@@ -263,7 +267,7 @@ class VAE(pl.LightningModule):
                 for k in ['elbo', 'kl', 'reconstruction']:
                     avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
                     phase = 'training' if i == 0 else 'validation'
-                    self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.current_epoch)
+                    self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.global_step)
                     # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
                 # return {'log': d}
 
@@ -292,13 +296,32 @@ def train():
         def __call__(self, image):
             return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
 
+    class MyRotationTransform:
+        """Rotate by one of the given angles."""
+
+        def __init__(self, angles):
+            self.angles = angles
+
+        def __call__(self, x):
+            angle = random.choice(self.angles)
+            return TF.rotate(x, angle)
+
     class RGBCells(Dataset):
-        def __init__(self, split):
+        def __init__(self, split, augment=False, aggressive_rotation=False):
+            assert not (augment is False and aggressive_rotation is True)
             d = {'expression': False, 'center': False, 'ome': True, 'mask': False}
             self.ds = CellDataset(split, d)
+            self.augment = augment
+            self.aggressive_rotation = aggressive_rotation
             self.transform = transforms.Compose([
                 transforms.ToTensor(),
                 PadByOne()
+            ])
+            self.augment_transform = transforms.Compose([
+                MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else transforms.RandomApply(
+                    nn.ModuleList([transforms.RandomRotation(degrees=360)])),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(),
             ])
             self.normalize = ome_normalization()
 
@@ -308,31 +331,36 @@ def train():
         def __getitem__(self, item):
             x = self.ds[item][0]
             x = self.transform(x)
+            if self.augment:
+                x = self.augment_transform(x)
+            x = torch.asinh(x)
             x = x[COOL_CHANNELS, :, :]
             x = x.permute(1, 2, 0)
             x = (x - self.normalize.mean) / self.normalize.std
             x = x.permute(2, 0, 1)
-            x = torch.asinh(x)
             x = x.float()
             return x
 
-    train_ds = RGBCells('train')
+    train_ds = RGBCells('train', augment=True)
+    train_ds_validation = RGBCells('train')
     val_ds = RGBCells('validation')
 
     logger = TensorBoardLogger(save_dir='/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/checkpoints',
                                name='resnet_vae')
     trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
-                         logger=logger, log_every_n_steps=5, val_check_interval=2)
+                         logger=logger,
+                         # log_every_n_steps=5, val_check_interval=2)
+                         log_every_n_steps=15, val_check_interval=200)
 
-    n = BATCH_SIZE * 2
+    n = BATCH_SIZE * 20
     indices = np.random.choice(len(train_ds), n, replace=False)
-    train_subset = Subset(train_ds, indices)
+    train_subset = Subset(train_ds_validation, indices)
 
-    train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
                               shuffle=True)
     train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
 
-    n = BATCH_SIZE * 2
+    n = BATCH_SIZE * 20
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
     val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
