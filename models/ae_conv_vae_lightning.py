@@ -50,13 +50,15 @@ from data2 import CellDataset
 #
 COOL_CHANNELS = np.array([0, 10, 20])
 BATCH_SIZE = 1024
+LEARNING_RATE = 0.7e-4
 # DEBUG = True
 DEBUG = False
 if DEBUG:
     NUM_WORKERS = 0
     DETECT_ANOMALY = True
 else:
-    NUM_WORKERS = 16
+    NUM_WORKERS = 0
+    # NUM_WORKERS = 16
     DETECT_ANOMALY = False
 
 
@@ -102,6 +104,14 @@ class ImageSampler(pl.Callback):
             dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
             all_originals = []
             all_reconstructed = []
+            all_reconstructed_masked = []
+            mask_color = torch.tensor([x / 255 for x in [255, 112, 31]]).float()
+            new_size = (128, 128)
+            upscale = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
+                transforms.ToTensor()
+            ])
             n = 5
             with torch.no_grad():
                 batch = loader.__iter__().__next__()
@@ -129,21 +139,73 @@ class ImageSampler(pl.Callback):
                 b = torch.max(b_original, b_reconstructed)
                 f = lambda t, a, b: ((t.permute(1, 2, 0) - a) / (b - a)).permute(2, 0, 1)
                 original = f(original, a, b)
-                reconstructed = f(reconstructed, a, b)
+                reconstructed = f(reconstructed, a, b).float()
 
-                new_size = (128, 128)
-                compose = transforms.Compose([
-                    transforms.ToPILImage(),
-                    transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
-                    transforms.ToTensor()
-                ])
-                original = compose(original)
-                reconstructed = compose(reconstructed)
+                m = masks_data[i].cpu().bool()
+                m = torch.logical_not(m)
+                m = torch.squeeze(m, 0)
+                reconstructed_masked = reconstructed.clone().permute(1, 2, 0)
+                reconstructed_masked[m, :] = mask_color
+                reconstructed_masked = reconstructed_masked.permute(2, 0, 1)
+
+                original = upscale(original)
+                reconstructed = upscale(reconstructed)
+                reconstructed_masked = upscale(reconstructed_masked)
+
                 all_originals.append(original)
                 all_reconstructed.append(reconstructed)
-            l = all_originals + all_reconstructed
+                all_reconstructed_masked.append(reconstructed_masked)
+            l = all_originals + all_reconstructed + all_reconstructed_masked
             img = make_grid(l, nrow=n)
-            trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img, trainer.global_step)
+            trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
+                                                trainer.global_step)
+
+            for i in range(n):
+                original = all_originals[i].clone()
+                reconstructed = all_reconstructed[i].clone()
+                mask = masks_data[i].cpu().clone()
+                mask = upscale(mask)
+                mask = torch.squeeze(mask, 0)
+                mask = mask.bool()
+                inverted_mask = torch.logical_not(mask)
+
+                all_original_c = []
+                all_original_masked_c = []
+                all_reconstructed_c = []
+                all_reconstructed_masked_c = []
+
+                n_channels = original.shape[0]
+                for c in range(n_channels):
+                    original_c = original[c]
+                    original_c = original_c.repeat(3, 1, 1)
+
+                    original_masked_c = original_c.clone()
+                    original_masked_c = original_masked_c.permute(1, 2, 0)
+                    original_masked_c[inverted_mask, :] = mask_color
+                    original_masked_c = original_masked_c.permute(2, 0, 1)
+
+                    reconstructed_c = reconstructed[c]
+                    reconstructed_c = reconstructed_c.repeat(3, 1, 1)
+
+                    reconstructed_masked_c = reconstructed_c.clone()
+                    reconstructed_masked_c = reconstructed_masked_c.permute(1, 2, 0)
+                    reconstructed_masked_c[inverted_mask, :] = mask_color
+                    reconstructed_masked_c = reconstructed_masked_c.permute(2, 0, 1)
+
+                    all_original_c.append(original_c)
+                    all_original_masked_c.append(original_masked_c)
+                    all_reconstructed_c.append(reconstructed_c)
+                    all_reconstructed_masked_c.append(reconstructed_masked_c)
+                    trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
+                                                            f'{c}/original', original_masked_c[0].flatten(),
+                                                            trainer.global_step)
+                    trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
+                                                            f'{c}/reconstructed', reconstructed_masked_c[0].flatten(),
+                                                            trainer.global_step)
+                l = all_original_c + all_reconstructed_c + all_original_masked_c + all_reconstructed_masked_c
+                img = make_grid(l, nrow=n_channels)
+                trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}/image{i}', img,
+                                                    trainer.global_step)
 
 
 def get_detect_anomaly_cm():
@@ -176,16 +238,21 @@ class VAE(pl.LightningModule):
         self.softplus = nn.Softplus()
 
         # for the gaussian likelihood
-        self.log_scale = nn.Parameter(torch.Tensor([0.0]))
+        self.log_scale = nn.Parameter(torch.Tensor([0.4]))
         self.beta = 10.
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-4)
+        return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
 
-    def gaussian_likelihood(self, x_hat, logscale, x, mask):
+    def reconstruction_likelihood(self, x_hat, logscale, x, mask):
         scale = torch.exp(logscale)
         mean = x_hat
-        dist = torch.distributions.Normal(mean, scale)
+        # variance = torch.square(scale)
+        # alpha = torch.square(mean) / variance
+        # beta = mean / variance
+        # dist = torch.distributions.Gamma(alpha, beta)
+        dist = torch.distributions.NegativeBinomial(mean, torch.sigmoid(scale))
+        # dist = torch.distributions.Normal(mean, scale)
 
         # measure prob of seeing image under p(x|z)
         log_pxz = dist.log_prob(x)
@@ -211,6 +278,21 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
+    def loss_function(self, x, x_hat, mu, std, z, mask):
+        # reconstruction loss
+        # print(x_hat.shape)
+        cm = get_detect_anomaly_cm()
+        with cm:
+            recon_loss = self.reconstruction_likelihood(x_hat, self.log_scale, x, mask)
+            # kl
+            kl = self.kl_divergence(z, mu, std)
+            # elbo
+            elbo = (self.beta * kl - recon_loss)
+            elbo = elbo.mean()
+            if torch.isnan(elbo).any():
+                print('nan in loss detected!')
+            return elbo, kl, recon_loss
+
     def forward(self, x, mask):
         cm = get_detect_anomaly_cm()
         with cm:
@@ -227,17 +309,6 @@ class VAE(pl.LightningModule):
             x_hat = self.softplus(x_hat)
             return x_hat, mu, std, z
 
-    def loss_function(self, x, x_hat, mu, std, z, mask):
-        # reconstruction loss
-        # print(x_hat.shape)
-        recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x, mask)
-        # kl
-        kl = self.kl_divergence(z, mu, std)
-        # elbo
-        elbo = (self.beta * kl - recon_loss)
-        elbo = elbo.mean()
-        return elbo, kl, recon_loss
-
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         x = batch[0]
@@ -251,8 +322,6 @@ class VAE(pl.LightningModule):
             'kl': kl.mean(),
             'reconstruction': recon_loss.mean(),
         })
-        if torch.isnan(elbo).any():
-            print('nan in loss detected!')
 
         return elbo
 
@@ -296,69 +365,78 @@ class LogComputationalGraph(pl.Callback):
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
+class PadByOne:
+    def __call__(self, image):
+        return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
+
+
+class MyRotationTransform:
+    """Rotate by one of the given angles."""
+
+    def __init__(self, angles):
+        self.angles = angles
+
+    def __call__(self, x):
+        angle = random.choice(self.angles)
+        return TF.rotate(x, angle)
+
+
+class RGBCells(Dataset):
+    def __init__(self, split, augment=False, aggressive_rotation=False):
+        assert not (augment is False and aggressive_rotation is True)
+        d = {'expression': False, 'center': False, 'ome': True, 'mask': True}
+        self.ds = CellDataset(split, d)
+        self.augment = augment
+        self.aggressive_rotation = aggressive_rotation
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            PadByOne()
+        ])
+        self.augment_transform = transforms.Compose([
+            MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else transforms.RandomApply(
+                nn.ModuleList([transforms.RandomRotation(degrees=360)]),
+                p=0.6
+            ),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+        ])
+        self.normalize = ome_normalization()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, item):
+        x = self.ds[item][0]
+        if len(self.ds[item]) == 2:
+            mask = self.ds[item][1]
+            mask = self.transform(mask)
+            if self.augment:
+                state = torch.get_rng_state()
+                mask = self.augment_transform(mask)
+            mask = mask.float()
+        elif len(self.ds[item]) == 1:
+            mask = None
+        else:
+            raise ValueError()
+        x = self.transform(x)
+        if self.augment:
+            torch.set_rng_state(state)
+            x = self.augment_transform(x)
+        x = torch.asinh(x)
+        x = x[COOL_CHANNELS, :, :]
+        x = x.permute(1, 2, 0)
+        x = (x - self.normalize.mean) / self.normalize.std
+        x = x.permute(2, 0, 1)
+        x = x.float()
+        return x, mask
+
+
 def train():
     parser = ArgumentParser()
     parser.add_argument('--gpus', type=int, default=1)
     args = parser.parse_args()
 
-    class PadByOne:
-        def __call__(self, image):
-            return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
-
-    class MyRotationTransform:
-        """Rotate by one of the given angles."""
-
-        def __init__(self, angles):
-            self.angles = angles
-
-        def __call__(self, x):
-            angle = random.choice(self.angles)
-            return TF.rotate(x, angle)
-
-    class RGBCells(Dataset):
-        def __init__(self, split, augment=False, aggressive_rotation=False):
-            assert not (augment is False and aggressive_rotation is True)
-            d = {'expression': False, 'center': False, 'ome': True, 'mask': True}
-            self.ds = CellDataset(split, d)
-            self.augment = augment
-            self.aggressive_rotation = aggressive_rotation
-            self.transform = transforms.Compose([
-                transforms.ToTensor(),
-                PadByOne()
-            ])
-            self.augment_transform = transforms.Compose([
-                MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else transforms.RandomApply(
-                    nn.ModuleList([transforms.RandomRotation(degrees=360)])),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-            ])
-            self.normalize = ome_normalization()
-
-        def __len__(self):
-            return len(self.ds)
-
-        def __getitem__(self, item):
-            x = self.ds[item][0]
-            if len(self.ds[item]) == 2:
-                mask = self.ds[item][1]
-                mask = self.transform(mask)
-                mask = mask.float()
-            elif len(self.ds[item]) == 1:
-                mask = None
-            else:
-                raise ValueError()
-            x = self.transform(x)
-            if self.augment:
-                x = self.augment_transform(x)
-            x = torch.asinh(x)
-            x = x[COOL_CHANNELS, :, :]
-            x = x.permute(1, 2, 0)
-            x = (x - self.normalize.mean) / self.normalize.std
-            x = x.permute(2, 0, 1)
-            x = x.float()
-            return x, mask
-
-    train_ds = RGBCells('train', augment=True)
+    train_ds = RGBCells('train', augment=True, aggressive_rotation=True)
     train_ds_validation = RGBCells('train')
     val_ds = RGBCells('validation')
 
@@ -366,18 +444,24 @@ def train():
                                name='resnet_vae')
     trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
                          logger=logger,
-                         # log_every_n_steps=5, val_check_interval=2)
-                         log_every_n_steps=15, val_check_interval=200)
+                         log_every_n_steps=15, val_check_interval=2 if DEBUG else 50)
+    # set back val_check_interval to 200
 
-    n = BATCH_SIZE * 20
+    if DEBUG:
+        n = BATCH_SIZE * 2
+    else:
+        n = BATCH_SIZE * 20
     indices = np.random.choice(len(train_ds), n, replace=False)
     train_subset = Subset(train_ds_validation, indices)
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+    if DEBUG:
+        d = train_subset
+    else:
+        d = train_ds
+    train_loader = DataLoader(d, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
                               shuffle=True)
     train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
 
-    n = BATCH_SIZE * 20
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
     val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)

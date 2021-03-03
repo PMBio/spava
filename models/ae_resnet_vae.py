@@ -168,6 +168,7 @@ class ResNetEncoder(nn.Module):
             c, h, w = output.shape[1:]
         self.mask_conv1x1 = nn.Conv2d(8, 1, kernel_size=1)
         self.mask_adaptive = nn.AdaptiveAvgPool2d((h, w))
+        self.leaky_relu = nn.LeakyReLU()
         # self.mask_eltwise = TrainableEltwiseLayer(c, h, w)
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -199,9 +200,13 @@ class ResNetEncoder(nn.Module):
 
         if mask is not None:
             z = self.mask_conv1(mask)
+            z = self.leaky_relu(z)
             z = self.mask_conv2(z)
+            z = self.leaky_relu(z)
             z = self.mask_conv1x1(z)
+            z = self.leaky_relu(z)
             z = self.mask_adaptive(z)
+            # print('encoder:', z.sum().item())
             x = z * x
 
         x = self.avgpool(x)
@@ -222,6 +227,7 @@ class ResNetDecoder(nn.Module):
         self.first_conv = first_conv
         self.maxpool1 = maxpool1
         self.input_height = input_height
+        self.relu = nn.ReLU()
 
         self.upscale_factor = 4
 
@@ -256,6 +262,7 @@ class ResNetDecoder(nn.Module):
             c, h, w = output.shape[1:]
         self.mask_conv1x1 = nn.Conv2d(8, 1, kernel_size=1)
         self.mask_adaptive = nn.AdaptiveAvgPool2d((h, w))
+        self.leaky_relu = nn.LeakyReLU()
 
     def _make_layer(self, block, planes, blocks, scale=1):
         upsample = None
@@ -284,9 +291,13 @@ class ResNetDecoder(nn.Module):
 
         if mask is not None:
             z = self.mask_conv1(mask)
+            z = self.leaky_relu(z)
             z = self.mask_conv2(z)
+            z = self.leaky_relu(z)
             z = self.mask_conv1x1(z)
+            z = self.leaky_relu(z)
             z = self.mask_adaptive(z)
+            # print('decoder:', z.sum().item())
             x = z * x
 
         x = self.layer1(x)
