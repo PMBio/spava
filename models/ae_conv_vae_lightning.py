@@ -14,13 +14,12 @@ from models.ae_resnet_vae import resnet_encoder, resnet_decoder
 # resnet18_decoder,
 # resnet18_encoder,
 # )
-from pl_bolts.datamodules import CIFAR10DataModule, ImagenetDataModule
 from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
 import matplotlib
 
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import functools
 import numpy as np
 from torchvision.utils import make_grid
@@ -34,8 +33,8 @@ import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import random
 
-from pl_bolts.utils import _TORCHVISION_AVAILABLE
-from pl_bolts.utils.warnings import warn_missing_pkg
+# from pl_bolts.utils import _TORCHVISION_AVAILABLE
+# from pl_bolts.utils.warnings import warn_missing_pkg
 
 from torchvision import transforms
 from data2 import CellDataset
@@ -90,7 +89,7 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
                                         2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
                                         3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
                                         2.0277, 3.3281, 3.9273])[COOL_CHANNELS]
-
+# print('fino a qui tutto bene')
 
 def get_image(loader, model):
     all_originals = []
@@ -218,114 +217,26 @@ class ImageSampler(pl.Callback):
         # z = p.rsample()
 
         # normalize = ome_normalization()
+        a = pl_module.negative_binomial_p_logit
+        b = pl_module.boosted_sigmoid(a)
+        trainer.logger.experiment.add_scalars(f'negative_binomial_p_logit', {f'channel{i}': a[i] for i in range(len(
+            a))}, trainer.global_step)
+        trainer.logger.experiment.add_scalars(f'negative_binomial_p', {f'channel{i}': b[i] for i in range(len(b))},
+                                              trainer.global_step)
+
         for dataloader_idx in [0, 1]:
             loader = trainer.val_dataloaders[dataloader_idx]
             dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
-            all_originals = []
-            all_reconstructed = []
-            all_reconstructed_masked = []
-            mask_color = torch.tensor([x / 255 for x in [255, 112, 31]]).float()
-            new_size = (128, 128)
-            upscale = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize(new_size, interpolation=PIL.Image.NEAREST),
-                transforms.ToTensor()
-            ])
-            n = 5
-            with torch.no_grad():
-                batch = loader.__iter__().__next__()
-                omes = batch[0]
-                masks = batch[1]
-                assert len(omes.shape) == 4
-                assert len(omes) >= n
-                data = omes[:n].to(pl_module.device)
-                masks_data = masks[:n].to(pl_module.device)
-                pred = pl_module.forward(data, masks_data)[0]
-            for i in range(n):
-                def back_to_original(x):
-                    x = x.permute(1, 2, 0)
-                    # x = x * normalize.std + normalize.mean
-                    x = x * quantiles_for_normalization
-                    x = x.permute(2, 0, 1)
-                    return x
-
-                original = back_to_original(data[i].cpu())
-                reconstructed = back_to_original(pred[i].cpu())
-                a_original = original.amin(dim=(1, 2))
-                b_original = original.amax(dim=(1, 2))
-                a_reconstructed = reconstructed.amin(dim=(1, 2))
-                b_reconstructed = reconstructed.amax(dim=(1, 2))
-                a = torch.min(a_original, a_reconstructed)
-                b = torch.max(b_original, b_reconstructed)
-                f = lambda t, a, b: ((t.permute(1, 2, 0) - a) / (b - a)).permute(2, 0, 1)
-                original = f(original, a, b)
-                reconstructed = f(reconstructed, a, b).float()
-
-                m = masks_data[i].cpu().bool()
-                m = torch.logical_not(m)
-                m = torch.squeeze(m, 0)
-                reconstructed_masked = reconstructed.clone().permute(1, 2, 0)
-                reconstructed_masked[m, :] = mask_color
-                reconstructed_masked = reconstructed_masked.permute(2, 0, 1)
-
-                original = upscale(original)
-                reconstructed = upscale(reconstructed)
-                reconstructed_masked = upscale(reconstructed_masked)
-
-                all_originals.append(original)
-                all_reconstructed.append(reconstructed)
-                all_reconstructed_masked.append(reconstructed_masked)
-            l = all_originals + all_reconstructed + all_reconstructed_masked
-            img = make_grid(l, nrow=n)
+            img = get_image(loader, pl_module)
             trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
                                                 trainer.global_step)
 
-            for i in range(n):
-                original = all_originals[i].clone()
-                reconstructed = all_reconstructed[i].clone()
-                mask = masks_data[i].cpu().clone()
-                mask = upscale(mask)
-                mask = torch.squeeze(mask, 0)
-                mask = mask.bool()
-                inverted_mask = torch.logical_not(mask)
-
-                all_original_c = []
-                all_original_masked_c = []
-                all_reconstructed_c = []
-                all_reconstructed_masked_c = []
-
-                n_channels = original.shape[0]
-                for c in range(n_channels):
-                    original_c = original[c]
-                    original_c = original_c.repeat(3, 1, 1)
-
-                    original_masked_c = original_c.clone()
-                    original_masked_c = original_masked_c.permute(1, 2, 0)
-                    original_masked_c[inverted_mask, :] = mask_color
-                    original_masked_c = original_masked_c.permute(2, 0, 1)
-
-                    reconstructed_c = reconstructed[c]
-                    reconstructed_c = reconstructed_c.repeat(3, 1, 1)
-
-                    reconstructed_masked_c = reconstructed_c.clone()
-                    reconstructed_masked_c = reconstructed_masked_c.permute(1, 2, 0)
-                    reconstructed_masked_c[inverted_mask, :] = mask_color
-                    reconstructed_masked_c = reconstructed_masked_c.permute(2, 0, 1)
-
-                    all_original_c.append(original_c)
-                    all_original_masked_c.append(original_masked_c)
-                    all_reconstructed_c.append(reconstructed_c)
-                    all_reconstructed_masked_c.append(reconstructed_masked_c)
-                    trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
-                                                            f'{c}/original', original_masked_c[0].flatten(),
-                                                            trainer.global_step)
-                    trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
-                                                            f'{c}/reconstructed', reconstructed_masked_c[0].flatten(),
-                                                            trainer.global_step)
-                l = all_original_c + all_reconstructed_c + all_original_masked_c + all_reconstructed_masked_c
-                img = make_grid(l, nrow=n_channels)
-                trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}/image{i}', img,
-                                                    trainer.global_step)
+            # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
+            #                                         f'{c}/original', original_masked_c[0].flatten(),
+            #                                         trainer.global_step)
+            # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
+            #                                         f'{c}/reconstructed', reconstructed_masked_c[0].flatten(),
+            #                                         trainer.global_step)
 
 
 def get_detect_anomaly_cm():
@@ -364,10 +275,11 @@ class VAE(pl.LightningModule):
         # value such that if we apply the sigmoid function we get the p parameter of a negative binomial,
         # one per channel
 
-        logit = lambda p: math.log(p / (1 - p))
-
-        self.negative_binomial_p_logit = nn.Parameter(torch.Tensor([logit(0.2)] * self.n_channels))
-        self.vae_beta = 10.
+        VAE.p_booster = 1.
+        self.negative_binomial_p_logit = nn.Parameter(
+            torch.Tensor([self.boosted_logit(torch.tensor(0.2)).item()] * self.n_channels)
+        )
+        self.vae_beta = 100.
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
@@ -379,6 +291,14 @@ class VAE(pl.LightningModule):
         k = k.permute(0, 2, 3, 1)
         log_prob = torch.lgamma(k + r) - torch.lgamma(k + 1) - torch.lgamma(r) + r * torch.log(1 - p) + k * torch.log(p)
         return log_prob.permute(0, 3, 1, 2)
+
+    @classmethod
+    def boosted_logit(cls, p):
+        return torch.logit(p) / cls.p_booster
+
+    @classmethod
+    def boosted_sigmoid(cls, t):
+        return torch.sigmoid(t * cls.p_booster)
 
     @staticmethod
     def negative_binomial_mean(r, p):
@@ -392,7 +312,7 @@ class VAE(pl.LightningModule):
         # scale = torch.exp(logscale)
         # mean = x_hat
         r = x_hat
-        p = torch.sigmoid(self.negative_binomial_p_logit)
+        p = self.boosted_sigmoid(self.negative_binomial_p_logit)
         # variance = torch.square(scale)
         # alpha = torch.square(mean) / variance
         # beta = mean / variance
