@@ -126,17 +126,18 @@ class DecoderBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, block, layers, first_conv=False, maxpool1=False):
+    def __init__(self, block, layers, first_conv, maxpool1, n_channels):
         super().__init__()
 
         self.inplanes = 64
         self.first_conv = first_conv
         self.maxpool1 = maxpool1
+        self.n_channels = n_channels
 
         if self.first_conv:
-            self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(self.n_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         else:
-            self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(self.n_channels, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
 
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
@@ -154,7 +155,7 @@ class ResNetEncoder(nn.Module):
         # using the mask for conditioning the answer
         self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=1, bias=False)
         self.mask_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1, bias=False)
-        dummy_image = torch.zeros(1, 3, 32, 32)
+        dummy_image = torch.zeros(1, self.n_channels, 32, 32)
         with torch.no_grad():
             x = self.conv1(dummy_image)
             x = self.bn1(x)
@@ -219,13 +220,14 @@ class ResNetDecoder(nn.Module):
     Resnet in reverse order
     """
 
-    def __init__(self, block, layers, latent_dim, input_height, first_conv=False, maxpool1=False):
+    def __init__(self, block, layers, latent_dim, input_height, first_conv, maxpool1, n_channels):
         super().__init__()
 
         self.expansion = block.expansion
         self.inplanes = 256 * block.expansion
         self.first_conv = first_conv
         self.maxpool1 = maxpool1
+        self.n_channels = n_channels
         self.input_height = input_height
         self.relu = nn.ReLU()
 
@@ -251,7 +253,7 @@ class ResNetDecoder(nn.Module):
         # interpolate after linear layer using scale factor
         self.upscale1 = Interpolate(size=input_height // self.upscale_factor)
 
-        self.conv1 = nn.Conv2d(64 * block.expansion, 3, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(64 * block.expansion, self.n_channels, kernel_size=3, stride=1, padding=1, bias=False)
 
         # using the mask for conditioning the answer
         self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, padding=1)
@@ -309,9 +311,9 @@ class ResNetDecoder(nn.Module):
         return x
 
 
-def resnet_encoder(first_conv, maxpool1):
-    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1)
+def resnet_encoder(first_conv, maxpool1, n_channels):
+    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1, n_channels)
 
 
-def resnet_decoder(latent_dim, input_height, first_conv, maxpool1):
-    return ResNetDecoder(DecoderBlock, [2, 2, 2], latent_dim, input_height, first_conv, maxpool1)
+def resnet_decoder(latent_dim, input_height, first_conv, maxpool1, n_channels):
+    return ResNetDecoder(DecoderBlock, [2, 2, 2], latent_dim, input_height, first_conv, maxpool1, n_channels)
