@@ -49,11 +49,11 @@ from data2 import CellDataset
 #     return normalize
 #
 #
-COOL_CHANNELS = np.array([0, 10, 20])
+COOL_CHANNELS = np.array([0, 10, 20, 21])
 BATCH_SIZE = 1024
 LEARNING_RATE = 0.8e-3
-# DEBUG = True
-DEBUG = False
+DEBUG = True
+# DEBUG = False
 if DEBUG:
     NUM_WORKERS = 0
     DETECT_ANOMALY = True
@@ -92,10 +92,10 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
 # print('fino a qui tutto bene')
 
 def get_image(loader, model):
+    # TODOoooooooooooooooooooooooooooooooooooo PCA stuff
     all_originals = []
-    all_originals_masked = []
     all_reconstructed = []
-    all_reconstructed_masked = []
+    all_masks = []
     mask_color = torch.tensor([x / 255 for x in [254, 112, 31]]).float()
     new_size = (128, 128)
     upscale = transforms.Resize(new_size, interpolation=PIL.Image.NEAREST)
@@ -141,10 +141,11 @@ def get_image(loader, model):
         assert torch.all(reconstructed[mm, :] <= 1.)
         reconstructed = torch.clamp(reconstructed, 0., 1.)
 
-        original_masked = original.clone()
-        original_masked[mm_not, :] = mask_color
-        reconstructed_masked = reconstructed.clone()
-        reconstructed_masked[mm_not, :] = mask_color
+        all_masks.append(mm)
+        #### original_masked = original.clone()
+        #### original_masked[mm_not, :] = mask_color
+        #### reconstructed_masked = reconstructed.clone()
+        #### reconstructed_masked[mm_not, :] = mask_color
 
         for c in range(n_channels):
             original_c = original[:, :, c]
@@ -181,17 +182,29 @@ def get_image(loader, model):
 
         original = upscale(original.permute(2, 0, 1))
         reconstructed = upscale(reconstructed.permute(2, 0, 1))
-        original_masked = upscale(original_masked.permute(2, 0, 1))
-        reconstructed_masked = upscale(reconstructed_masked.permute(2, 0, 1))
+        #### original_masked = upscale(original_masked.permute(2, 0, 1))
+        #### reconstructed_masked = upscale(reconstructed_masked.permute(2, 0, 1))
 
         all_originals.append(original)
         all_reconstructed.append(reconstructed)
-        all_originals_masked.append(original_masked)
-        all_reconstructed_masked.append(reconstructed_masked)
+        #### all_originals_masked.append(original_masked)
+        #### all_reconstructed_masked.append(reconstructed_masked)
 
-    l = all_originals + all_reconstructed + all_originals_masked + all_reconstructed_masked
+    all_originals_pca_masked = []
+    all_reconstructed_pca_masked = []
+    #### l = all_originals + all_reconstructed + all_originals_masked + all_reconstructed_masked
+    l = [] ####
+    for original, reconstructed, mask in zip(all_originals, all_reconstructed, all_masks):
+        # TODO: compute the PCA reducer and fit (no fit transform) on all the pixels of original, and reconstructed
+        #  for the masked data. transform, and fill all_originals_pca, all_reconstructed_pca,
+        #  all_originals_pca_masked, all_reconstruced_pca_masked (using the mask color)
+        pass
+        print('ehi vecchio')
     for c in range(n_channels):
         l += (all_original_c[c] + all_reconstructed_c[c] + all_original_masked_c[c] + all_reconstructed_masked_c[c])
+
+    #### from sklearn.decomposition import PCA
+    #### reducer = PCA(3)
 
     img = make_grid(l, nrow=n)
     return img
@@ -256,12 +269,13 @@ class VAE(pl.LightningModule):
 
         # encoder, decoder
         self.n_channels = n_channels
-        self.encoder = resnet_encoder(first_conv=False, maxpool1=False)
+        self.encoder = resnet_encoder(first_conv=False, maxpool1=False, n_channels=self.n_channels)
         self.decoder = resnet_decoder(
             latent_dim=latent_dim,
             input_height=input_height,
             first_conv=False,
-            maxpool1=False
+            maxpool1=False,
+            n_channels=self.n_channels
         )
 
         # distribution parameters
@@ -508,8 +522,8 @@ def train():
     train_ds_validation = RGBCells('train')
     val_ds = RGBCells('validation')
 
-    logger = TensorBoardLogger(save_dir='/data/l989o/spatial_uzh/data/spatial_uzh_processed/a/checkpoints',
-                               name='resnet_vae')
+    from data2 import file_path
+    logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='resnet_vae')
     trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
                          logger=logger,
                          log_every_n_steps=15, val_check_interval=2 if DEBUG else 50)
