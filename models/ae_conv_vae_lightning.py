@@ -49,11 +49,12 @@ from data2 import CellDataset
 #     return normalize
 #
 #
-COOL_CHANNELS = np.array([0, 10, 20, 21])
+# COOL_CHANNELS = np.array([0, 10, 20, 21])
+COOL_CHANNELS = np.arange(39)
 BATCH_SIZE = 1024
 LEARNING_RATE = 0.8e-3
-DEBUG = True
-# DEBUG = False
+# DEBUG = True
+DEBUG = False
 if DEBUG:
     NUM_WORKERS = 0
     DETECT_ANOMALY = True
@@ -89,10 +90,11 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
                                         2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
                                         3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
                                         2.0277, 3.3281, 3.9273])[COOL_CHANNELS]
+
+
 # print('fino a qui tutto bene')
 
-def get_image(loader, model):
-    # TODOoooooooooooooooooooooooooooooooooooo PCA stuff
+def get_image(loader, model, return_cells=False):
     all_originals = []
     all_reconstructed = []
     all_masks = []
@@ -110,6 +112,9 @@ def get_image(loader, model):
         masks_data = masks[:n].to(model.device)
         pred = model.forward(data, masks_data)[0]
     n_channels = data.shape[1]
+    # I'm lazy
+    full_mask = torch.tensor([[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)])
+    full_mask = upscale(full_mask.permute(2, 0, 1))
     all_original_c = {c: [] for c in range(n_channels)}
     all_original_masked_c = {c: [] for c in range(n_channels)}
     all_reconstructed_c = {c: [] for c in range(n_channels)}
@@ -128,78 +133,137 @@ def get_image(loader, model):
         mm = torch.squeeze(m, 0)
         reconstructed_flattened = torch.reshape(reconstructed, (-1, reconstructed.shape[-1]))
         mask_flattened = mm.flatten()
-        a_reconstructed = reconstructed_flattened[mask_flattened, :].amin(dim=0)
-        b_reconstructed = reconstructed_flattened[mask_flattened, :].amax(dim=0)
-        a = torch.min(a_original, a_reconstructed)
-        b = torch.max(b_original, b_reconstructed)
+        if mask_flattened.sum() > 0:
+            a_reconstructed = reconstructed_flattened[mask_flattened, :].amin(dim=0)
+            b_reconstructed = reconstructed_flattened[mask_flattened, :].amax(dim=0)
+            a = torch.min(a_original, a_reconstructed)
+            b = torch.max(b_original, b_reconstructed)
 
-        original = ((original - a) / (b - a)).float()
-        reconstructed = ((reconstructed - a) / (b - a)).float()
+            original = ((original - a) / (b - a)).float()
+            reconstructed = ((reconstructed - a) / (b - a)).float()
 
-        mm_not = torch.logical_not(mm)
-        assert torch.all(reconstructed[mm, :] >= 0.)
-        assert torch.all(reconstructed[mm, :] <= 1.)
-        reconstructed = torch.clamp(reconstructed, 0., 1.)
+            mm_not = torch.logical_not(mm)
+            assert torch.all(reconstructed[mm, :] >= 0.)
+            assert torch.all(reconstructed[mm, :] <= 1.)
+            reconstructed = torch.clamp(reconstructed, 0., 1.)
 
-        all_masks.append(mm)
-        #### original_masked = original.clone()
-        #### original_masked[mm_not, :] = mask_color
-        #### reconstructed_masked = reconstructed.clone()
-        #### reconstructed_masked[mm_not, :] = mask_color
+            all_masks.append(mm)
+            #### original_masked = original.clone()
+            #### original_masked[mm_not, :] = mask_color
+            #### reconstructed_masked = reconstructed.clone()
+            #### reconstructed_masked[mm_not, :] = mask_color
 
-        for c in range(n_channels):
-            original_c = original[:, :, c]
-            original_c = torch.stack([original_c] * 3, dim=2)
+            for c in range(n_channels):
+                original_c = original[:, :, c]
+                original_c = torch.stack([original_c] * 3, dim=2)
 
-            reconstructed_c = reconstructed[:, :, c]
-            reconstructed_c = torch.stack([reconstructed_c] * 3, dim=2)
+                reconstructed_c = reconstructed[:, :, c]
+                reconstructed_c = torch.stack([reconstructed_c] * 3, dim=2)
 
-            def f(t):
-                t = t.permute(2, 0, 1)
-                t = upscale(t)
-                return t
+                def f(t):
+                    t = t.permute(2, 0, 1)
+                    t = upscale(t)
+                    return t
 
-            def overlay_mask(t):
-                t = t.clone()
-                t[mm_not, :] = mask_color
-                return t
+                def overlay_mask(t):
+                    t = t.clone()
+                    t[mm_not, :] = mask_color
+                    return t
 
-            a_original_c = original_c.amin(dim=(0, 1))
-            b_original_c = original_c.amax(dim=(0, 1))
-            reconstructed_flattened_c = torch.reshape(reconstructed_c, (-1, reconstructed_c.shape[-1]))
-            mask_flattened = mm.flatten()
-            a_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amin(dim=0)
-            b_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amax(dim=0)
-            a_c = torch.min(a_original_c, a_reconstructed_c)
-            b_c = torch.max(b_original_c, b_reconstructed_c)
+                a_original_c = original_c.amin(dim=(0, 1))
+                b_original_c = original_c.amax(dim=(0, 1))
+                reconstructed_flattened_c = torch.reshape(reconstructed_c, (-1, reconstructed_c.shape[-1]))
+                mask_flattened = mm.flatten()
+                a_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amin(dim=0)
+                b_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amax(dim=0)
+                a_c = torch.min(a_original_c, a_reconstructed_c)
+                b_c = torch.max(b_original_c, b_reconstructed_c)
 
-            t = (original_c - a_c) / (b_c - a_c)
-            all_original_c[c].append(f(t))
-            all_original_masked_c[c].append(f(overlay_mask(t)))
-            t = (reconstructed_c - a_c) / (b_c - a_c)
-            all_reconstructed_c[c].append(f(t))
-            all_reconstructed_masked_c[c].append(f(overlay_mask(t)))
+                t = (original_c - a_c) / (b_c - a_c)
+                all_original_c[c].append(f(t))
+                all_original_masked_c[c].append(f(overlay_mask(t)))
+                t = (reconstructed_c - a_c) / (b_c - a_c)
+                all_reconstructed_c[c].append(f(t))
+                all_reconstructed_masked_c[c].append(f(overlay_mask(t)))
 
-        original = upscale(original.permute(2, 0, 1))
-        reconstructed = upscale(reconstructed.permute(2, 0, 1))
-        #### original_masked = upscale(original_masked.permute(2, 0, 1))
-        #### reconstructed_masked = upscale(reconstructed_masked.permute(2, 0, 1))
+            original = upscale(original.permute(2, 0, 1))
+            reconstructed = upscale(reconstructed.permute(2, 0, 1))
+            #### original_masked = upscale(original_masked.permute(2, 0, 1))
+            #### reconstructed_masked = upscale(reconstructed_masked.permute(2, 0, 1))
 
-        all_originals.append(original)
-        all_reconstructed.append(reconstructed)
-        #### all_originals_masked.append(original_masked)
-        #### all_reconstructed_masked.append(reconstructed_masked)
+            all_originals.append(original)
+            all_reconstructed.append(reconstructed)
+            #### all_originals_masked.append(original_masked)
+            #### all_reconstructed_masked.append(reconstructed_masked)
+        else:
+            all_originals.append(upscale(original.permute(2, 0, 1)))
+            all_reconstructed.append(upscale(reconstructed.permute(2, 0, 1)))
+            all_masks.append(torch.tensor(np.zeros(new_size, dtype=bool)))
+            for c in range(n_channels):
+                all_original_c[c].append(full_mask)
+                all_reconstructed_c[c].append(full_mask)
+                all_original_masked_c[c].append(full_mask)
+                all_reconstructed_masked_c[c].append(full_mask)
 
+    l = []  ####
+    pixels = []
+    for original, reconstructed, mask in zip(all_originals, all_reconstructed, all_masks):
+        pixels.extend(original.permute(1, 2, 0).reshape((-1, n_channels)))
+        upscaled_mask = upscale(torch.unsqueeze(mask, 0))
+        upscaled_mask = torch.squeeze(upscaled_mask, 0).bool()
+        masked_reconstructed = reconstructed[:, upscaled_mask]
+        pixels.extend(masked_reconstructed.permute(1, 0))
+    from sklearn.decomposition import PCA
+    all_pixels = torch.stack(pixels).numpy()
+    reducer = PCA(3)
+    reducer.fit(all_pixels)
+    transformed = reducer.transform(all_pixels)
+    a = np.min(transformed, axis=0)
+    b = np.max(transformed, axis=0)
+    all_originals_pca = []
+    all_reconstructed_pca = []
     all_originals_pca_masked = []
     all_reconstructed_pca_masked = []
-    #### l = all_originals + all_reconstructed + all_originals_masked + all_reconstructed_masked
-    l = [] ####
+
+    def scale(x, a, b):
+        x = np.transpose(x, (1, 2, 0))
+        x = (x - a) / (b - a)
+        x = np.transpose(x, (2, 0, 1))
+        return x
+
     for original, reconstructed, mask in zip(all_originals, all_reconstructed, all_masks):
-        # TODO: compute the PCA reducer and fit (no fit transform) on all the pixels of original, and reconstructed
-        #  for the masked data. transform, and fill all_originals_pca, all_reconstructed_pca,
-        #  all_originals_pca_masked, all_reconstruced_pca_masked (using the mask color)
-        pass
-        print('ehi vecchio')
+        to_transform = original.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
+        pca = reducer.transform(to_transform)
+        pca.shape = (original.shape[1], original.shape[2], 3)
+        original_pca = np.transpose(pca, (2, 0, 1))
+        original_pca = scale(original_pca, a, b)
+        all_originals_pca.append(torch.tensor(original_pca))
+
+        to_transform = reconstructed.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
+        pca = reducer.transform(to_transform)
+        pca.shape = (reconstructed.shape[1], reconstructed.shape[2], 3)
+        reconstructed_pca = np.transpose(pca, (2, 0, 1))
+        reconstructed_pca = scale(reconstructed_pca, a, b)
+        all_reconstructed_pca.append(torch.tensor(reconstructed_pca))
+
+        mask = torch.logical_not(mask)
+        upscaled_mask = upscale(torch.unsqueeze(mask, 0))
+        upscaled_mask = torch.squeeze(upscaled_mask, 0).bool()
+
+        original_pca_masked = original_pca.copy()
+        original_pca_masked = original_pca_masked.transpose((1, 2, 0))
+        original_pca_masked[upscaled_mask, :] = mask_color
+        original_pca_masked = original_pca_masked.transpose((2, 0, 1))
+        all_originals_pca_masked.append(torch.tensor(original_pca_masked))
+
+        reconstructed_pca_masked = reconstructed_pca.copy()
+        reconstructed_pca_masked = reconstructed_pca_masked.transpose((1, 2, 0))
+        reconstructed_pca_masked[upscaled_mask, :] = mask_color
+        reconstructed_pca_masked = reconstructed_pca_masked.transpose((2, 0, 1))
+        all_reconstructed_pca_masked.append(torch.tensor(reconstructed_pca_masked))
+
+    l.extend(all_originals_pca + all_reconstructed_pca + all_originals_pca_masked + all_reconstructed_pca_masked)
+
     for c in range(n_channels):
         l += (all_original_c[c] + all_reconstructed_c[c] + all_original_masked_c[c] + all_reconstructed_masked_c[c])
 
@@ -207,8 +271,10 @@ def get_image(loader, model):
     #### reducer = PCA(3)
 
     img = make_grid(l, nrow=n)
-    return img
-
+    if not return_cells:
+        return img
+    else:
+        return img, all_original_c, all_reconstructed_c, all_masks
 
 # plt.figure(figsize=(30, 30))
 # im = img.permute(1, 2, 0).numpy()
