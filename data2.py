@@ -19,6 +19,8 @@ from torch.utils.data import DataLoader  # SequentialSampler
 import pathlib
 
 current_file_path = pathlib.Path(__file__).parent.absolute()
+
+
 # current_file_path = os.path.abspath('')
 
 
@@ -275,8 +277,10 @@ class ExpressionDataset(Dataset):
         self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
 
     # the background is not an expression rows, so for instance there is no new row which corresponds to the background in the old cell labeling. The asserts will check that everything is ok
-    def expression_old_to_new(self, old_e, i):
-        new_to_old, old_to_new = self.index_converter(i)
+    @staticmethod
+    def expression_old_to_new(old_e, i, index_converter):
+        # new_to_old, old_to_new = self.index_converter(i)
+        new_to_old, old_to_new = index_converter(i)
         assert len(old_e) == len(old_to_new) - 1, (len(old_e), len(old_to_new) + 1, f'ome_index{i}')
         new = []
         for i in range(len(old_to_new)):
@@ -293,7 +297,7 @@ class ExpressionDataset(Dataset):
 
     def __getitem__(self, i):
         e = self.ds[i]
-        new_e = self.expression_old_to_new(e, i)
+        new_e = ExpressionDataset.expression_old_to_new(e, i, self.index_converter)
         return new_e
 
 
