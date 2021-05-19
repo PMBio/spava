@@ -1,0 +1,6 @@
+#STARTUP:showall
+* expresion model
+- 
+* simple image model
+* resnet image model
+* latent fatures from resnet image model

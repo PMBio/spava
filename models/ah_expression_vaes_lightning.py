@@ -1,6 +1,7 @@
 import os.path
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 
@@ -29,7 +30,8 @@ import pyro.distributions
 import torchvision.transforms
 from data2 import CellDataset
 
-MAX_EPOCHS = 100
+MAX_EPOCHS = 360
+# MAX_EPOCHS = 50
 BATCH_SIZE = 1024
 LEARNING_RATE = 0.8e-3
 LOG_C = 1
@@ -217,6 +219,15 @@ class VAE(pl.LightningModule):
         s = log_pxz.mean(dim=-1)
         return s
 
+    def expected_value(self, a):
+        if NOISE_MODEL == 'gaussian':
+            dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
+        elif NOISE_MODEL == 'zi_gamma':
+            dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=torch.sigmoid(self.logit_d))
+        else:
+            raise RuntimeError()
+        return dist.mean
+
     def kl_divergence(self, z, mu, std):
         # --------------------------
         # Monte carlo KL divergence
@@ -281,7 +292,7 @@ class VAE(pl.LightningModule):
                 old['mu'] = mu
                 old['std'] = log_var
                 old['z'] = z
-                print('so far so good')
+                # print('so far so good')
             return a, mu, std, z
 
     def training_step(self, batch, batch_idx):
@@ -362,6 +373,20 @@ class PerturbedCellDataset(Dataset):
         self.merged = torch.asinh(self.merged)
         self.merged /= quantiles_for_normalization
         self.merged = self.merged.float()
+        self.corrupted_entries = None
+        self.original_merged = None
+        self.seed = None
+
+    def perturb(self, seed=0):
+        self.seed = seed
+        from torch.distributions import Bernoulli
+        dist = Bernoulli(probs=0.1)
+        state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        self.corrupted_entries = dist.sample(self.merged.shape).bool()
+        torch.set_rng_state(state)
+        self.original_merged = self.merged.clone()
+        self.merged[self.corrupted_entries] = 0.
 
     def __len__(self):
         return len(self.merged)
@@ -370,19 +395,27 @@ class PerturbedCellDataset(Dataset):
         return self.merged[i, :]
 
 
-def train():
-    parser = ArgumentParser()
-    parser.add_argument('--gpus', type=int, default=1)
-    args = parser.parse_args()
+def train(perturb=True):
+    # parser = ArgumentParser()
+    # parser.add_argument('--gpus', type=int, default=1)
+    # args = parser.parse_args()
 
     train_ds = PerturbedCellDataset('train')
+    if perturb:
+        train_ds.perturb()
     train_ds_validation = PerturbedCellDataset('train')
     val_ds = PerturbedCellDataset('validation')
     print(f'len(train_ds) = {len(train_ds)}, train_ds[0] = {train_ds[0]}, train_ds[0].shape = {train_ds[0].shape}')
 
     from data2 import file_path
     logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='expression_vae')
-    trainer = pl.Trainer(gpus=args.gpus, max_epochs=MAX_EPOCHS, callbacks=[ImageSampler(), LogComputationalGraph()],
+    print(f'logging in {logger.experiment.log_dir}')
+    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
+                                          monitor='elbo',
+                                          # every_n_train_steps=2,
+                                          save_last=True,
+                                          save_top_k=3)
+    trainer = pl.Trainer(gpus=1, max_epochs=MAX_EPOCHS, callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
                          logger=logger, num_sanity_val_steps=0, track_grad_norm=2,
                          log_every_n_steps=15 if not DEBUG else 1, val_check_interval=1 if DEBUG else 50)
     # set back val_check_interval to 200
