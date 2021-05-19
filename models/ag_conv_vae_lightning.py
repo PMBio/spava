@@ -9,7 +9,7 @@ import itertools
 from torch import nn
 import torch
 
-from models.ae_resnet_vae import resnet_encoder, resnet_decoder
+from models.ag_resnet_vae import resnet_encoder, resnet_decoder
 # from pl_bolts.models.autoencoders.components import (
 # resnet18_decoder,
 # resnet18_encoder,
@@ -32,11 +32,12 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import random
+import pyro
 
 # from pl_bolts.utils import _TORCHVISION_AVAILABLE
 # from pl_bolts.utils.warnings import warn_missing_pkg
 
-from torchvision import transforms
+import torchvision.transforms
 from data2 import CellDataset
 
 # def imagenet_normalization():
@@ -53,6 +54,7 @@ from data2 import CellDataset
 COOL_CHANNELS = np.arange(39)
 BATCH_SIZE = 1024
 LEARNING_RATE = 0.8e-3
+VAE_BETA = 100
 DEBUG = True
 # DEBUG = False
 if DEBUG:
@@ -100,7 +102,7 @@ def get_image(loader, model, return_cells=False):
     all_masks = []
     mask_color = torch.tensor([x / 255 for x in [254, 112, 31]]).float()
     new_size = (128, 128)
-    upscale = transforms.Resize(new_size, interpolation=PIL.Image.NEAREST)
+    upscale = torchvision.transforms.Resize(new_size, interpolation=PIL.Image.NEAREST)
     n = 15
     with torch.no_grad():
         batch = loader.__iter__().__next__()
@@ -110,7 +112,7 @@ def get_image(loader, model, return_cells=False):
         assert len(omes) >= n
         data = omes[:n].to(model.device)
         masks_data = masks[:n].to(model.device)
-        pred = model.forward(data, masks_data)[0]
+        alpha_pred, beta_pred = model.forward(data, masks_data)
     n_channels = data.shape[1]
     # I'm lazy
     full_mask = torch.tensor([[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)])
@@ -122,9 +124,14 @@ def get_image(loader, model, return_cells=False):
 
     for i in range(n):
         original = data[i].cpu().permute(1, 2, 0) * quantiles_for_normalization
-        r_hat = pred[i].cpu().permute(1, 2, 0)
-        p = torch.sigmoid(model.negative_binomial_p_logit).cpu().detach()
-        mean = model.negative_binomial_mean(r=r_hat, p=p)
+        alpha = alpha_pred[i].cpu().permute(1, 2, 0)
+        beta = beta_pred[i].cpu().permute(1, 2, 0)
+        r = alpha
+        p = 1 / (1 + beta)
+        # r_hat = pred[i].cpu().permute(1, 2, 0)
+        # p = torch.sigmoid(model.negative_binomial_p_logit).cpu().detach()
+        # mean = model.negative_binomial_mean(r=r_hat, p=p)
+        mean = p * r / (1 - p)
         reconstructed = mean * quantiles_for_normalization
 
         a_original = original.amin(dim=(0, 1))
@@ -276,6 +283,7 @@ def get_image(loader, model, return_cells=False):
     else:
         return img, all_original_c, all_reconstructed_c, all_masks
 
+
 # plt.figure(figsize=(30, 30))
 # im = img.permute(1, 2, 0).numpy()
 # print(im.shape, im.min(), im.max())
@@ -296,12 +304,12 @@ class ImageSampler(pl.Callback):
         # z = p.rsample()
 
         # normalize = ome_normalization()
-        a = pl_module.negative_binomial_p_logit
-        b = pl_module.boosted_sigmoid(a)
-        trainer.logger.experiment.add_scalars(f'negative_binomial_p_logit', {f'channel{i}': a[i] for i in range(len(
-            a))}, trainer.global_step)
-        trainer.logger.experiment.add_scalars(f'negative_binomial_p', {f'channel{i}': b[i] for i in range(len(b))},
-                                              trainer.global_step)
+        # a = pl_module.negative_binomial_p_logit
+        # b = pl_module.boosted_sigmoid(a)
+        # trainer.logger.experiment.add_scalars(f'negative_binomial_p_logit', {f'channel{i}': a[i] for i in range(len(
+        #     a))}, trainer.global_step)
+        # trainer.logger.experiment.add_scalars(f'negative_binomial_p', {f'channel{i}': b[i] for i in range(len(b))},
+        #                                       trainer.global_step)
 
         for dataloader_idx in [0, 1]:
             loader = trainer.val_dataloaders[dataloader_idx]
@@ -355,51 +363,12 @@ class VAE(pl.LightningModule):
         # value such that if we apply the sigmoid function we get the p parameter of a negative binomial,
         # one per channel
 
-        VAE.p_booster = 1.
-        self.negative_binomial_p_logit = nn.Parameter(
-            torch.Tensor([self.boosted_logit(torch.tensor(0.2)).item()] * self.n_channels)
-        )
-        self.vae_beta = 100.
-
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
 
-    # these functions assume r > 0 and p in ]0, 1[
-    @staticmethod
-    def negative_binomial_log_prob(r, p, k):
-        r = r.permute(0, 2, 3, 1)
-        k = k.permute(0, 2, 3, 1)
-        log_prob = torch.lgamma(k + r) - torch.lgamma(k + 1) - torch.lgamma(r) + r * torch.log(1 - p) + k * torch.log(p)
-        return log_prob.permute(0, 3, 1, 2)
-
-    @classmethod
-    def boosted_logit(cls, p):
-        return torch.logit(p) / cls.p_booster
-
-    @classmethod
-    def boosted_sigmoid(cls, t):
-        return torch.sigmoid(t * cls.p_booster)
-
-    @staticmethod
-    def negative_binomial_mean(r, p):
-        return p * r / (1 - p)
-
-    @staticmethod
-    def negative_binomial_variance(r, p):
-        return p * r / torch.square(1 - p)
-
-    def reconstruction_likelihood(self, x_hat, x, mask):
-        # scale = torch.exp(logscale)
-        # mean = x_hat
-        r = x_hat
-        p = self.boosted_sigmoid(self.negative_binomial_p_logit)
-        # variance = torch.square(scale)
-        # alpha = torch.square(mean) / variance
-        # beta = mean / variance
-        # dist = torch.distributions.Gamma(alpha, beta)
-        log_pxz = self.negative_binomial_log_prob(r, p, k=x)
-        # dist = torch.distributions.NegativeBinomial(mean, torch.sigmoid(scale))
-        # dist = torch.distributions.Normal(mean, scale)
+    def reconstruction_likelihood(self, alpha, beta, x, mask):
+        dist = pyro.distributions.GammaPoisson(alpha, beta)
+        log_pxz = dist.log_prob(x)
 
         # measure prob of seeing image under p(x|z)
         # log_pxz = dist.log_prob(x)
@@ -425,16 +394,16 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
-    def loss_function(self, x, x_hat, mu, std, z, mask):
+    def loss_function(self, x, alpha, beta, mu, std, z, mask):
         # reconstruction loss
         # print(x_hat.shape)
         cm = get_detect_anomaly_cm()
         with cm:
-            recon_loss = self.reconstruction_likelihood(x_hat, x, mask)
+            recon_loss = self.reconstruction_likelihood(alpha, beta, x, mask)
             # kl
             kl = self.kl_divergence(z, mu, std)
             # elbo
-            elbo = (self.vae_beta * kl - recon_loss)
+            elbo = (VAE_BETA * kl - recon_loss)
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print('nan in loss detected!')
@@ -452,17 +421,18 @@ class VAE(pl.LightningModule):
             z = q.rsample()
 
             # decoded
-            x_hat = self.decoder(z, mask)
-            x_hat = self.softplus(x_hat)
-            return x_hat, mu, std, z
+            log_alpha, log_beta = self.decoder(z, mask)
+            alpha = torch.exp(log_alpha)
+            beta = torch.exp(log_beta)
+            return alpha, beta, mu, std, z
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         x = batch[0]
         mask = batch[1]
         # encode x to get the mu and variance parameters
-        x_hat, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z, mask)
+        alpha, beta, mu, std, z = self.forward(x, mask)
+        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask)
 
         self.log_dict({
             'elbo': elbo,
@@ -475,8 +445,8 @@ class VAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx):
         x = batch[0]
         mask = batch[1]
-        x_hat, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, x_hat, mu, std, z, mask)
+        alpha, beta, mu, std, z = self.forward(x, mask)
+        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask)
 
         d = {
             'elbo': elbo,
@@ -535,17 +505,18 @@ class RGBCells(Dataset):
         self.ds = CellDataset(split, d)
         self.augment = augment
         self.aggressive_rotation = aggressive_rotation
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
+        t = torchvision.transforms
+        self.transform = t.Compose([
+            t.ToTensor(),
             PadByOne()
         ])
-        self.augment_transform = transforms.Compose([
-            MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else transforms.RandomApply(
-                nn.ModuleList([transforms.RandomRotation(degrees=360)]),
+        self.augment_transform = t.Compose([
+            MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else t.RandomApply(
+                nn.ModuleList([t.RandomRotation(degrees=360)]),
                 p=0.6
             ),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
+            t.RandomHorizontalFlip(),
+            t.RandomVerticalFlip(),
         ])
         # self.normalize = ome_normalization()
 
