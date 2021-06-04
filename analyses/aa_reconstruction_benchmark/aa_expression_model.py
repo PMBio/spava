@@ -29,6 +29,7 @@ import pyro
 import pyro.distributions
 
 ##
+# import ipdb
 # from models.ah_expression_vaes_lightning import train
 #
 # train(perturb=True)
@@ -52,6 +53,7 @@ model = VAE.load_from_checkpoint(checkpoint)
 ##
 plt.figure()
 plt.hist(torch.exp(model.log_c).detach().numpy())
+plt.title('distribution of log(c) values')
 plt.show()
 
 ##
@@ -72,38 +74,44 @@ print(score)
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import kde
-
+import time
 
 ##
 v = x[a].detach().numpy()
 w = x_zero_pred_mean[a].detach().numpy()
 axes = plt.subplots(1, 2, figsize=(10, 5))[1]
 axes[0].hist(v, bins=30)
+axes[0].set(title='histogram of original expression values')
 axes[0].set(xlim=(0, 5))
 axes[1].hist(w, bins=5)
+axes[1].set(title='histogram of predicted expression values')
 axes[1].set(xlim=(0, 5))
+plt.suptitle('only indices for corrupted entries')
 plt.show()
+
+
 ##
-def plot_imputation(imputed, original, xtext): #, zeros, i, j, ix, xtext):
+def plot_imputation(imputed, original, xtext):  # , zeros, i, j, ix, xtext):
     # all_index = i[ix], j[ix]
     # x, y = imputed[all_index], original[all_index]
     #
     # x = x[zeros[all_index] == 0]
     # y = y[zeros[all_index] == 0]
     #
-    ymax = 4
-    # mask = x < ymax
-    # x = x[mask]
-    # y = y[mask]
-    #
-    # mask = y < ymax
-    # x = x[mask]
-    # y = y[mask]
-    #
-    # l = np.minimum(x.shape[0], y.shape[0])
-    #
-    # x = x[:l]
-    # y = y[:l]
+    cutoff = 2
+    mask = imputed < cutoff
+    imputed = imputed[mask]
+    original = original[mask]
+
+    mask = original < cutoff
+    imputed = imputed[mask]
+    original = original[mask]
+
+    l = np.minimum(imputed.shape[0], original.shape[0])
+
+    assert len(imputed) == len(original)
+    imputed = imputed[:l]
+    original = original[:l]
 
     # data = np.vstack([x, y])
     data = np.vstack([imputed, original])
@@ -111,15 +119,18 @@ def plot_imputation(imputed, original, xtext): #, zeros, i, j, ix, xtext):
     plt.figure(figsize=(5, 5))
 
     axes = plt.gca()
-    axes.set_xlim([0, ymax])
-    axes.set_ylim([0, ymax])
+    axes.set_xlim([0, cutoff])
+    axes.set_ylim([0, cutoff])
 
     nbins = 50
 
     # Evaluate a gaussian kde on a regular grid of nbins x nbins over data extents
     k = kde.gaussian_kde(data)
-    xi, yi = np.mgrid[0:ymax:nbins * 1j, 0:ymax:nbins * 1j]
+    xi, yi = np.mgrid[0:cutoff:nbins * 1j, 0:cutoff:nbins * 1j]
+
+    start = time.time()
     zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+    print(f'evaluating the kernel on the mesh: {time.time() - start}')
 
     plt.title(xtext, fontsize=12)
     plt.ylabel("Imputed counts")
@@ -128,10 +139,43 @@ def plot_imputation(imputed, original, xtext): #, zeros, i, j, ix, xtext):
     plt.pcolormesh(yi, xi, zi.reshape(xi.shape), cmap="Reds")
 
     a, _, _, _ = np.linalg.lstsq(original[:, np.newaxis], imputed)
-    l = np.linspace(0, ymax)
+    l = np.linspace(0, cutoff)
     plt.plot(l, a * l, color='black')
+
+    A = np.vstack([original, np.ones(len(original))]).T
+    aa, _, _, _ = np.linalg.lstsq(A, imputed)
+    plt.plot(l, aa[0] * l + aa[1], color='red')
 
     plt.plot(l, l, color='black', linestyle=":")
     plt.show()
 
+
 plot_imputation(w, v, 'gaussian noise model')
+
+##
+plt.figure()
+plt.scatter(v, w, s=1, alpha=0.05)
+plt.xlabel('original')
+plt.ylabel('imputed')
+ax = plt.gca()
+# ax.set_aspect('equal')
+ax.set(xlim=(0, 2), ylim=(0, 2))
+plt.show()
+
+
+##
+plt.figure()
+plt.hist(w, bins=1000)
+plt.title('historam of imputed')
+plt.show()
+
+
+##
+plt.figure()
+plt.hist(v, bins=10000)
+plt.xscale('log')
+plt.title('historam of originals')
+plt.show()
+
+##
+
