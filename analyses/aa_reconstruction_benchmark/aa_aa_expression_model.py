@@ -65,6 +65,8 @@ models = {
            '/version_61/checkpoints/last.ckpt',
     'zip_oliver': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/checkpoints/expression_vae'
            '/version_64/checkpoints/last.ckpt',
+    'better_zip': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/checkpoints/expression_vae'
+           '/version_65/checkpoints/last.ckpt',
 }
 # model_title = 'first_decent_gaussian'
 # model_title = 'montecarlo_and_oliver'
@@ -75,7 +77,8 @@ models = {
 # model_title = 'zip'
 # model_title = 'zin'
 # model_title = 'log_normal'
-model_title = 'zip_oliver'
+# model_title = 'zip_oliver'
+model_title = 'better_zip'
 checkpoint = models[model_title]
 
 from models.ah_expression_vaes_lightning import VAE, set_ppp_from_loaded_model
@@ -91,11 +94,16 @@ plt.show()
 ##
 x = ds0.original_merged
 x_zero = ds0.merged
-x_pred = model.forward(x)[0]
-x_zero_pred = model.forward(x_zero)[0]
+x_pred, b = model.forward(x)[:2]
+x_zero_pred, b_zero = model.forward(x_zero)[:2]
 
-x_pred_mean = model.expected_value(x_pred)
-x_zero_pred_mean = model.expected_value(x_zero_pred)
+x_pred_mean = model.expected_value(x_pred, b)
+x_zero_pred_mean = model.expected_value(x_zero_pred, b_zero)
+##
+plt.figure()
+plt.title(f'{model_title}: distribution of b values')
+plt.hist(b.detach().numpy().ravel(), bins=30)
+plt.show()
 
 ##
 a = ds0.corrupted_entries
