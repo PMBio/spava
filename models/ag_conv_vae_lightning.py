@@ -1,3 +1,38 @@
+import numpy as np
+class Ppp:
+    pass
+
+
+ppp = Ppp()
+# ppp.DEBUG_TORCH = 'yessss'
+ppp.MAX_EPOCHS = 20
+# ppp.COOL_CHANNELS = np.array([0, 10, 20, 21])
+ppp.COOL_CHANNELS = np.arange(39)
+ppp.BATCH_SIZE = 1024
+ppp.LEARNING_RATE = 0.8e-3
+ppp.VAE_BETA = 100
+# ppp.DEBUG = True
+ppp.DEBUG = False
+if ppp.DEBUG:
+    ppp.NUM_WORKERS = 0
+    ppp.DETECT_ANOMALY = True
+else:
+    if 'DEBUG_TORCH' in ppp.__dict__:
+        ppp.NUM_WORKERS = 0
+    else:
+        ppp.NUM_WORKERS = 16
+    ppp.DETECT_ANOMALY = False
+ppp.MASK_LOSS = True
+# ppp.NOISE_MODEL = 'gaussian'
+ppp.NOISE_MODEL = 'nb'
+
+def set_ppp_from_loaded_model(pl_module):
+    global ppp
+    ppp = pl_module.hparams
+
+
+import os.path
+
 import math
 
 import pytorch_lightning as pl
@@ -21,7 +56,6 @@ import matplotlib
 
 # matplotlib.use('Agg')
 import functools
-import numpy as np
 from torchvision.utils import make_grid
 import PIL
 import pytorch_lightning as pl
@@ -50,20 +84,6 @@ from data2 import CellDataset
 #     return normalize
 #
 #
-# COOL_CHANNELS = np.array([0, 10, 20, 21])
-COOL_CHANNELS = np.arange(39)
-BATCH_SIZE = 1024
-LEARNING_RATE = 0.8e-3
-VAE_BETA = 100
-DEBUG = True
-# DEBUG = False
-if DEBUG:
-    NUM_WORKERS = 0
-    DETECT_ANOMALY = True
-else:
-    # NUM_WORKERS = 0
-    NUM_WORKERS = 16
-    DETECT_ANOMALY = False
 
 # def ome_normalization():
 #     mean = np.array([0.3128328, 0.08154685, 0.02617499, 0.31149776, 0.10011313,
@@ -561,7 +581,7 @@ def train():
 
     from data2 import file_path
     logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='resnet_vae')
-    trainer = pl.Trainer(gpus=args.gpus, max_epochs=20, callbacks=[ImageSampler(), LogComputationalGraph()],
+    trainer = pl.Trainer(gpus=args.gpus, max_epochs=ppp.MAX_EPOCHS, callbacks=[ImageSampler(), LogComputationalGraph()],
                          logger=logger,
                          log_every_n_steps=15, val_check_interval=2 if DEBUG else 50)
     # set back val_check_interval to 200

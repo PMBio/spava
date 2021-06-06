@@ -1,3 +1,44 @@
+class Ppp:
+    pass
+
+
+ppp = Ppp()
+
+# ppp.DEBUG_TORCH = 'yessss'
+ppp.MAX_EPOCHS = 20
+ppp.BATCH_SIZE = 1024
+ppp.LEARNING_RATE = 0.8e-3
+ppp.LOG_C = 1
+ppp.VAE_BETA = 1e-2
+ppp.MONTE_CARLO = True
+ppp.MASK_LOSS = True
+ppp.LATENT_DIMS = 10
+# ppp.DEBUG = True
+ppp.DEBUG = False
+if ppp.DEBUG:
+    ppp.NUM_WORKERS = 0
+    ppp.DETECT_ANOMALY = True
+else:
+    if 'DEBUG_TORCH' in ppp.__dict__:
+        ppp.NUM_WORKERS = 0
+    else:
+        ppp.NUM_WORKERS = 16
+    ppp.DETECT_ANOMALY = False
+# ppp.NOISE_MODEL = 'gaussian'
+# ppp.NOISE_MODEL = 'gamma'
+ppp.NOISE_MODEL = 'zip'
+# ppp.NOISE_MODEL = 'zin'
+# ppp.NOISE_MODEL = 'log_normal'
+
+
+# ppp.NOISE_MODEL = 'zi_gamma'
+# ppp.NOISE_MODEL = 'nb'
+
+def set_ppp_from_loaded_model(pl_module):
+    global ppp
+    ppp = pl_module.hparams
+
+
 import os.path
 
 import pytorch_lightning as pl
@@ -30,24 +71,6 @@ import pyro.distributions
 import torchvision.transforms
 from data2 import CellDataset
 
-MAX_EPOCHS = 360
-# MAX_EPOCHS = 50
-BATCH_SIZE = 1024
-LEARNING_RATE = 0.8e-3
-LOG_C = 1
-VAE_BETA = 1e-2
-DEBUG = True
-# DEBUG = False
-if DEBUG:
-    NUM_WORKERS = 0
-    DETECT_ANOMALY = True
-else:
-    # NUM_WORKERS = 0
-    NUM_WORKERS = 16
-    DETECT_ANOMALY = False
-NOISE_MODEL = 'gaussian'
-# NOISE_MODEL = 'zi_gamma'
-
 quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
                                         3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
                                         2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
@@ -79,8 +102,7 @@ class ImageSampler(pl.Callback):
 
 
 def get_detect_anomaly_cm():
-    global DETECT_ANOMALY
-    if DETECT_ANOMALY:
+    if ppp.DETECT_ANOMALY:
         cm = autograd.detect_anomaly()
     else:
         cm = contextlib.nullcontext()
@@ -90,6 +112,38 @@ def get_detect_anomaly_cm():
 from pyro.distributions.zero_inflated import ZeroInflatedDistribution
 from pyro.distributions import Gamma
 from torch.distributions import constraints
+
+
+class ZeroInflatedNormal(ZeroInflatedDistribution):
+    """
+    A Zero Inflated Normal distribution.
+    """
+    arg_constraints = {"loc": constraints.real,
+                       "scale": constraints.positive,
+                       "gate": constraints.unit_interval,
+                       "gate_logits": constraints.real}
+    support = constraints.real
+
+    def __init__(self, loc, scale, *, gate=None, gate_logits=None,
+                 validate_args=None):
+        base_dist = pyro.distributions.Normal(
+            loc=loc,
+            scale=scale,
+            validate_args=False,
+        )
+        base_dist._validate_args = validate_args
+
+        super().__init__(
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
+        )
+
+    @property
+    def location(self):
+        return self.base_dist.mean
+
+    @property
+    def stddev(self):
+        return self.base_dist.stddev
 
 
 class ZeroInflatedGamma(ZeroInflatedDistribution):
@@ -131,9 +185,6 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
         return self.base_dist.rate
 
 
-old = dict()
-
-
 # dist = Gamma(10, 10)
 # dist = ZeroInflatedGamma(10, 10, gate=torch.tensor([0.1]))
 # x = dist.sample((10000,))
@@ -142,8 +193,9 @@ old = dict()
 # plt.show()
 
 class VAE(pl.LightningModule):
-    def __init__(self, in_channels, latent_dim=10, out_channels=None):
+    def __init__(self, in_channels, latent_dim=10, out_channels=None, mask_loss: bool = None, **kwargs):
         super().__init__()
+        self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
         self.in_channels = in_channels
         if out_channels is None:
@@ -151,6 +203,7 @@ class VAE(pl.LightningModule):
         else:
             self.out_channels = out_channels
         self.latent_dim = latent_dim
+        self.mask_loss = mask_loss
 
         self.encoder0 = nn.Linear(self.in_channels, 30)
         self.encoder1 = nn.Linear(30, 20)
@@ -161,10 +214,11 @@ class VAE(pl.LightningModule):
         self.decoder1 = nn.Linear(15, 20)
         self.decoder2 = nn.Linear(20, 30)
         self.decoder3_a = nn.Linear(30, self.out_channels)
-        self.softplus_a = nn.Softplus()
-        # self.decoder3_b = nn.Linear(30, self.out_channels)
+        self.softplus = nn.Softplus()
+        self.decoder3_b = nn.Linear(30, self.out_channels)
+        self.sigmoid = nn.Sigmoid()
 
-        self.log_c = nn.Parameter(torch.Tensor([LOG_C] * 39))
+        self.log_c = nn.Parameter(torch.Tensor([ppp.LOG_C] * 39))
         self.logit_d = nn.Parameter(torch.logit(torch.Tensor([0.001] * 39)))
 
     def encoder(self, x):
@@ -180,12 +234,17 @@ class VAE(pl.LightningModule):
         z = F.relu(self.decoder1(z))
         z = F.relu(self.decoder2(z))
         decoded_a = self.decoder3_a(z)
-        if NOISE_MODEL == 'zi_gamma':
-            decoded_a = self.softplus_a(decoded_a) + 2
-        return decoded_a
+        decoded_b = self.decoder3_b(z)
+        if ppp.NOISE_MODEL in ['gamma', 'zi_gamma', 'nb']:
+            decoded_a = self.softplus(decoded_a) + 2
+        elif ppp.NOISE_MODEL == 'zip':
+            decoded_a = self.softplus(decoded_a)
+        if ppp.NOISE_MODEL in ['zip', 'zig', 'zi_gamma']:
+            decoded_b = self.sigmoid(decoded_b)
+        return decoded_a, decoded_b
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
+        return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
 
     @staticmethod
     def kld_loss(mu, log_var):
@@ -193,39 +252,63 @@ class VAE(pl.LightningModule):
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        kld = -0.5 * torch.mean(torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1), dim=0)
+
+        # kld = -0.5 * torch.mean(torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1), dim=0)
+        # the mean for dim=0 is done by loss_function()
+        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
         return kld
 
-    @staticmethod
-    def mse_loss(recon_x, x):
-        mse_loss = nn.MSELoss(reduction='mean')
-        err_absolute = mse_loss(recon_x, x)
-        return err_absolute
+    def mse_loss(self, recon_x, x, corrupted_entries):
+        # mse_loss = nn.MSELoss(reduction='mean')
+        # err_absolute = mse_loss(recon_x, x)
+        se_loss = torch.square(recon_x - x)
+        if self.mask_loss:
+            se_loss[corrupted_entries] = 0.
+        non_corrupted_count = corrupted_entries.shape[-1] - corrupted_entries.sum(dim=-1)
+        mse_loss = se_loss.sum(dim=-1) / non_corrupted_count
+        return mse_loss
 
-    def reconstruction_likelihood(self, a, x):
-        if NOISE_MODEL == 'gaussian':
+    def get_dist(self, a, b):
+        if ppp.NOISE_MODEL == 'gaussian':
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
-        elif NOISE_MODEL == 'zi_gamma':
-            dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=torch.sigmoid(self.logit_d))
+        elif ppp.NOISE_MODEL == 'zin':
+            dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
+        elif ppp.NOISE_MODEL == 'gamma':
+            dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
+        elif ppp.NOISE_MODEL == 'zi_gamma':
+            dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=b)
+        elif ppp.NOISE_MODEL == 'nb':
+            dist = pyro.distributions.GammaPoisson(a, torch.exp(self.log_c))
+        elif ppp.NOISE_MODEL == 'zip':
+            dist = pyro.distributions.ZeroInflatedPoisson(a, gate=b)
+        elif ppp.NOISE_MODEL == 'log_normal':
+            dist = pyro.distributions.LogNormal(a, torch.exp(self.log_c))
         else:
             raise RuntimeError()
+        return dist
 
+    def reconstruction_likelihood(self, a, b, x, corrupted_entries):
+        dist = self.get_dist(a, b)
         # measure prob of seeing image under p(x|z)
-        if torch.any(dist.log_prob(0.).isinf()):
+        # bad variable naming :P
+        zero = torch.tensor([2.]).to(a.device)
+        if torch.any(dist.log_prob(zero).isinf()):
             print('infinite value detected')
-        if torch.any(dist.log_prob(0.).isinf()):
+        if torch.any(dist.log_prob(zero).isnan()):
             print('nan value detected')
-        log_pxz = dist.log_prob(x)
-        s = log_pxz.mean(dim=-1)
+        if ppp.NOISE_MODEL in ['gamma, zi_gamma', 'log_normal']:
+            offset = 1e-4
+        else:
+            offset = 0.
+        log_pxz = dist.log_prob(x + offset)
+        if self.mask_loss:
+            log_pxz[corrupted_entries] = 0.
+        non_corrupted_count = corrupted_entries.shape[-1] - corrupted_entries.sum(dim=-1)
+        s = log_pxz.sum(dim=-1) / non_corrupted_count
         return s
 
-    def expected_value(self, a):
-        if NOISE_MODEL == 'gaussian':
-            dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
-        elif NOISE_MODEL == 'zi_gamma':
-            dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=torch.sigmoid(self.logit_d))
-        else:
-            raise RuntimeError()
+    def expected_value(self, a, b=None):
+        dist = self.get_dist(a)
         return dist.mean
 
     def kl_divergence(self, z, mu, std):
@@ -245,24 +328,22 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
-    def loss_function(self, x, a, mu, std, z):
+    def loss_function(self, x, a, b, mu, std, z, corrupted_entries):
         # reconstruction loss
         # print(x_hat.shape)
         cm = get_detect_anomaly_cm()
         with cm:
-            MONTE_CARLO = True
-            # MONTE_CARLO = False
-            if MONTE_CARLO:
-                recon_loss = self.reconstruction_likelihood(a, x)
+            if ppp.MONTE_CARLO:
+                recon_loss = self.reconstruction_likelihood(a, b, x, corrupted_entries)
                 # kl
                 kl = self.kl_divergence(z, mu, std)
                 # elbo
                 # elbo = kl - recon_loss
             else:
-                recon_loss = - self.mse_loss(a, x)
+                recon_loss = - self.mse_loss(a, x, corrupted_entries)
                 log_var = 2 * torch.log(std)
                 kl = self.kld_loss(mu, log_var)
-            elbo = (VAE_BETA * kl - recon_loss)
+            elbo = (ppp.VAE_BETA * kl - recon_loss)
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print('nan in loss detected!')
@@ -283,25 +364,21 @@ class VAE(pl.LightningModule):
             z = q.rsample()
 
             # decoded
-            a = self.decoder(z)
+            a, b = self.decoder(z)
             if torch.isnan(a).any() or torch.isnan(mu).any() or torch.isnan(std).any() or torch.isnan(z).any():
                 print('nan in forward detected!')
-            else:
-                global old
-                old['a'] = a
-                old['mu'] = mu
-                old['std'] = log_var
-                old['z'] = z
-                # print('so far so good')
-            return a, mu, std, z
+            # print('so far so good')
+            return a, b, mu, std, z
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        assert batch.shape == (BATCH_SIZE, 39)
-        x = batch
+        x, corrupted_entries = batch
+        # assert x.shape == (BATCH_SIZE, 39)
+        assert len(x.shape) == 2
+        assert x.shape[-1] == 39
         # encode x to get the mu and variance parameters
-        a, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, a, mu, std, z)
+        a, b, mu, std, z = self.forward(x)
+        elbo, kl, recon_loss = self.loss_function(x, a, b, mu, std, z, corrupted_entries)
 
         self.log_dict({
             'elbo': elbo,
@@ -312,10 +389,12 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        assert batch.shape == (BATCH_SIZE, 39)
-        x = batch
-        a, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, a, mu, std, z)
+        x, corrupted_entries = batch
+        # assert x.shape == (BATCH_SIZE, 39)
+        assert len(x.shape) == 2
+        assert x.shape[-1] == 39
+        a, b, mu, std, z = self.forward(x)
+        elbo, kl, recon_loss = self.loss_function(x, a, b, mu, std, z, corrupted_entries)
 
         d = {
             'elbo': elbo,
@@ -351,6 +430,16 @@ class LogComputationalGraph(pl.Callback):
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
+# class LogHyperparameters(pl.Callback):
+#     def __init__(self):
+#         self.alredy_logged = False
+#
+#     def on_validation_start(self, trainer, pl_module) -> None:
+#         if not trainer.running_sanity_check:
+#             if not self.alredy_logged:
+#                 pl_module.logger.log_hyperparams(ppp.__dict__)
+#                 self.alredy_logged = True
+
 from data2 import AccumulatedDataset, FilteredMasksRelabeled, ExpressionDataset, file_path
 
 
@@ -373,7 +462,7 @@ class PerturbedCellDataset(Dataset):
         self.merged = torch.asinh(self.merged)
         self.merged /= quantiles_for_normalization
         self.merged = self.merged.float()
-        self.corrupted_entries = None
+        self.corrupted_entries = torch.zeros_like(self.merged, dtype=torch.bool)
         self.original_merged = None
         self.seed = None
 
@@ -392,10 +481,10 @@ class PerturbedCellDataset(Dataset):
         return len(self.merged)
 
     def __getitem__(self, i):
-        return self.merged[i, :]
+        return self.merged[i, :], self.corrupted_entries[i, :]
 
 
-def train(perturb=True):
+def train(perturb=False):
     # parser = ArgumentParser()
     # parser.add_argument('--gpus', type=int, default=1)
     # args = parser.parse_args()
@@ -405,7 +494,8 @@ def train(perturb=True):
         train_ds.perturb()
     train_ds_validation = PerturbedCellDataset('train')
     val_ds = PerturbedCellDataset('validation')
-    print(f'len(train_ds) = {len(train_ds)}, train_ds[0] = {train_ds[0]}, train_ds[0].shape = {train_ds[0].shape}')
+    print(f'len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ='
+          f' {train_ds[0][0].shape}')
 
     from data2 import file_path
     logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='expression_vae')
@@ -415,29 +505,31 @@ def train(perturb=True):
                                           # every_n_train_steps=2,
                                           save_last=True,
                                           save_top_k=3)
-    trainer = pl.Trainer(gpus=1, max_epochs=MAX_EPOCHS, callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
-                         logger=logger, num_sanity_val_steps=0, track_grad_norm=2,
-                         log_every_n_steps=15 if not DEBUG else 1, val_check_interval=1 if DEBUG else 50)
+    trainer = pl.Trainer(gpus=1, max_epochs=ppp.MAX_EPOCHS,
+                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
+                         logger=logger, num_sanity_val_steps=0,  # track_grad_norm=2,
+                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 400)
     # set back val_check_interval to 200
 
-    if DEBUG:
-        n = BATCH_SIZE * 2
+    if ppp.DEBUG:
+        n = ppp.BATCH_SIZE * 2
     else:
-        n = BATCH_SIZE * 20
+        n = ppp.BATCH_SIZE * 20
     indices = np.random.choice(len(train_ds), n, replace=False)
     train_subset = Subset(train_ds_validation, indices)
 
-    if DEBUG:
+    if ppp.DEBUG:
         d = train_subset
     else:
         d = train_ds
-    train_loader = DataLoader(d, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+    train_loader = DataLoader(d, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True,
                               shuffle=True)
-    train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+    train_loader_batch = DataLoader(train_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS,
+                                    pin_memory=True)
 
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
-    val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+    val_loader = DataLoader(val_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True)
     #
     # class MySampler(Sampler):
     #     def __init__(self, my_ordered_indices):
@@ -457,9 +549,10 @@ def train(perturb=True):
 
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
-    vae = VAE(in_channels=39)
+    vae = VAE(in_channels=39, latent_dim=ppp.LATENT_DIMS, out_channels=None, mask_loss=ppp.MASK_LOSS, **ppp.__dict__)
     trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
+    print(f'finished logging in {logger.experiment.log_dir}')
 
 
 if __name__ == '__main__':
-    train()
+    train(perturb=True)
