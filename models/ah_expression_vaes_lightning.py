@@ -308,7 +308,7 @@ class VAE(pl.LightningModule):
         return s
 
     def expected_value(self, a, b=None):
-        dist = self.get_dist(a)
+        dist = self.get_dist(a, b)
         return dist.mean
 
     def kl_divergence(self, z, mu, std):
