@@ -126,6 +126,7 @@ def get_image(loader, model, return_cells=False):
     all_reconstructed = []
     all_masks = []
     mask_color = torch.tensor([x / 255 for x in [254, 112, 31]]).float()
+    red_color = torch.tensor([x / 255 for x in [255, 0, 0]]).float()
     new_size = (128, 128)
     upscale = torchvision.transforms.Resize(new_size, interpolation=PIL.Image.NEAREST)
     n = 15
@@ -133,6 +134,10 @@ def get_image(loader, model, return_cells=False):
         batch = loader.__iter__().__next__()
         omes = batch[0]
         masks = batch[1]
+        if len(batch) == 3:
+            perturbed_entries = batch[2]
+        else:
+            perturbed_entries = None
         assert len(omes.shape) == 4
         assert len(omes) >= n
         data = omes[:n].to(model.device)
@@ -186,6 +191,7 @@ def get_image(loader, model, return_cells=False):
             #### reconstructed_masked[mm_not, :] = mask_color
 
             for c in range(n_channels):
+                is_perturbed_entry = perturbed_entries is not None and perturbed_entries[i, c]
                 original_c = original[:, :, c]
                 original_c = torch.stack([original_c] * 3, dim=2)
 
@@ -197,9 +203,13 @@ def get_image(loader, model, return_cells=False):
                     t = upscale(t)
                     return t
 
-                def overlay_mask(t):
+                def overlay_mask(t, is_perturbed_entry=False):
                     t = t.clone()
-                    t[mm_not, :] = mask_color
+                    if not is_perturbed_entry:
+                        color = mask_color
+                    else:
+                        color = red_color
+                    t[mm_not, :] = color
                     return t
 
                 a_original_c = original_c.amin(dim=(0, 1))
@@ -213,10 +223,10 @@ def get_image(loader, model, return_cells=False):
 
                 t = (original_c - a_c) / (b_c - a_c)
                 all_original_c[c].append(f(t))
-                all_original_masked_c[c].append(f(overlay_mask(t)))
+                all_original_masked_c[c].append(f(overlay_mask(t, is_perturbed_entry)))
                 t = (reconstructed_c - a_c) / (b_c - a_c)
                 all_reconstructed_c[c].append(f(t))
-                all_reconstructed_masked_c[c].append(f(overlay_mask(t)))
+                all_reconstructed_masked_c[c].append(f(overlay_mask(t, is_perturbed_entry)))
 
             original = upscale(original.permute(2, 0, 1))
             reconstructed = upscale(reconstructed.permute(2, 0, 1))
@@ -390,7 +400,7 @@ class VAE(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
 
-    def reconstruction_likelihood(self, alpha, beta, x, mask):
+    def reconstruction_likelihood(self, alpha, beta, x, mask, corrupted_entries):
         dist = pyro.distributions.GammaPoisson(alpha, beta)
         log_pxz = dist.log_prob(x)
 
@@ -398,7 +408,9 @@ class VAE(pl.LightningModule):
         # log_pxz = dist.log_prob(x)
         if mask is None:
             mask = torch.ones_like(log_pxz)
-        s = (mask * log_pxz).mean(dim=(1, 2, 3))
+        log_pxz[corrupted_entries, :, :] = 0.
+        non_corrupted_count = corrupted_entries.logical_not().sum()
+        s = (mask * log_pxz).sum(dim=(1, 2, 3)) / non_corrupted_count
         return s
 
     def kl_divergence(self, z, mu, std):
@@ -418,12 +430,12 @@ class VAE(pl.LightningModule):
         kl = kl.sum(-1)
         return kl
 
-    def loss_function(self, x, alpha, beta, mu, std, z, mask):
+    def loss_function(self, x, alpha, beta, mu, std, z, mask, corrupted_entries):
         # reconstruction loss
         # print(x_hat.shape)
         cm = get_detect_anomaly_cm()
         with cm:
-            recon_loss = self.reconstruction_likelihood(alpha, beta, x, mask)
+            recon_loss = self.reconstruction_likelihood(alpha, beta, x, mask, corrupted_entries)
             # kl
             kl = self.kl_divergence(z, mu, std)
             # elbo
@@ -454,9 +466,10 @@ class VAE(pl.LightningModule):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         x = batch[0]
         mask = batch[1]
+        corrupted_entries = batch[2]
         # encode x to get the mu and variance parameters
         alpha, beta, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask)
+        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask, corrupted_entries)
 
         self.log_dict({
             'elbo': elbo,
@@ -469,8 +482,9 @@ class VAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx):
         x = batch[0]
         mask = batch[1]
+        corrupted_entries = batch[2]
         alpha, beta, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask)
+        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask, corrupted_entries)
 
         d = {
             'elbo': elbo,
@@ -585,15 +599,15 @@ class PerturbedRGBCells(Dataset):
     def __init__(self, split: str, **kwargs):
         self.rgb_cells = RGBCells(split, **kwargs)
         self.seed = None
-        self.corrupted_entries = None
+        # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
+        n_channels = self.rgb_cells[0][0].shape[0]
+        self.corrupted_entries = torch.zeros((len(self.rgb_cells), n_channels))
 
     def perturb(self, seed=0):
         self.seed = seed
         from torch.distributions import Bernoulli
         dist = Bernoulli(probs=0.1)
-        # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
-        n_channels = self.rgb_cells[0][0].shape[0]
-        shape = (len(self.rgb_cells), n_channels)
+        shape = self.corrupted_entries.shape
         state = torch.get_rng_state()
         torch.manual_seed(seed)
         self.corrupted_entries = dist.sample(shape).bool()
@@ -614,14 +628,9 @@ def train(perturb=False):
     parser.add_argument('--gpus', type=int, default=1)
     args = parser.parse_args()
 
-    if perturb:
-        my_ds = PerturbedRGBCells
-    else:
-        my_ds = RGBCells
-
-    train_ds = my_ds('train', augment=True, aggressive_rotation=True)
-    train_ds_validation = my_ds('train')
-    val_ds = my_ds('validation')
+    train_ds = PerturbedRGBCells('train', augment=True, aggressive_rotation=True)
+    train_ds_validation = PerturbedRGBCells('train')
+    val_ds = PerturbedRGBCells('validation')
 
     if perturb:
         train_ds.perturb()

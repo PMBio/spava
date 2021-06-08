@@ -264,7 +264,7 @@ class VAE(pl.LightningModule):
         se_loss = torch.square(recon_x - x)
         if self.mask_loss:
             se_loss[corrupted_entries] = 0.
-        non_corrupted_count = corrupted_entries.shape[-1] - corrupted_entries.sum(dim=-1)
+        non_corrupted_count = corrupted_entries.logical_not().sum()
         mse_loss = se_loss.sum(dim=-1) / non_corrupted_count
         return mse_loss
 
@@ -303,7 +303,7 @@ class VAE(pl.LightningModule):
         log_pxz = dist.log_prob(x + offset)
         if self.mask_loss:
             log_pxz[corrupted_entries] = 0.
-        non_corrupted_count = corrupted_entries.shape[-1] - corrupted_entries.sum(dim=-1)
+        non_corrupted_count = corrupted_entries.logical_not().sum()
         s = log_pxz.sum(dim=-1) / non_corrupted_count
         return s
 
@@ -448,7 +448,7 @@ class PerturbedCellDataset(Dataset):
         self.split = split
         self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=False)
         self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
-        f = file_path('ah_filtered_untransformed_expression_tensor_merged.npy')
+        f = file_path(f'ah_filtered_untransformed_expression_tensor_merged_{split}.npy')
         # os.remove(f)
         if not os.path.isfile(f):
             all = []
