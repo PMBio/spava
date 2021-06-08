@@ -15,7 +15,7 @@ ppp.MASK_LOSS = True
 ppp.LATENT_DIMS = 10
 # ppp.DEBUG = True
 ppp.DEBUG = False
-if ppp.DEBUG:
+if ppp.DEBUG and not 'DEBUG_TORCH' in ppp.__dict__:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
@@ -472,7 +472,8 @@ class PerturbedCellDataset(Dataset):
         dist = Bernoulli(probs=0.1)
         state = torch.get_rng_state()
         torch.manual_seed(seed)
-        self.corrupted_entries = dist.sample(self.merged.shape).bool()
+        shape = self.merged.shape
+        self.corrupted_entries = dist.sample(shape).bool()
         torch.set_rng_state(state)
         self.original_merged = self.merged.clone()
         self.merged[self.corrupted_entries] = 0.
@@ -490,10 +491,13 @@ def train(perturb=False):
     # args = parser.parse_args()
 
     train_ds = PerturbedCellDataset('train')
-    if perturb:
-        train_ds.perturb()
     train_ds_validation = PerturbedCellDataset('train')
     val_ds = PerturbedCellDataset('validation')
+
+    if perturb:
+        train_ds.perturb()
+        train_ds_validation.perturb()
+        val_ds.perturb()
     print(f'len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ='
           f' {train_ds[0][0].shape}')
 

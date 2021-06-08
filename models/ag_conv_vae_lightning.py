@@ -1,4 +1,6 @@
 import numpy as np
+
+
 class Ppp:
     pass
 
@@ -13,7 +15,7 @@ ppp.LEARNING_RATE = 0.8e-3
 ppp.VAE_BETA = 100
 # ppp.DEBUG = True
 ppp.DEBUG = False
-if ppp.DEBUG:
+if ppp.DEBUG and not 'DEBUG_TORCH' in ppp.__dict__:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
@@ -23,8 +25,10 @@ else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
 ppp.MASK_LOSS = True
+
+
 # ppp.NOISE_MODEL = 'gaussian'
-ppp.NOISE_MODEL = 'nb'
+# ppp.NOISE_MODEL = 'nb'
 
 def set_ppp_from_loaded_model(pl_module):
     global ppp
@@ -59,6 +63,7 @@ import functools
 from torchvision.utils import make_grid
 import PIL
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from torch.utils.data import Dataset, DataLoader, Sampler, Subset
 from torch import autograd
 import contextlib
@@ -111,7 +116,7 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
                                         3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
                                         2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
                                         3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
-                                        2.0277, 3.3281, 3.9273])[COOL_CHANNELS]
+                                        2.0277, 3.3281, 3.9273])[ppp.COOL_CHANNELS]
 
 
 # print('fino a qui tutto bene')
@@ -132,7 +137,7 @@ def get_image(loader, model, return_cells=False):
         assert len(omes) >= n
         data = omes[:n].to(model.device)
         masks_data = masks[:n].to(model.device)
-        alpha_pred, beta_pred = model.forward(data, masks_data)
+        alpha_pred, beta_pred, mu, std, z = model.forward(data, masks_data)
     n_channels = data.shape[1]
     # I'm lazy
     full_mask = torch.tensor([[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)])
@@ -347,8 +352,7 @@ class ImageSampler(pl.Callback):
 
 
 def get_detect_anomaly_cm():
-    global DETECT_ANOMALY
-    if DETECT_ANOMALY:
+    if ppp.DETECT_ANOMALY:
         cm = autograd.detect_anomaly()
     else:
         cm = contextlib.nullcontext()
@@ -384,7 +388,7 @@ class VAE(pl.LightningModule):
         # one per channel
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=LEARNING_RATE)
+        return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
 
     def reconstruction_likelihood(self, alpha, beta, x, mask):
         dist = pyro.distributions.GammaPoisson(alpha, beta)
@@ -423,7 +427,7 @@ class VAE(pl.LightningModule):
             # kl
             kl = self.kl_divergence(z, mu, std)
             # elbo
-            elbo = (VAE_BETA * kl - recon_loss)
+            elbo = (ppp.VAE_BETA * kl - recon_loss)
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print('nan in loss detected!')
@@ -485,6 +489,12 @@ class VAE(pl.LightningModule):
                     self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.global_step)
                     # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
                 # return {'log': d}
+
+    def on_post_move_to_device(self):
+        self.decoder.mask_conv1.weight = self.encoder.mask_conv1.weight
+        self.decoder.mask_conv2.weight = self.encoder.mask_conv2.weight
+        self.decoder.mask_conv1x1.weight = self.encoder.mask_conv1x1.weight
+        print('sharing the weights between encoder and decoder for the convnet operating on the mask')
 
 
 # from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
@@ -561,7 +571,7 @@ class RGBCells(Dataset):
             torch.set_rng_state(state)
             x = self.augment_transform(x)
         x = torch.asinh(x)
-        x = x[COOL_CHANNELS, :, :]
+        x = x[ppp.COOL_CHANNELS, :, :]
         x = x.permute(1, 2, 0)
         # x = (x - self.normalize.mean) / self.normalize.std
         x = x / quantiles_for_normalization
@@ -570,40 +580,88 @@ class RGBCells(Dataset):
         return x, mask
 
 
-def train():
+# maybe use inheritance
+class PerturbedRGBCells(Dataset):
+    def __init__(self, split: str, **kwargs):
+        self.rgb_cells = RGBCells(split, **kwargs)
+        self.seed = None
+        self.corrupted_entries = None
+
+    def perturb(self, seed=0):
+        self.seed = seed
+        from torch.distributions import Bernoulli
+        dist = Bernoulli(probs=0.1)
+        # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
+        n_channels = self.rgb_cells[0][0].shape[0]
+        shape = (len(self.rgb_cells), n_channels)
+        state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        self.corrupted_entries = dist.sample(shape).bool()
+        torch.set_rng_state(state)
+
+    def __len__(self):
+        return len(self.rgb_cells)
+
+    def __getitem__(self, i):
+        x, mask = self.rgb_cells[i]
+        entries_to_corrupt = self.corrupted_entries[i, :]
+        x[entries_to_corrupt] = 0.
+        return x, mask, entries_to_corrupt
+
+
+def train(perturb=False):
     parser = ArgumentParser()
     parser.add_argument('--gpus', type=int, default=1)
     args = parser.parse_args()
 
-    train_ds = RGBCells('train', augment=True, aggressive_rotation=True)
-    train_ds_validation = RGBCells('train')
-    val_ds = RGBCells('validation')
+    if perturb:
+        my_ds = PerturbedRGBCells
+    else:
+        my_ds = RGBCells
+
+    train_ds = my_ds('train', augment=True, aggressive_rotation=True)
+    train_ds_validation = my_ds('train')
+    val_ds = my_ds('validation')
+
+    if perturb:
+        train_ds.perturb()
+        train_ds_validation.perturb()
+        val_ds.perturb()
 
     from data2 import file_path
     logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='resnet_vae')
-    trainer = pl.Trainer(gpus=args.gpus, max_epochs=ppp.MAX_EPOCHS, callbacks=[ImageSampler(), LogComputationalGraph()],
+    print(f'logging in {logger.experiment.log_dir}')
+    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
+                                          monitor='elbo',
+                                          # every_n_train_steps=2,
+                                          save_last=True,
+                                          save_top_k=1)
+    trainer = pl.Trainer(gpus=args.gpus, max_epochs=ppp.MAX_EPOCHS, callbacks=[
+        ImageSampler(), LogComputationalGraph(), checkpoint_callback
+    ],
                          logger=logger,
-                         log_every_n_steps=15, val_check_interval=2 if DEBUG else 50)
+                         log_every_n_steps=15, val_check_interval=2 if ppp.DEBUG else 50)
     # set back val_check_interval to 200
 
-    if DEBUG:
-        n = BATCH_SIZE * 2
+    if ppp.DEBUG:
+        n = ppp.BATCH_SIZE * 2
     else:
-        n = BATCH_SIZE * 20
+        n = ppp.BATCH_SIZE * 20
     indices = np.random.choice(len(train_ds), n, replace=False)
     train_subset = Subset(train_ds_validation, indices)
 
-    if DEBUG:
+    if ppp.DEBUG:
         d = train_subset
     else:
         d = train_ds
-    train_loader = DataLoader(d, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
+    train_loader = DataLoader(d, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True,
                               shuffle=True)
-    train_loader_batch = DataLoader(train_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+    train_loader_batch = DataLoader(train_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS,
+                                    pin_memory=True)
 
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
-    val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True)
+    val_loader = DataLoader(val_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True)
     #
     # class MySampler(Sampler):
     #     def __init__(self, my_ordered_indices):
@@ -623,9 +681,10 @@ def train():
 
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
-    vae = VAE(n_channels=len(COOL_CHANNELS))
+    vae = VAE(n_channels=len(ppp.COOL_CHANNELS))
     trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
+    print(f'finished logging in {logger.experiment.log_dir}')
 
 
 if __name__ == '__main__':
-    train()
+    train(perturb=True)
