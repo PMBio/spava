@@ -24,7 +24,6 @@ else:
     else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
-ppp.MASK_LOSS = True
 
 
 # ppp.NOISE_MODEL = 'gaussian'
@@ -156,12 +155,14 @@ def get_image(loader, model, return_cells=False):
         original = data[i].cpu().permute(1, 2, 0) * quantiles_for_normalization
         alpha = alpha_pred[i].cpu().permute(1, 2, 0)
         beta = beta_pred[i].cpu().permute(1, 2, 0)
-        r = alpha
-        p = 1 / (1 + beta)
-        # r_hat = pred[i].cpu().permute(1, 2, 0)
-        # p = torch.sigmoid(model.negative_binomial_p_logit).cpu().detach()
-        # mean = model.negative_binomial_mean(r=r_hat, p=p)
-        mean = p * r / (1 - p)
+        dist = model.get_dist(alpha, beta)
+        mean = dist.mean
+        # r = alpha
+        # p = 1 / (1 + beta)
+        # # r_hat = pred[i].cpu().permute(1, 2, 0)
+        # # p = torch.sigmoid(model.negative_binomial_p_logit).cpu().detach()
+        # # mean = model.negative_binomial_mean(r=r_hat, p=p)
+        # mean = p * r / (1 - p)
         reconstructed = mean * quantiles_for_normalization
 
         a_original = original.amin(dim=(0, 1))
@@ -370,9 +371,10 @@ def get_detect_anomaly_cm():
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, n_channels, enc_out_dim=256, latent_dim=64, input_height=32):
+    def __init__(self, n_channels, enc_out_dim=256, latent_dim=64, input_height=32, **kwargs):
         super().__init__()
 
+        # self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
 
         # encoder, decoder
@@ -400,8 +402,11 @@ class VAE(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
 
+    def get_dist(self, alpha, beta):
+        return pyro.distributions.GammaPoisson(alpha, beta)
+
     def reconstruction_likelihood(self, alpha, beta, x, mask, corrupted_entries):
-        dist = pyro.distributions.GammaPoisson(alpha, beta)
+        dist = self.get_dist(alpha, beta)
         log_pxz = dist.log_prob(x)
 
         # measure prob of seeing image under p(x|z)
@@ -690,7 +695,7 @@ def train(perturb=False):
 
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
-    vae = VAE(n_channels=len(ppp.COOL_CHANNELS))
+    vae = VAE(n_channels=len(ppp.COOL_CHANNELS), **ppp.__dict__)
     trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
     print(f'finished logging in {logger.experiment.log_dir}')
 
