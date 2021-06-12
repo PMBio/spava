@@ -1,3 +1,4 @@
+# aaa = True
 import numpy as np
 
 
@@ -6,10 +7,11 @@ class Ppp:
 
 
 ppp = Ppp()
-# ppp.DEBUG_TORCH = 'yessss'
+if 'aaa' in locals():
+    ppp.DEBUG_TORCH = 'yessss'
 ppp.MAX_EPOCHS = 20
-# ppp.COOL_CHANNELS = np.array([0, 10, 20, 21])
-ppp.COOL_CHANNELS = np.arange(39)
+ppp.COOL_CHANNELS = np.array([38, 38, 38])
+# ppp.COOL_CHANNELS = np.arange(39)
 ppp.BATCH_SIZE = 1024
 ppp.LEARNING_RATE = 0.8e-3
 ppp.VAE_BETA = 100

@@ -45,7 +45,7 @@ assert torch.all(ds0.corrupted_entries == ds1.corrupted_entries)
 
 ##
 models = {
-    'first_decent_gaussian': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/old_checkpoints/expression_vae'
+    'overfitted_gaussian': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/old_checkpoints/expression_vae'
                              '/version_13/checkpoints/epoch=359-step=719.ckpt',
     'montecarlo_and_oliver': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/old_checkpoints/expression_vae'
                              '/version_32/checkpoints/last.ckpt', # <---- best model
@@ -68,7 +68,7 @@ models = {
     'better_zip': '/data/l989o/data/basel_zurich/spatial_uzh_processed/a/checkpoints/expression_vae'
            '/version_65/checkpoints/last.ckpt',
 }
-# model_title = 'first_decent_gaussian'
+# model_title = 'overfitted_gaussian'
 # model_title = 'montecarlo_and_oliver'
 # model_title = 'no_montecarlo_and_oliver'
 # model_title = 'montecarlo_and_scvi'
@@ -216,7 +216,7 @@ def plot_imputation(imputed, original, xtext):  # , zeros, i, j, ix, xtext):
     plt.show()
 
 
-# plot_imputation(w, v, 'gaussian noise model')
+plot_imputation(w, v, 'gaussian noise model')
 
 ##
 print('done')

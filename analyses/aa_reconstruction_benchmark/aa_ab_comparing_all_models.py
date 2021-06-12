@@ -42,7 +42,7 @@ from scipy.stats import kde
 import time
 
 fig, axes = plt.subplots(math.ceil(len(models) / 2), 2, figsize=(10, 10))
-axes = axes.flatten(axes)
+axes = axes.flatten()
 for i, model_title in enumerate(tqdm(models, desc='iterating through models ')):
     checkpoint = models[model_title]
 
