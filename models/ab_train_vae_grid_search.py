@@ -1,6 +1,6 @@
 # take inspiration from here https://github.com/pytorch/ignite/blob/master/examples/contrib/cifar10/main.py
 from __future__ import annotations
-from data import file_path
+from ds import file_path
 
 import os
 import shutil
@@ -389,7 +389,7 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     np.random.seed(0)
 
-    from data import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
+    from ds import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
 
     # MODEL_ID = 'raw_mean_dataset'
     # MODEL_ID = 'raw_mean12'

@@ -25,11 +25,11 @@ current_file_path = pathlib.Path(__file__).parent.absolute()
 
 
 def file_path_old_data(f):
-    return os.path.join(current_file_path, 'data/spatial_uzh_processed', f)
+    return os.path.join(current_file_path, 'ds/spatial_uzh_processed', f)
 
 
 def file_path(f):
-    return os.path.join(current_file_path, 'data/spatial_uzh_processed/a', f)
+    return os.path.join(current_file_path, 'ds/spatial_uzh_processed/a', f)
 
 
 CHANNEL_NAMES = ['H3tot', 'H3met', 'CK5', 'Fibronectin', 'CK19', 'CK8/18', 'TWIST1', 'CD68', 'CK14', 'SMA',
@@ -83,7 +83,7 @@ class OmeDataset(Dataset):
 
     def __getitem__(self, i):
         filename = self.filenames[i]
-        f = os.path.join('data/OMEandSingleCellMasks/ome/', filename)
+        f = os.path.join('ds/OMEandSingleCellMasks/ome/', filename)
         ome = skimage.io.imread(f)
         ome = np.moveaxis(ome, 0, 2)
         ome = ome[:, :, CHANNELS_TO_KEEP]

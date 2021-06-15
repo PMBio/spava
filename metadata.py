@@ -470,7 +470,7 @@ def metrics_factory(feature_name: str, begin: int, end: int) -> Dict[str, Metric
 def get_metadata(clean=True, clean_verbose=True):
     # import time
     # start = time.time()
-    from data import file_path_old_data
+    from ds import file_path_old_data
     f_basel = file_path_old_data('../Data_publication/BaselTMA/Basel_PatientMetadata.csv')
     f_zurich = file_path_old_data('../Data_publication/ZurichTMA/Zuri_PatientMetadata.csv')
     df_basel = pd.read_csv(f_basel)

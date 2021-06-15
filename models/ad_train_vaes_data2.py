@@ -338,7 +338,7 @@ if __name__ == '__main__':
     torch.manual_seed(now)
     np.random.seed(now)
 
-    from data import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
+    from ds import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
 
     # MODEL_ID = 'raw_mean_dataset'
     # MODEL_ID = 'raw_mean12'

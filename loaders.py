@@ -31,7 +31,7 @@ def get_data_loader(dataset):
 
 
 if __name__ == '__main__':
-    from data import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
+    from ds import RawMeanDataset, RawMean12, NatureBImproved, NatureBOriginal, TransformedMeanDataset
 
     splits = ['train', 'validation', 'test']
     # splits = ['validation', 'test']

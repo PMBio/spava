@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 import h5py
-from data import RawMeanDataset, TransformedMeanDataset, file_path
+from ds import RawMeanDataset, TransformedMeanDataset, file_path
 import pickle
 from splits import train, validation, test
 

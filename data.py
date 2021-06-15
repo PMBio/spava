@@ -21,11 +21,11 @@ channel_names = ['H3tot', 'H3met', 'CK5', 'Fibronectin', 'CK19', 'CK8/18', 'TWIS
 
 
 def file_path_old_data(f):
-    return os.path.join(current_file_path, 'data/spatial_uzh_processed', f)
+    return os.path.join(current_file_path, 'ds/spatial_uzh_processed', f)
 
 
 def file_path(f):
-    return os.path.join(current_file_path, 'data/spatial_uzh_processed/a', f)
+    return os.path.join(current_file_path, 'ds/spatial_uzh_processed/a', f)
 
 a = file_path_old_data('phyper_data/accumulated_features/b3f06e1c82889221ec4ac7c901afe5295666b7ab905716bf32072ba1e2920abb/cell_features.hdf5')
 
@@ -113,7 +113,7 @@ class OmeDataset(Dataset):
 
     def __getitem__(self, i):
         filename = self.filenames[i]
-        f = os.path.join('data/OMEandSingleCellMasks/ome/', filename)
+        f = os.path.join('ds/OMEandSingleCellMasks/ome/', filename)
         ome = skimage.io.imread(f)
         ome = np.moveaxis(ome, 0, 2)
         ome = torch.from_numpy(ome).float()
@@ -144,7 +144,7 @@ class OmeDatasetHotPixelsRemoved(Dataset):
 
     def __getitem__(self, i):
         filename = self.filenames[i]
-        f = os.path.join('data/OMEandSingleCellMasks/ome/', filename)
+        f = os.path.join('ds/OMEandSingleCellMasks/ome/', filename)
         ome = skimage.io.imread(f)
         ome = np.moveaxis(ome, 0, 2)
         to_keep = [8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,

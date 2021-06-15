@@ -6,7 +6,7 @@ import argparse
 import h5py
 from models.long_jobs.merge_cells import merge_cells
 import phenograph
-from data import file_path
+from ds import file_path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--normalization-method', type=str, required=True)
