@@ -20,17 +20,14 @@ cells_ds.perturb()
 
 if False:
     assert torch.all(ds.corrupted_entries == cells_ds.corrupted_entries)
-    ##
     print(ds.corrupted_entries.shape)
     print(cells_ds.corrupted_entries.shape)
     print(ds.corrupted_entries[0, :])
     print(cells_ds.corrupted_entries[0, :])
-    ##
     i = 10
     c = ds.corrupted_entries[i, :]
     print(c)
     j = torch.nonzero(c).flatten()[0].item()
-    ##
     x = ds[i][0][j]
     x_original = ds.rgb_cells[i][0][j]
 
@@ -57,7 +54,7 @@ rgb_ds = ds.rgb_cells
 from models.ag_conv_vae_lightning import VAE as ResNetVAE
 
 the_model = 'resnet_vae'
-the_model = 'resnet_vae_last_channel'
+# the_model = 'resnet_vae_last_channel'
 resnet_vae = ResNetVAE.load_from_checkpoint(models[the_model])
 loader = DataLoader(rgb_ds, batch_size=16, num_workers=8, pin_memory=True)
 data = loader.__iter__().__next__()
@@ -219,10 +216,11 @@ if True:
 
     torch.cuda.empty_cache()
 
-    all_masks = []
-    for data in tqdm(loader, desc='putting the masks in the hdf5 file'):
-        _, masks = data
-        all_masks.append(masks)
+    if False:
+        all_masks = []
+        for data in tqdm(loader, desc='putting the masks in the hdf5 file'):
+            _, masks = data
+            all_masks.append(masks)
 ##
 from data2 import file_path
 
@@ -298,3 +296,6 @@ from scipy.stats import spearmanr
 for i in range(39):
     r, p = spearmanr(expression[:, i], mean_expression[:, i])
     print(f'channel {i}: {r}')
+
+##
+

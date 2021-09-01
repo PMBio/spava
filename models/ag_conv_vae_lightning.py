@@ -10,8 +10,8 @@ ppp = Ppp()
 if 'aaa' in locals():
     ppp.DEBUG_TORCH = 'yessss'
 ppp.MAX_EPOCHS = 20
-ppp.COOL_CHANNELS = np.array([38, 38, 38])
-# ppp.COOL_CHANNELS = np.arange(39)
+# ppp.COOL_CHANNELS = np.array([38, 38, 38])
+ppp.COOL_CHANNELS = np.arange(39)
 ppp.BATCH_SIZE = 1024
 ppp.LEARNING_RATE = 0.8e-3
 ppp.VAE_BETA = 100
@@ -608,7 +608,7 @@ class PerturbedRGBCells(Dataset):
         self.seed = None
         # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
         n_channels = self.rgb_cells[0][0].shape[0]
-        self.corrupted_entries = torch.zeros((len(self.rgb_cells), n_channels))
+        self.corrupted_entries = torch.zeros((len(self.rgb_cells), n_channels), dtype=torch.bool)
 
     def perturb(self, seed=0):
         self.seed = seed

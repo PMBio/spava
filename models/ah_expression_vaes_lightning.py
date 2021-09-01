@@ -27,6 +27,8 @@ else:
 # ppp.NOISE_MODEL = 'gaussian'
 # ppp.NOISE_MODEL = 'gamma'
 ppp.NOISE_MODEL = 'zip'
+
+
 # ppp.NOISE_MODEL = 'zin'
 # ppp.NOISE_MODEL = 'log_normal'
 
@@ -485,11 +487,7 @@ class PerturbedCellDataset(Dataset):
         return self.merged[i, :], self.corrupted_entries[i, :]
 
 
-def train(perturb=False):
-    # parser = ArgumentParser()
-    # parser.add_argument('--gpus', type=int, default=1)
-    # args = parser.parse_args()
-
+def get_loaders(perturb: bool):
     train_ds = PerturbedCellDataset('train')
     train_ds_validation = PerturbedCellDataset('train')
     val_ds = PerturbedCellDataset('validation')
@@ -500,20 +498,6 @@ def train(perturb=False):
         val_ds.perturb()
     print(f'len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ='
           f' {train_ds[0][0].shape}')
-
-    from data2 import file_path
-    logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='expression_vae')
-    print(f'logging in {logger.experiment.log_dir}')
-    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
-                                          monitor='elbo',
-                                          # every_n_train_steps=2,
-                                          save_last=True,
-                                          save_top_k=3)
-    trainer = pl.Trainer(gpus=1, max_epochs=ppp.MAX_EPOCHS,
-                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
-                         logger=logger, num_sanity_val_steps=0,  # track_grad_norm=2,
-                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 400)
-    # set back val_check_interval to 200
 
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
@@ -534,6 +518,30 @@ def train(perturb=False):
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
     val_loader = DataLoader(val_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True)
+    return train_loader, val_loader, train_loader_batch
+
+
+def train(perturb=False):
+    # parser = ArgumentParser()
+    # parser.add_argument('--gpus', type=int, default=1)
+    # args = parser.parse_args()
+
+    from data2 import file_path
+    logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='expression_vae')
+    print(f'logging in {logger.experiment.log_dir}')
+    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
+                                          monitor='elbo',
+                                          # every_n_train_steps=2,
+                                          save_last=True,
+                                          save_top_k=3)
+    trainer = pl.Trainer(gpus=1, max_epochs=ppp.MAX_EPOCHS,
+                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
+                         logger=logger, num_sanity_val_steps=0,  # track_grad_norm=2,
+                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 400)
+
+    train_loader, val_loader, train_loader_batch = get_loaders(perturb)
+    # set back val_check_interval to 200
+
     #
     # class MySampler(Sampler):
     #     def __init__(self, my_ordered_indices):
@@ -559,4 +567,4 @@ def train(perturb=False):
 
 
 if __name__ == '__main__':
-    train(perturb=True)
+    train(perturb=False)

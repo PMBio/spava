@@ -5,11 +5,12 @@ import re
 import numpy as np
 import torch
 import torch.nn as nn
-from ignite.metrics import Metric
-from ignite.exceptions import NotComputableError
+
+# from ignite.metrics import Metric
+# from ignite.exceptions import NotComputableError
 
 # These decorators helps with distributed settings
-from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
+# from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 DISEASE_STATUSES = ['non-tumor', 'tumor']
 CANCER_SUBTYPES = ['PR+ER+', 'PR-ER+', 'PR-ER-', 'PR+ER-']
@@ -37,7 +38,8 @@ VALID_PTNM_M_LABELS = ['M0', 'cMo(i+)', 'pM1']
 
 def get_description_of_cleaned_features():
     feature_description = {
-        'image_level_features': ['FileName_FullStack', 'merged_pid', 'diseasestatus', 'Height_FullStack', 'Width_FullStack', 'area', 'sum_area_cells', 'Count_Cells'],
+        'image_level_features': ['FileName_FullStack', 'merged_pid', 'diseasestatus', 'Height_FullStack',
+                                 'Width_FullStack', 'area', 'sum_area_cells', 'Count_Cells'],
         'patient_level_features': ['PrimarySite', 'Subtype', 'clinical_type', 'PTNM_T', 'PTNM_N', 'PTNM_M',
                                    'DFSmonth', 'OSmonth', 'images_per_patient', 'images_per_patient_filtered', 'cohort']
     }
@@ -47,7 +49,9 @@ def get_description_of_cleaned_features():
 def get_predictive_clustering_valid_features():
     feature_description = get_description_of_cleaned_features()
     columns = feature_description['image_level_features'] + feature_description['patient_level_features']
-    columns = [s for s in columns if s not in ['FileName_FullStack', 'merged_pid', 'PrimarySite', 'Height_FullStack', 'Width_FullStack', 'images_per_patient']]
+    columns = [s for s in columns if
+               s not in ['FileName_FullStack', 'merged_pid', 'PrimarySite', 'Height_FullStack', 'Width_FullStack',
+                         'images_per_patient']]
     return columns
 
 
@@ -89,7 +93,8 @@ def clean_metadata(df_basel, df_zurich, verbose=False):
     df_zurich.drop('PID', axis=1, inplace=True)
     df = pd.concat([df_basel, df_zurich])
     feature_description = get_description_of_cleaned_features()
-    assert set(df.columns.to_list()) == set(feature_description['image_level_features'] + feature_description['patient_level_features'])
+    assert set(df.columns.to_list()) == set(
+        feature_description['image_level_features'] + feature_description['patient_level_features'])
     pids = sorted(df['merged_pid'].unique())
     for my_pid in pids:
         dff = df.loc[df['merged_pid'] == my_pid, :]
@@ -235,7 +240,8 @@ def one_hot_to_class(t: torch.Tensor, classes: List[str]):
     return classes[i]
 
 
-def ptnm_tn_class_to_one_hot(my_class: Union[str, float], ptnm_labels_hierarchy: Dict[str, List[str]], valid_ptnm_labels: List[str]):
+def ptnm_tn_class_to_one_hot(my_class: Union[str, float], ptnm_labels_hierarchy: Dict[str, List[str]],
+                             valid_ptnm_labels: List[str]):
     assert len(valid_ptnm_labels) == len(set(valid_ptnm_labels))
     if type(my_class) == float and math.isnan(my_class):
         return torch.tensor([float('nan')] * len(valid_ptnm_labels))
@@ -280,7 +286,8 @@ def torchize_feature(k: str, v):
         raise ValueError(f'torchize_feature: k = {k}, v = {v}')
 
 
-def ptnm_tn_one_hot_to_class(t: torch.Tensor, ptnm_labels_hierarchy: Dict[str, List[str]], valid_ptnm_labels: List[str]):
+def ptnm_tn_one_hot_to_class(t: torch.Tensor, ptnm_labels_hierarchy: Dict[str, List[str]],
+                             valid_ptnm_labels: List[str]):
     if torch.isnan(t).any():
         raise ValueError(f'one_hot_to_class: found nan in the tensor {t}')
     t = t.view(-1)
@@ -377,86 +384,86 @@ def activation_factory(feature_name: str, in_channels: int):
     assert False, f'unexpected feature_name: {feature_name}'
 
 
-class CustomAccuracy(Metric):
-    def __init__(self, begin: int, end: int):
-        assert 0 <= begin < end
-        self.begin = begin
-        self.end = end
-        self._num_correct = None
-        self._num_examples = None
-        super(CustomAccuracy, self).__init__()
+# class CustomAccuracy(Metric):
+#     def __init__(self, begin: int, end: int):
+#         assert 0 <= begin < end
+#         self.begin = begin
+#         self.end = end
+#         self._num_correct = None
+#         self._num_examples = None
+#         super(CustomAccuracy, self).__init__()
+#
+#     @reinit__is_reduced
+#     def reset(self):
+#         self._num_correct = 0
+#         self._num_examples = 0
+#         super(CustomAccuracy, self).reset()
+#
+#     @reinit__is_reduced
+#     def update(self, output):
+#         y_pred, y = output
+#         y_pred = y_pred[:, self.begin:self.end]
+#         y = y[:, self.begin:self.end]
+#
+#         indices_pred = torch.argmax(y_pred, dim=1)
+#         indices = torch.argmax(y, dim=1)
+#
+#         correct = torch.eq(indices_pred, indices).view(-1)
+#
+#         self._num_correct += torch.sum(correct).item()
+#         self._num_examples += correct.shape[0]
+#
+#     @sync_all_reduce('_num_examples', '_num_correct')
+#     def compute(self):
+#         if self._num_examples == 0:
+#             raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
+#         return self._num_correct / self._num_examples
+#
+#
+# class CustomMSE(Metric):
+#     def __init__(self, begin: int, end: int):
+#         assert 0 <= begin < end
+#         self.begin = begin
+#         self.end = end
+#         self._incremental_mse = None
+#         self._num_examples = None
+#         super(CustomMSE, self).__init__()
+#
+#     @reinit__is_reduced
+#     def reset(self):
+#         self._incremental_mse = 0.
+#         self._num_examples = 0
+#         super(CustomMSE, self).reset()
+#
+#     @reinit__is_reduced
+#     def update(self, output):
+#         y_pred, y = output
+#         y_pred = y_pred[:, self.begin:self.end]
+#         y = y[:, self.begin:self.end]
+#         partial_mse = torch.square((y - y_pred).view(-1)).sum()
+#
+#         self._incremental_mse += partial_mse.item()
+#         self._num_examples += y.shape[0]
+#
+#     @sync_all_reduce('_num_examples', '_incremental_mse')
+#     def compute(self):
+#         if self._num_examples == 0:
+#             raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
+#         return self._incremental_mse / self._num_examples
 
-    @reinit__is_reduced
-    def reset(self):
-        self._num_correct = 0
-        self._num_examples = 0
-        super(CustomAccuracy, self).reset()
 
-    @reinit__is_reduced
-    def update(self, output):
-        y_pred, y = output
-        y_pred = y_pred[:, self.begin:self.end]
-        y = y[:, self.begin:self.end]
-
-        indices_pred = torch.argmax(y_pred, dim=1)
-        indices = torch.argmax(y, dim=1)
-
-        correct = torch.eq(indices_pred, indices).view(-1)
-
-        self._num_correct += torch.sum(correct).item()
-        self._num_examples += correct.shape[0]
-
-    @sync_all_reduce('_num_examples', '_num_correct')
-    def compute(self):
-        if self._num_examples == 0:
-            raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
-        return self._num_correct / self._num_examples
-
-
-class CustomMSE(Metric):
-    def __init__(self, begin: int, end: int):
-        assert 0 <= begin < end
-        self.begin = begin
-        self.end = end
-        self._incremental_mse = None
-        self._num_examples = None
-        super(CustomMSE, self).__init__()
-
-    @reinit__is_reduced
-    def reset(self):
-        self._incremental_mse = 0.
-        self._num_examples = 0
-        super(CustomMSE, self).reset()
-
-    @reinit__is_reduced
-    def update(self, output):
-        y_pred, y = output
-        y_pred = y_pred[:, self.begin:self.end]
-        y = y[:, self.begin:self.end]
-        partial_mse = torch.square((y - y_pred).view(-1)).sum()
-
-        self._incremental_mse += partial_mse.item()
-        self._num_examples += y.shape[0]
-
-    @sync_all_reduce('_num_examples', '_incremental_mse')
-    def compute(self):
-        if self._num_examples == 0:
-            raise NotComputableError('CustomAccuracy must have at least one example before it can be computed.')
-        return self._incremental_mse / self._num_examples
-
-
-def metrics_factory(feature_name: str, begin: int, end: int) -> Dict[str, Metric]:
-    valid_features = get_predictive_clustering_valid_features()
-    assert feature_name in valid_features
-    if feature_name in ['diseasestatus', 'Subtype', 'clinical_type', 'PTNM_M']:
-        return {'accuracy': CustomAccuracy(begin, end)}
-    elif feature_name in ['area', 'sum_area_cells', 'Count_Cells', 'DFSmonth', 'OSmonth']:
-        return {'mse': CustomMSE(begin, end)}
-    elif feature_name == 'PTNM_T':
-        return {'accuracy': CustomAccuracy(begin, end)}
-    elif feature_name == 'PTNM_N':
-        return {'accuracy': CustomAccuracy(begin, end)}
-    assert False, f'unexpected feature_name: {feature_name}'
+# def metrics_factory(feature_name: str, begin: int, end: int) -> Dict[str, Metric]:
+#     valid_features = get_predictive_clustering_valid_features()
+#     assert feature_name in valid_features
+#     if feature_name in ['diseasestatus', 'Subtype', 'clinical_type', 'PTNM_M']:
+#         return {'accuracy': CustomAccuracy(begin, end)}
+#     elif feature_name in ['area', 'sum_area_cells', 'Count_Cells', 'DFSmonth', 'OSmonth']:
+#         return {'mse': CustomMSE(begin, end)}
+#     elif feature_name == 'PTNM_T':
+#         return {'accuracy': CustomAccuracy(begin, end)}
+#     elif feature_name == 'PTNM_N':
+#         return {'accuracy': CustomAccuracy(begin, end)}
+#     assert False, f'unexpected feature_name: {feature_name}'
 
 
 # from joblib import Memory
@@ -467,12 +474,18 @@ def metrics_factory(feature_name: str, begin: int, end: int) -> Dict[str, Metric
 # @memory.cache
 
 
-def get_metadata(clean=True, clean_verbose=True):
+def get_metadata(clean=True, clean_verbose=True, basel_csv=None, zurich_csv=None):
     # import time
     # start = time.time()
-    from ds import file_path_old_data
-    f_basel = file_path_old_data('../Data_publication/BaselTMA/Basel_PatientMetadata.csv')
-    f_zurich = file_path_old_data('../Data_publication/ZurichTMA/Zuri_PatientMetadata.csv')
+    from data2 import file_path_old_data
+    if basel_csv is None:
+        f_basel = file_path_old_data('../Data_publication/BaselTMA/Basel_PatientMetadata.csv')
+    else:
+        f_basel = basel_csv
+    if zurich_csv is None:
+        f_zurich = file_path_old_data('../Data_publication/ZurichTMA/Zuri_PatientMetadata.csv')
+    else:
+        f_zurich = zurich_csv
     df_basel = pd.read_csv(f_basel)
     df_zurich = pd.read_csv(f_zurich)
     selected_columns = ['FileName_FullStack', 'PID', 'diseasestatus', 'PrimarySite', 'Subtype', 'clinical_type',
