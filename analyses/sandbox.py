@@ -2,7 +2,7 @@
 import igraph
 import matplotlib.pyplot as plt
 import pickle
-from data2 import AccumulatedDataset, file_path, ExpressionDataset, FilteredMasksRelabeled
+from data2 import AccumulatedDataset, file_path, ExpressionFilteredDataset, FilteredMasksRelabeled
 from tqdm import tqdm
 from torch.utils.data import Dataset
 from sklearn.neighbors import NearestNeighbors
@@ -38,8 +38,8 @@ class GraphDataset(Dataset):
             with h5py.File(self.knn_file, 'w') as f5:
                 for i in tqdm(range(len(self.ds)), desc='computing knns'):
                     centers = self.ds[i]
-                    new_centers = ExpressionDataset.expression_old_to_new(centers, i,
-                                                                          index_converter=self.index_converter)
+                    new_centers = ExpressionFilteredDataset.expression_old_to_new(centers, i,
+                                                                                  index_converter=self.index_converter)
                     # knn method
                     k = 20
                     neighbors = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(new_centers)

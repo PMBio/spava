@@ -643,7 +643,6 @@ def train(perturb=False):
         train_ds.perturb()
         train_ds_validation.perturb()
         val_ds.perturb()
-
     from data2 import file_path
     logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='resnet_vae')
     print(f'logging in {logger.experiment.log_dir}')
@@ -658,7 +657,6 @@ def train(perturb=False):
                          logger=logger,
                          log_every_n_steps=15, val_check_interval=2 if ppp.DEBUG else 50)
     # set back val_check_interval to 200
-
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
     else:

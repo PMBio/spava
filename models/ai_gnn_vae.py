@@ -440,7 +440,7 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
 # #                 pl_module.logger.log_hyperparams(ppp.__dict__)
 # #                 self.alredy_logged = True
 
-from data2 import AccumulatedDataset, FilteredMasksRelabeled, ExpressionDataset, file_path
+from data2 import AccumulatedDataset, FilteredMasksRelabeled, ExpressionFilteredDataset, file_path
 
 
 class PerturbedCellDataset(Dataset):
@@ -454,7 +454,7 @@ class PerturbedCellDataset(Dataset):
             all = []
             for i in tqdm(range(len(self.ds)), desc='merging expression tensor'):
                 e = self.ds[i]
-                new_e = ExpressionDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
+                new_e = ExpressionFilteredDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
                 all.append(new_e)
             merged = np.concatenate(all, axis=0)
             np.save(f, merged)

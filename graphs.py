@@ -20,7 +20,7 @@ import colorsys
 import h5py
 import time
 from pprint import pprint
-from data2 import AccumulatedDataset, ExpressionDataset, FilteredMasksRelabeled, file_path
+from data2 import AccumulatedDataset, ExpressionFilteredDataset, FilteredMasksRelabeled, file_path
 from torch.utils.data import Dataset
 import os
 
@@ -38,7 +38,7 @@ class PerturbedCellDataset(Dataset):
         all = []
         for i in tqdm(range(len(self.ds)), desc='merging expression tensor'):
             e = self.ds[i]
-            new_e = ExpressionDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
+            new_e = ExpressionFilteredDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
             all.append(new_e)
 
 
