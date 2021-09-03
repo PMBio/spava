@@ -9,7 +9,7 @@ from tqdm import tqdm
 import torch
 
 ##
-from models.ah_expression_vaes_lightning import PerturbedCellDataset
+from data2 import PerturbedCellDataset
 
 ds0 = PerturbedCellDataset('train')
 ds0.perturb()

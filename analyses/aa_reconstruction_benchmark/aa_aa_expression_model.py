@@ -35,7 +35,7 @@ import pyro.distributions
 # train(perturb=True)
 
 ##
-from models.ah_expression_vaes_lightning import PerturbedCellDataset
+from data2 import PerturbedCellDataset
 
 ds0 = PerturbedCellDataset('train')
 ds0.perturb()

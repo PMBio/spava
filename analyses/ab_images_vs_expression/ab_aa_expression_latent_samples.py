@@ -5,13 +5,10 @@ import torch
 from tqdm import tqdm
 import matplotlib.cm
 
-from models.ag_conv_vae_lightning import RGBCells
+from data2 import RGBCells, PerturbedRGBCells, PerturbedCellDataset
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-
-from models.ag_conv_vae_lightning import PerturbedRGBCells
-from models.ah_expression_vaes_lightning import PerturbedCellDataset
 
 ds = PerturbedRGBCells(split='validation')
 

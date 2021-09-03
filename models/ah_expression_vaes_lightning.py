@@ -41,37 +41,25 @@ def set_ppp_from_loaded_model(pl_module):
     ppp = pl_module.hparams
 
 
-import os.path
-
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-from tqdm import tqdm
 
 pl.seed_everything(1234)
 
 from torch import nn
 
-from models.ag_resnet_vae import resnet_encoder, resnet_decoder
-from argparse import ArgumentParser
-
 import numpy as np
-import matplotlib.pyplot as plt
-from torchvision.utils import make_grid
-import PIL
 import pytorch_lightning as pl
-from torch.utils.data import Dataset, DataLoader, Sampler, Subset
+from torch.utils.data import DataLoader, Subset
 from torch import autograd
 import contextlib
 import torch
 import torch.nn.functional as F
-import torchvision.transforms.functional as TF
-import random
 import pyro
 import pyro.distributions
 
-import torchvision.transforms
-from data2 import CellDataset
+from data2 import PerturbedCellDataset
 
 quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
                                         3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
@@ -441,50 +429,6 @@ class LogComputationalGraph(pl.Callback):
 #             if not self.alredy_logged:
 #                 pl_module.logger.log_hyperparams(ppp.__dict__)
 #                 self.alredy_logged = True
-
-from data2 import AccumulatedDataset, FilteredMasksRelabeled, ExpressionFilteredDataset, file_path
-
-
-class PerturbedCellDataset(Dataset):
-    def __init__(self, split):
-        self.split = split
-        self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=False)
-        self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
-        f = file_path(f'ah_filtered_untransformed_expression_tensor_merged_{split}.npy')
-        # os.remove(f)
-        if not os.path.isfile(f):
-            all = []
-            for i in tqdm(range(len(self.ds)), desc='merging expression tensor'):
-                e = self.ds[i]
-                new_e = ExpressionFilteredDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
-                all.append(new_e)
-            merged = np.concatenate(all, axis=0)
-            np.save(f, merged)
-        self.merged = torch.tensor(np.load(f))
-        self.merged = torch.asinh(self.merged)
-        self.merged /= quantiles_for_normalization
-        self.merged = self.merged.float()
-        self.corrupted_entries = torch.zeros_like(self.merged, dtype=torch.bool)
-        self.original_merged = None
-        self.seed = None
-
-    def perturb(self, seed=0):
-        self.seed = seed
-        from torch.distributions import Bernoulli
-        dist = Bernoulli(probs=0.1)
-        state = torch.get_rng_state()
-        torch.manual_seed(seed)
-        shape = self.merged.shape
-        self.corrupted_entries = dist.sample(shape).bool()
-        torch.set_rng_state(state)
-        self.original_merged = self.merged.clone()
-        self.merged[self.corrupted_entries] = 0.
-
-    def __len__(self):
-        return len(self.merged)
-
-    def __getitem__(self, i):
-        return self.merged[i, :], self.corrupted_entries[i, :]
 
 
 def get_loaders(perturb: bool):

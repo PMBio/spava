@@ -36,18 +36,12 @@ def set_ppp_from_loaded_model(pl_module):
     ppp = pl_module.hparams
 
 
-import os.path
-
-import math
-
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 
 pl.seed_everything(1234)
 
-import itertools
 from torch import nn
-import torch
 
 from models.ag_resnet_vae import resnet_encoder, resnet_decoder
 # from pl_bolts.models.autoencoders.components import (
@@ -56,29 +50,22 @@ from models.ag_resnet_vae import resnet_encoder, resnet_decoder
 # )
 from argparse import ArgumentParser
 
-import matplotlib.pyplot as plt
-import matplotlib
-
 # matplotlib.use('Agg')
-import functools
 from torchvision.utils import make_grid
 import PIL
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from torch.utils.data import Dataset, DataLoader, Sampler, Subset
+from torch.utils.data import DataLoader, Subset
 from torch import autograd
 import contextlib
 import torch
-import torch.nn.functional as F
-import torchvision.transforms.functional as TF
-import random
 import pyro
 
 # from pl_bolts.utils import _TORCHVISION_AVAILABLE
 # from pl_bolts.utils.warnings import warn_missing_pkg
 
 import torchvision.transforms
-from data2 import CellDataset
+from data2 import PerturbedRGBCells
 
 # def imagenet_normalization():
 #     if not _TORCHVISION_AVAILABLE:  # pragma: no cover
@@ -533,101 +520,7 @@ class LogComputationalGraph(pl.Callback):
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
-class PadByOne:
-    def __call__(self, image):
-        return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
-
-
-class MyRotationTransform:
-    """Rotate by one of the given angles."""
-
-    def __init__(self, angles):
-        self.angles = angles
-
-    def __call__(self, x):
-        angle = random.choice(self.angles)
-        return TF.rotate(x, angle)
-
-
-class RGBCells(Dataset):
-    def __init__(self, split, augment=False, aggressive_rotation=False):
-        assert not (augment is False and aggressive_rotation is True)
-        d = {'expression': False, 'center': False, 'ome': True, 'mask': True}
-        self.ds = CellDataset(split, d)
-        self.augment = augment
-        self.aggressive_rotation = aggressive_rotation
-        t = torchvision.transforms
-        self.transform = t.Compose([
-            t.ToTensor(),
-            PadByOne()
-        ])
-        self.augment_transform = t.Compose([
-            MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else t.RandomApply(
-                nn.ModuleList([t.RandomRotation(degrees=360)]),
-                p=0.6
-            ),
-            t.RandomHorizontalFlip(),
-            t.RandomVerticalFlip(),
-        ])
-        # self.normalize = ome_normalization()
-
-    def __len__(self):
-        return len(self.ds)
-
-    def __getitem__(self, item):
-        x = self.ds[item][0]
-        if len(self.ds[item]) == 2:
-            mask = self.ds[item][1]
-            mask = self.transform(mask)
-            if self.augment:
-                state = torch.get_rng_state()
-                mask = self.augment_transform(mask)
-            mask = mask.float()
-        elif len(self.ds[item]) == 1:
-            mask = None
-        else:
-            raise ValueError()
-        x = self.transform(x)
-        if self.augment:
-            torch.set_rng_state(state)
-            x = self.augment_transform(x)
-        x = torch.asinh(x)
-        x = x[ppp.COOL_CHANNELS, :, :]
-        x = x.permute(1, 2, 0)
-        # x = (x - self.normalize.mean) / self.normalize.std
-        x = x / quantiles_for_normalization
-        x = x.permute(2, 0, 1)
-        x = x.float()
-        return x, mask
-
-
 # maybe use inheritance
-class PerturbedRGBCells(Dataset):
-    def __init__(self, split: str, **kwargs):
-        self.rgb_cells = RGBCells(split, **kwargs)
-        self.seed = None
-        # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
-        n_channels = self.rgb_cells[0][0].shape[0]
-        self.corrupted_entries = torch.zeros((len(self.rgb_cells), n_channels), dtype=torch.bool)
-
-    def perturb(self, seed=0):
-        self.seed = seed
-        from torch.distributions import Bernoulli
-        dist = Bernoulli(probs=0.1)
-        shape = self.corrupted_entries.shape
-        state = torch.get_rng_state()
-        torch.manual_seed(seed)
-        self.corrupted_entries = dist.sample(shape).bool()
-        torch.set_rng_state(state)
-
-    def __len__(self):
-        return len(self.rgb_cells)
-
-    def __getitem__(self, i):
-        x, mask = self.rgb_cells[i]
-        entries_to_corrupt = self.corrupted_entries[i, :]
-        x[entries_to_corrupt] = 0.
-        return x, mask, entries_to_corrupt
 
 
 def train(perturb=False):

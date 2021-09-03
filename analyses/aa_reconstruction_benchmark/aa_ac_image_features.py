@@ -4,13 +4,9 @@ import time
 import torch
 from tqdm import tqdm
 
-from models.ag_conv_vae_lightning import RGBCells
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-
-from models.ag_conv_vae_lightning import PerturbedRGBCells
-from models.ah_expression_vaes_lightning import PerturbedCellDataset
 
 ds = PerturbedRGBCells(split='validation')
 ds.perturb()
@@ -222,7 +218,7 @@ if True:
             _, masks = data
             all_masks.append(masks)
 ##
-from data2 import file_path
+from data2 import file_path, RGBCells, PerturbedRGBCells, PerturbedCellDataset
 
 f = file_path('image_features_resnet_vae_gamma_poisson.h5py')
 import h5py

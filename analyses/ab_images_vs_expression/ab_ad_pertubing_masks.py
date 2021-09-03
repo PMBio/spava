@@ -10,9 +10,6 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import skimage.measure
 
-from models.ag_conv_vae_lightning import PerturbedRGBCells
-from models.ah_expression_vaes_lightning import PerturbedCellDataset
-
 ds = PerturbedRGBCells(split="validation")
 
 cells_ds = PerturbedCellDataset(split="validation")
@@ -62,7 +59,7 @@ if False:
     torch.cuda.empty_cache()
 
 ##
-from data2 import file_path
+from data2 import file_path, PerturbedRGBCells, PerturbedCellDataset
 
 f = file_path("image_features.npy")
 if False:
