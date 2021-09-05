@@ -11,7 +11,6 @@ if 'aaa' in locals():
     ppp.DEBUG_TORCH = 'yessss'
 ppp.MAX_EPOCHS = 20
 # ppp.COOL_CHANNELS = np.array([38, 38, 38])
-ppp.COOL_CHANNELS = np.arange(39)
 ppp.BATCH_SIZE = 1024
 ppp.LEARNING_RATE = 0.8e-3
 ppp.VAE_BETA = 100
@@ -35,6 +34,7 @@ def set_ppp_from_loaded_model(pl_module):
     global ppp
     ppp = pl_module.hparams
 
+from data2 import quantiles_for_normalization
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -100,11 +100,6 @@ from data2 import PerturbedRGBCells
 #     normalize = transforms.Normalize(mean=mean, std=std)
 #     return normalize
 
-quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
-                                        3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
-                                        2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
-                                        3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
-                                        2.0277, 3.3281, 3.9273])[ppp.COOL_CHANNELS]
 
 
 # print('fino a qui tutto bene')
@@ -588,7 +583,7 @@ def train(perturb=False):
 
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
-    vae = VAE(n_channels=len(ppp.COOL_CHANNELS), **ppp.__dict__)
+    vae = VAE(n_channels=len(quantiles_for_normalization), **ppp.__dict__)
     trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
     print(f'finished logging in {logger.experiment.log_dir}')
 

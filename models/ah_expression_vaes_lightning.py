@@ -59,13 +59,7 @@ import torch.nn.functional as F
 import pyro
 import pyro.distributions
 
-from data2 import PerturbedCellDataset
-
-quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
-                                        3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
-                                        2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
-                                        3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
-                                        2.0277, 3.3281, 3.9273])
+from data2 import PerturbedCellDataset, quantiles_for_normalization
 
 
 class ImageSampler(pl.Callback):

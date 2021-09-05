@@ -2,3 +2,8 @@
 __pycache__/
 uzh/
 debug/
+.DS_Store
+.idea/
+.vscode/
+*.html
+slides/

@@ -26,9 +26,6 @@ from torch.utils.data import DataLoader  # SequentialSampler
 
 import pathlib
 
-from models.ag_conv_vae_lightning import ppp, quantiles_for_normalization
-from models.ah_expression_vaes_lightning import quantiles_for_normalization
-
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
 
@@ -43,9 +40,11 @@ except NameError:
         return os.path.join('/data/l989o/data/basel_zurich/spatial_uzh_processed/a', f)
 
 if __name__ == '__main__':
-    PLOT = True
-    COMPUTE = True
-    DEBUG = True
+    # PLOT = True
+    PLOT = False
+    COMPUTE = False
+    # DEBUG = True
+    DEBUG = False
 else:
     PLOT = False
     COMPUTE = False
@@ -183,7 +182,7 @@ class AccumulatedDataset(Dataset):
             return x
 
 
-if COMPUTE and False:
+if COMPUTE:
     p = file_path('accumulated_features')
     os.makedirs(p, exist_ok=True)
 
@@ -205,67 +204,34 @@ if COMPUTE and False:
         accumulate_split('train')
         accumulate_split('validation')
         accumulate_split('test')
+
+
 ##
+def plot_expression_dataset(ds):
+    l = []
+    for e in ds:
+        l.append(e.mean(dim=0, keepdim=True))
+    ee = torch.cat(l, dim=0)
+    print(ee.shape)
+    plt.figure()
+    plt.imshow(ee.numpy())
+    plt.show()
+
+
 if PLOT:
-    def plot_expression_dataset(ds):
-        l = []
-        for e in ds:
-            l.append(e.mean(dim=0, keepdim=True))
-        ee = torch.cat(l, dim=0)
-        print(ee.shape)
-        plt.figure()
-        plt.imshow(ee.numpy())
-        plt.show()
-
-
     ds = AccumulatedDataset('validation', 'mean', from_raw=True, transform=True)
     plot_expression_dataset(ds)
 
 
 ##
-
-class ScaledAccumulatedDataset(Dataset):
-    def __init__(self, split, feature: str, from_raw: bool, transform: bool):
-        self.accumulated_ds = AccumulatedDataset(split, feature, from_raw, transform)
-        self.mu, self.std = self.get_mean_and_std(self.accumulated_ds)
-
-    def __len__(self):
-        return len(self.accumulated_ds)
-
-    @staticmethod
-    def get_mean_and_std(ds):
-        l = []
-        for x in ds:
-            l.append(x.numpy())
-        z = np.concatenate(l, axis=0)
-        mu = np.mean(z, axis=0)
-        std = np.std(z, axis=0)
-        return mu, std
-
-    def scale(self, x):
-        return (x - self.mu) / self.std
-
-    def scale_back(self, z):
-        return self.mu + self.std * z
-
-    def __getitem__(self, i):
-        x = self.accumulated_ds[i]
-        z = self.scale(x)
-        return z
-
-
-if PLOT:
-    ds = ScaledAccumulatedDataset('validation', feature='mean', from_raw=True, transform=True)
-    plot_expression_dataset(ds)
-
-
-##
+# this function is called more times than needed, but performance is still fine
 def get_ok_size_cells(split):
     areas_ds = AccumulatedDataset(split, 'count', from_raw=True, transform=False)
     all_areas = []
     # note that we remove the background before concatenating
     check = 0
-    for area in tqdm(areas_ds, desc=f'filtering cells by areas, {split} set'):
+    # for area in tqdm(areas_ds, desc=f'filtering cells by areas, {split} set'):
+    for area in areas_ds:
         all_areas.append(area)
         check += len(area)
 
@@ -415,7 +381,7 @@ if PLOT:
 
 if PLOT:
     split = 'train'
-    ds = ScaledAccumulatedDataset(split, 'mean', from_raw=True, transform=True)
+    ds = AccumulatedDataset(split, 'mean', from_raw=True, transform=True)
     l = []
     for x in ds:
         l.append(x)
@@ -465,7 +431,7 @@ if PLOT:
 class ExpressionFilteredDataset(Dataset):
     def __init__(self, split):
         self.split = split
-        self.ds = ScaledAccumulatedDataset(split, feature='mean', from_raw=True, transform=True)
+        self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=True)
         self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
 
     # allows for easy filtering of quantities that are defined for each cell, so to match the indexing given by
@@ -518,9 +484,12 @@ class CenterFilteredDataset(Dataset):
 
 
 ##
+COMPUTE = True
+PLOT = True
+DEBUG = True
 from scipy.ndimage import center_of_mass
 
-if COMPUTE and False:
+if COMPUTE:
     f_in = file_path('accumulated_features/raw_accumulated.hdf5')
     f_out = file_path('filtered_cells_dataset.hdf5')
 
@@ -642,6 +611,8 @@ if COMPUTE and False:
                         if DEBUG_WITH_PLOTS:
                             if k >= 4:
                                 DEBUG_WITH_PLOTS = False
+                                import sys
+                                sys.exit(0)
 
 # %%
 #
@@ -681,7 +652,6 @@ if COMPUTE and False:
 #         print('region centers computed correctly')
 
 
-
 ##
 
 import matplotlib
@@ -697,7 +667,7 @@ with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
     plt.show()
 
 ##
-if COMPUTE and False:
+if COMPUTE:
     with h5py.File(file_path('merged_filtered_centers_and_expressions.hdf5'), 'w') as f5:
         for split in ['train', 'validation', 'test']:
             filenames = get_split(split)
@@ -744,6 +714,8 @@ class CellDataset(Dataset):
         if self.features['mask']:
             l.append(self.f5_masks[f'{i}'][...])
         return l
+
+
 ##
 assert torch.cuda.is_available()
 
@@ -789,7 +761,7 @@ ee = np.sum(x, axis=(1, 2))
 ee /= m.sum()
 ee = np.arcsinh(ee)
 e_ds = ExpressionFilteredDataset('train')
-ee = e_ds.ds.scale(ee)
+# ee = e_ds.ds.scale(ee)
 assert np.allclose(e, e_ds[0][0])
 assert np.allclose(e, ee)
 
@@ -805,8 +777,13 @@ loader = DataLoader(dataset, batch_size=1024, num_workers=16, pin_memory=True,
 
 print(loader.__iter__().__next__())
 
-
 ##
+quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
+                                        3.7035, 3.6496, 1.8566, 2.5784, 0.9939, 1.4314, 2.1803, 1.8672, 1.6674,
+                                        2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708,
+                                        3.4417, 1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609,
+                                        2.0277, 3.3281, 3.9273])
+
 
 class PadByOne:
     def __call__(self, image):
@@ -867,7 +844,7 @@ class RGBCells(Dataset):
             torch.set_rng_state(state)
             x = self.augment_transform(x)
         x = torch.asinh(x)
-        x = x[ppp.COOL_CHANNELS, :, :]
+        # x = x[COOL_CHANNELS, :, :]
         x = x.permute(1, 2, 0)
         # x = (x - self.normalize.mean) / self.normalize.std
         x = x / quantiles_for_normalization
@@ -902,11 +879,15 @@ class PerturbedRGBCells(Dataset):
         entries_to_corrupt = self.corrupted_entries[i, :]
         x[entries_to_corrupt] = 0.
         return x, mask, entries_to_corrupt
+
+
 ##
 
-class PerturbedCellDataset(Dataset):
+class PerturbedCellDatasetDebug(Dataset):
     def __init__(self, split):
         self.split = split
+        # begin
+        # let's just keep this class for debug purposes, to compare it with the one defined below
         self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=False)
         self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
         f = file_path(f'ah_filtered_untransformed_expression_tensor_merged_{split}.npy')
@@ -920,6 +901,7 @@ class PerturbedCellDataset(Dataset):
             merged = np.concatenate(all, axis=0)
             np.save(f, merged)
         self.merged = torch.tensor(np.load(f))
+        # end
         self.merged = torch.asinh(self.merged)
         self.merged /= quantiles_for_normalization
         self.merged = self.merged.float()
@@ -944,3 +926,62 @@ class PerturbedCellDataset(Dataset):
 
     def __getitem__(self, i):
         return self.merged[i, :], self.corrupted_entries[i, :]
+
+
+class PerturbedCellDataset(Dataset):
+    def __init__(self, split: str):
+        self.cell_dataset = CellDataset(split, features={'expression': True, 'center': False, 'ome': False,
+                                                         'mask': False})
+        self.seed = None
+        # first element of the ds -> first elemnet of the tuple (=expression matrix) -> shape[0]
+        n_channels = self.cell_dataset[0][0].shape[0]
+        self.corrupted_entries = torch.zeros((len(self.cell_dataset), n_channels), dtype=torch.bool)
+
+    def perturb(self, seed=0):
+        self.seed = seed
+        from torch.distributions import Bernoulli
+        dist = Bernoulli(probs=0.1)
+        state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        shape = self.corrupted_entries.shape
+        self.corrupted_entries = dist.sample(shape).bool()
+        torch.set_rng_state(state)
+
+    def __len__(self):
+        return len(self.cell_dataset)
+
+    def __getitem__(self, i):
+        x, mask = self.cell_dataset[i]
+        entries_to_corrupt = self.corrupted_entries[i, :]
+        x[entries_to_corrupt] = 0.
+        return x, mask, entries_to_corrupt
+
+ds0 = PerturbedCellDatasetDebug('train')
+ds1 = PerturbedCellDatasetDebug('train')
+assert ds0[42] == ds1[42]
+##
+print()
+print('done')
+
+    ##
+    #
+    # @staticmethod
+    # def get_mean_and_std(ds):
+    #     l = []
+    #     for x in ds:
+    #         l.append(x.numpy())
+    #     z = np.concatenate(l, axis=0)
+    #     mu = np.mean(z, axis=0)
+    #     std = np.std(z, axis=0)
+    #     return mu, std
+    #
+    # def scale(self, x):
+    #     return (x - self.mu) / self.std
+    #
+    # def scale_back(self, z):
+    #     return self.mu + self.std * z
+    #
+    # def __getitem__(self, i):
+    #     x = self.accumulated_ds[i]
+    #     z = self.scale(x)
+    #     return z
