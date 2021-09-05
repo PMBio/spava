@@ -1,5 +1,6 @@
 ##
 import random
+import math
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -237,7 +238,7 @@ def get_ok_size_cells(split):
 
     areas = torch.cat(all_areas)
     assert len(areas) == check
-    print(len(areas), 'cells in', split, 'set')
+    # print(len(areas), 'cells in', split, 'set')
 
     min_area = 15.
     max_area = 400.
@@ -484,9 +485,6 @@ class CenterFilteredDataset(Dataset):
 
 
 ##
-COMPUTE = True
-PLOT = True
-DEBUG = True
 from scipy.ndimage import center_of_mass
 
 if COMPUTE:
@@ -497,11 +495,6 @@ if COMPUTE:
         lists_of_centers = {'train': [], 'validation': [], 'test': []}
         lists_of_expressions = {'train': [], 'validation': [], 'test': []}
 
-    if DEBUG and PLOT:
-        DEBUG_WITH_PLOTS = True
-    else:
-        DEBUG_WITH_PLOTS = False
-
     with h5py.File(f_out, 'w') as f5_out:
         with h5py.File(f_in, 'r') as f5_in:
             for split in tqdm(['train', 'validation', 'test'], desc=f'split'):
@@ -509,11 +502,11 @@ if COMPUTE:
                 ds = ExpressionFilteredDataset(split)
                 ome_ds = OmeDataset(split)
                 masks_ds = FilteredMasksRelabeled(split)
-                old_masks_ds = MasksDataset(split)  # to debug
+                old_masks_ds = MasksDataset(split)  # used for debugging
                 for ome_index, e in enumerate(tqdm(ds, desc=f'isolating all cells {split}')):
                     ome = ome_ds[ome_index].numpy()
                     masks = masks_ds[ome_index]
-                    old_masks = old_masks_ds[ome_index]  # to debug
+                    old_masks = old_masks_ds[ome_index]  # used for debugging
                     new_to_old, old_to_new = masks_ds.get_indices_conversion_arrays(ome_index)
                     for cell_index in range(len(e)):
                         o = ome_ds.filenames[ome_index]
@@ -524,17 +517,31 @@ if COMPUTE:
                         center = f5_in[f'/{o}/region_center'][old - 1, :]
                         # compute the bounding box of the mask
                         z = masks == new
-                        p0 = np.sum(z, axis=0)
-                        p1 = np.sum(z, axis=1)
-                        w0, = np.where(p0 > 0)
-                        w1, = np.where(p1 > 0)
-                        a0 = w0[0]
-                        b0 = w0[-1] + 1
-                        a1 = w1[0]
-                        b1 = w1[-1] + 1
+                        z_center = center_of_mass(z)
+                        l = 32
+                        # r = (l - 1) / 2
+                        # one pixel is lost but this makes computation easier
+                        r = math.floor(l / 2)
+                        if False:
+                            p0 = np.sum(z, axis=0)
+                            p1 = np.sum(z, axis=1)
+                            w0, = np.where(p0 > 0)
+                            w1, = np.where(p1 > 0)
+                            a0 = w0[0]
+                            b0 = w0[-1] + 1
+                            a1 = w1[0]
+                            b1 = w1[-1] + 1
+                        else:
+                            a0 = math.floor(z_center[1] - r)
+                            a0 = max(0, a0)
+                            b0 = math.ceil(z_center[1] + r)
+                            b0 = min(b0, z.shape[1])
+                            a1 = math.floor(z_center[0] - r)
+                            a1 = max(0, a1)
+                            b1 = math.ceil(z_center[0] + r)
+                            b1 = min(b1, z.shape[0])
+                            # print(f'[{a1}:{b1}, {a0}:{b0}]')
                         y = z[a1: b1, a0: b0]
-                        if DEBUG:
-                            z_center = center_of_mass(z)
                         if DEBUG_WITH_PLOTS:
                             plt.figure(figsize=(20, 20))
                             plt.imshow(z)
@@ -557,8 +564,6 @@ if COMPUTE:
                             plt.show()
                         if DEBUG:
                             assert np.allclose(center, z_center)
-                        r = 15
-                        l = 2 * r + 1
                         square_ome = np.zeros((l, l, ome.shape[2]))
                         square_mask = np.zeros((l, l))
 
@@ -611,8 +616,6 @@ if COMPUTE:
                         if DEBUG_WITH_PLOTS:
                             if k >= 4:
                                 DEBUG_WITH_PLOTS = False
-                                import sys
-                                sys.exit(0)
 
 # %%
 #
@@ -653,19 +656,24 @@ if COMPUTE:
 
 
 ##
+if PLOT:
+    with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
+        cell_k = 10000
+        x = f5[f'train/omes/{cell_k}'][...]
+        mask = f5[f'train/masks/{cell_k}'][...]
 
-import matplotlib
+        plt.imshow(mask)
+        plt.show()
 
-with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
-    cell_k = 10000
-    x = f5[f'train/omes/{cell_k}'][...]
-    plt.imshow(f5[f'train/masks/{cell_k}'][...])
-    plt.show()
-    axes = plt.subplots(8, 5, figsize=(5 * 2, 8 * 1.8))[1].flatten()
-    for i in range(39):
-        axes[i].imshow(x[:, :, i], cmap=matplotlib.cm.get_cmap('gray'))
-    plt.show()
+        axes = plt.subplots(8, 5, figsize=(5 * 2, 8 * 1.8))[1].flatten()
+        for i in range(39):
+            axes[i].imshow(x[:, :, i], cmap=matplotlib.cm.get_cmap('gray'))
+        plt.show()
 
+        axes = plt.subplots(8, 5, figsize=(5 * 2, 8 * 1.8))[1].flatten()
+        for i in range(39):
+            axes[i].imshow(x[:, :, i] * mask, cmap=matplotlib.cm.get_cmap('gray'))
+        plt.show()
 ##
 if COMPUTE:
     with h5py.File(file_path('merged_filtered_centers_and_expressions.hdf5'), 'w') as f5:
@@ -688,7 +696,7 @@ if COMPUTE:
 
 ##
 class CellDataset(Dataset):
-    def __init__(self, split, features=None):
+    def __init__(self, split, features=None, perturb_pixels=False, perturb_masks=False):
         self.features = features or {'expression': True, 'center': False, 'ome': True, 'mask': True}
         self.split = split
         with h5py.File(file_path('merged_filtered_centers_and_expressions.hdf5'), 'r') as f5:
@@ -699,27 +707,136 @@ class CellDataset(Dataset):
         self.f5_masks = self.f5[f'{split}/masks']
         assert len(self.expressions) == len(self.f5_omes)
         assert len(self.expressions) == len(self.f5_masks)
+        self.length = len(self.expressions)
+        # self.n_channels = self.expressions.shape[1]
+        self.perturb_pixels = perturb_pixels
+        self.perturb_masks = perturb_masks
+        if self.perturb_pixels:
+            state = np.random.get_state()
+            np.random.seed(42)
+            self.seeds = np.random.randint(2 ** 32 - 1, size=(self.length,))
+            np.random.set_state(state)
+        self.FORCE_RECOMPUTE_EXPRESSION = True
 
     def __len__(self):
-        return len(self.expressions)
+        return self.length
+
+    def recompute_expression(self, ome, mask):
+        # recompute acculated features easily from cell tiles
+        x = ome.transpose(2, 0, 1) * (mask > 0)
+        e = np.sum(x, axis=(1, 2))
+        e /= mask.sum()
+        e = np.arcsinh(e)
+        return e
+
+    def recompute_mask(self, mask):
+        assert self.perturb_masks
+        kernel = np.ones((3, 3), np.uint8)
+        mask_dilated = cv2.dilate(mask, kernel, iterations=1)
+        return mask_dilated
+
+    def recompute_ome(self, ome, ome_index):
+        assert self.perturb_pixels
+        state = np.random.get_state()
+        np.random.seed(self.seeds[ome_index])
+        fraction_of_pixels_to_mask = 0.3
+        x = np.random.binomial(1, 1 - fraction_of_pixels_to_mask, ome.shape[:2])
+        perturbed_ome = (ome.transpose(2, 0, 1) * x).transpose(1, 2, 0)
+        np.random.set_state(state)
+        return perturbed_ome
 
     def __getitem__(self, i):
         l = []
+        # if mask is required
+        if self.features['mask'] or self.perturb_masks:
+            mask = self.f5_masks[f'{i}'][...]
+            if self.perturb_masks:
+                mask = self.recompute_mask(mask)
+        # if ome is required
+        if self.features['ome'] or self.perturb_masks or self.perturb_pixels:
+            ome = self.f5_omes[f'{i}'][...]
+            if self.perturb_pixels:
+                ome = self.recompute_ome(ome, ome_index=i)
+
         if self.features['expression']:
-            l.append(self.expressions[i])
+            if self.perturb_pixels or self.perturb_masks or self.FORCE_RECOMPUTE_EXPRESSION:
+                recomputed_expression = self.recompute_expression(ome, mask)
+                l.append(recomputed_expression)
+            else:
+                l.append(self.expressions[i])
         if self.features['center']:
             l.append(self.centers[i])
         if self.features['ome']:
-            l.append(self.f5_omes[f'{i}'][...])
+            l.append(ome)
         if self.features['mask']:
-            l.append(self.f5_masks[f'{i}'][...])
+            l.append(mask)
         return l
 
 
 ##
-assert torch.cuda.is_available()
+if DEBUG:
+    # this test takes approximately 8 minutes, output:
+    # 1320/446738 expressions are different when recomputed from ome. I'm quite sure this happens because some cells don't
+    # fit the tile they
+    # are in
+    ds = CellDataset('train')
+    exceptions = 0
+    for i in tqdm(range(len(ds)), desc='debugging expression re-derivation'):
+        mask = ds.f5_masks[f'{i}'][...]
+        ome = ds.f5_omes[f'{i}'][...]
+        expression = ds.expressions[i]
+        e = ds.recompute_expression(ome, mask)
+        if not np.allclose(expression, e):
+            exceptions += 1
+            if ds.FORCE_RECOMPUTE_EXPRESSION:
+                raise RuntimeError()
+    print(f'{exceptions}/{len(ds)} expressions are different when recomputed from ome. I\'m quite sure this happens '
+          f'because some cells don\'t fit the tile they are in')
+##
+# verify that the perturbation is correctly performed
+ds0 = CellDataset('train')
+ds1 = CellDataset('train', perturb_masks=True)
+channel = 20
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+e, o, m = ds0[412]
+plt.title(f'{e[channel].item()}')
+plt.imshow(o[:, :, channel])
+plt.imshow(m, alpha=0.2, cmap='gray')
+plt.subplot(1, 2, 2)
+e, o, m = ds1[412]
+plt.title(f'{e[channel].item()}')
+plt.imshow(o[:, :, channel])
+plt.imshow(m, alpha=0.2, cmap='gray')
+plt.show()
+##
+# verify that the perturbation is correctly performed and reproducible
+plt.figure(figsize=(15, 5))
+ds0 = CellDataset('train')
+ds1 = CellDataset('train', perturb_pixels=True)
+ds2 = CellDataset('train', perturb_pixels=True)
+channel = 20
 
-if __name__ == '__main__':
+plt.subplot(1, 3, 1)
+e, o, m = ds0[412]
+plt.title(f'{e[channel].item()}')
+plt.imshow(o[:, :, channel])
+
+plt.subplot(1, 3, 2)
+e, o, m = ds1[412]
+plt.title(f'{e[channel].item()}')
+plt.imshow(o[:, :, channel])
+
+plt.subplot(1, 3, 3)
+e, o, m = ds2[412]
+plt.title(f'{e[channel].item()}')
+plt.imshow(o[:, :, channel])
+
+plt.show()
+
+##
+
+if PLOT:
     dataset = CellDataset('train')
     loader = DataLoader(dataset, batch_size=1024, num_workers=16, pin_memory=True, shuffle=True)
     with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
@@ -743,35 +860,34 @@ if __name__ == '__main__':
             plt.imshow(f5[f'train/masks/{cell_k}'][...])
             plt.show()
 
-    with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
-        cell_k = 10000
-        x = f5[f'train/omes/{cell_k}'][...]
-        plt.imshow(f5[f'train/masks/{cell_k}'][...])
-        axes = plt.subplots(8, 5, figsize=(5 * 2, 8 * 1.8))[1].flatten()
-        for i in range(39):
-            axes[i].imshow(x[:, :, i], cmap=matplotlib.cm.get_cmap('gray'))
-        plt.show()
+# with h5py.File(file_path('filtered_cells_dataset.hdf5'), 'r') as f5:
+#     cell_k = 10000
+#     x = f5[f'train/omes/{cell_k}'][...]
+#     plt.imshow(f5[f'train/masks/{cell_k}'][...])
+#     axes = plt.subplots(8, 5, figsize=(5 * 2, 8 * 1.8))[1].flatten()
+#     for i in range(39):
+#         axes[i].imshow(x[:, :, i], cmap=matplotlib.cm.get_cmap('gray'))
+#     plt.show()
 
 ##
-# recompute acculated features easily from cell tiles
-ds = CellDataset('train')
+if DEBUG:
+    # recompute acculated features easily from cell tiles
+    ds = CellDataset('test')
 e, o, m = ds[0]
 x = o.transpose(2, 0, 1) * (m > 0)
 ee = np.sum(x, axis=(1, 2))
 ee /= m.sum()
 ee = np.arcsinh(ee)
-e_ds = ExpressionFilteredDataset('train')
+e_ds = ExpressionFilteredDataset('test')
 # ee = e_ds.ds.scale(ee)
 assert np.allclose(e, e_ds[0][0])
 assert np.allclose(e, ee)
-
 ##
 import torch
 from torch.utils.data import DataLoader  # SequentialSampler
 
-assert torch.cuda.is_available()
-
-dataset = CellDataset('train')
+if DEBUG:
+    dataset = CellDataset('train')
 loader = DataLoader(dataset, batch_size=1024, num_workers=16, pin_memory=True,
                     shuffle=True)
 
@@ -785,9 +901,9 @@ quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 
                                         2.0277, 3.3281, 3.9273])
 
 
-class PadByOne:
-    def __call__(self, image):
-        return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
+# class PadByOne:
+#     def __call__(self, image):
+#         return F.pad(image, pad=[0, 1, 0, 1], mode='constant', value=0)
 
 
 class MyRotationTransform:
@@ -802,16 +918,16 @@ class MyRotationTransform:
 
 
 class RGBCells(Dataset):
-    def __init__(self, split, augment=False, aggressive_rotation=False):
+    def __init__(self, split, augment=False, aggressive_rotation=False, perturb_pixels=False, perturb_masks=False):
         assert not (augment is False and aggressive_rotation is True)
         d = {'expression': False, 'center': False, 'ome': True, 'mask': True}
-        self.ds = CellDataset(split, d)
+        self.ds = CellDataset(split, features=d, perturb_pixels=perturb_pixels, perturb_masks=perturb_masks)
         self.augment = augment
         self.aggressive_rotation = aggressive_rotation
         t = torchvision.transforms
         self.transform = t.Compose([
             t.ToTensor(),
-            PadByOne()
+            # PadByOne()
         ])
         self.augment_transform = t.Compose([
             MyRotationTransform(angles=[90, 180, 270]) if not self.aggressive_rotation else t.RandomApply(
@@ -836,7 +952,8 @@ class RGBCells(Dataset):
                 mask = self.augment_transform(mask)
             mask = mask.float()
         elif len(self.ds[item]) == 1:
-            mask = None
+            raise ValueError()
+            # mask = None
         else:
             raise ValueError()
         x = self.transform(x)
@@ -854,8 +971,8 @@ class RGBCells(Dataset):
 
 
 class PerturbedRGBCells(Dataset):
-    def __init__(self, split: str, **kwargs):
-        self.rgb_cells = RGBCells(split, **kwargs)
+    def __init__(self, split: str, augment=False, aggressive_rotation=False, perturb_pixels=False, perturb_masks=False):
+        self.rgb_cells = RGBCells(split, augment, aggressive_rotation, perturb_pixels, perturb_masks)
         self.seed = None
         # first element of the ds -> first elemnet of the tuple (=ome) -> shape[0]
         n_channels = self.rgb_cells[0][0].shape[0]
@@ -883,55 +1000,56 @@ class PerturbedRGBCells(Dataset):
 
 ##
 
-class PerturbedCellDatasetDebug(Dataset):
-    def __init__(self, split):
-        self.split = split
-        # begin
-        # let's just keep this class for debug purposes, to compare it with the one defined below
-        self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=False)
-        self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
-        f = file_path(f'ah_filtered_untransformed_expression_tensor_merged_{split}.npy')
-        # os.remove(f)
-        if not os.path.isfile(f):
-            all = []
-            for i in tqdm(range(len(self.ds)), desc='merging expression tensor'):
-                e = self.ds[i]
-                new_e = ExpressionFilteredDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
-                all.append(new_e)
-            merged = np.concatenate(all, axis=0)
-            np.save(f, merged)
-        self.merged = torch.tensor(np.load(f))
-        # end
-        self.merged = torch.asinh(self.merged)
-        self.merged /= quantiles_for_normalization
-        self.merged = self.merged.float()
-        self.corrupted_entries = torch.zeros_like(self.merged, dtype=torch.bool)
-        self.original_merged = None
-        self.seed = None
-
-    def perturb(self, seed=0):
-        self.seed = seed
-        from torch.distributions import Bernoulli
-        dist = Bernoulli(probs=0.1)
-        state = torch.get_rng_state()
-        torch.manual_seed(seed)
-        shape = self.merged.shape
-        self.corrupted_entries = dist.sample(shape).bool()
-        torch.set_rng_state(state)
-        self.original_merged = self.merged.clone()
-        self.merged[self.corrupted_entries] = 0.
-
-    def __len__(self):
-        return len(self.merged)
-
-    def __getitem__(self, i):
-        return self.merged[i, :], self.corrupted_entries[i, :]
+# class PerturbedCellDatasetDebug(Dataset):
+#     def __init__(self, split: str):
+#         self.split = split
+#         # begin
+#         # let's just keep this class for debug purposes, to compare it with the one defined below
+#         self.ds = AccumulatedDataset(split, feature='mean', from_raw=True, transform=False)
+#         self.index_converter = FilteredMasksRelabeled(split).get_indices_conversion_arrays
+#         f = file_path(f'ah_filtered_untransformed_expression_tensor_merged_{split}.npy')
+#         # os.remove(f)
+#         if not os.path.isfile(f):
+#             all = []
+#             for i in tqdm(range(len(self.ds)), desc='merging expression tensor'):
+#                 e = self.ds[i]
+#                 new_e = ExpressionFilteredDataset.expression_old_to_new(e, i, index_converter=self.index_converter)
+#                 all.append(new_e)
+#             merged = np.concatenate(all, axis=0)
+#             np.save(f, merged)
+#         self.merged = torch.tensor(np.load(f))
+#         # end
+#         self.merged = torch.asinh(self.merged)
+#         self.merged /= quantiles_for_normalization
+#         self.merged = self.merged.float()
+#         self.corrupted_entries = torch.zeros_like(self.merged, dtype=torch.bool)
+#         self.original_merged = None
+#         self.seed = None
+#
+#     def perturb(self, seed=0):
+#         self.seed = seed
+#         from torch.distributions import Bernoulli
+#         dist = Bernoulli(probs=0.1)
+#         state = torch.get_rng_state()
+#         torch.manual_seed(seed)
+#         shape = self.merged.shape
+#         self.corrupted_entries = dist.sample(shape).bool()
+#         torch.set_rng_state(state)
+#         self.original_merged = self.merged.clone()
+#         self.merged[self.corrupted_entries] = 0.
+#
+#     def __len__(self):
+#         return len(self.merged)
+#
+#     def __getitem__(self, i):
+#         return self.merged[i, :], self.corrupted_entries[i, :]
 
 
 class PerturbedCellDataset(Dataset):
-    def __init__(self, split: str):
+    def __init__(self, split: str, perturb_pixels=False, perturb_masks=False):
         self.cell_dataset = CellDataset(split, features={'expression': True, 'center': False, 'ome': False,
-                                                         'mask': False})
+                                                         'mask': False}, perturb_pixels=perturb_pixels,
+                                        perturb_masks=perturb_masks)
         self.seed = None
         # first element of the ds -> first elemnet of the tuple (=expression matrix) -> shape[0]
         n_channels = self.cell_dataset[0][0].shape[0]
@@ -956,32 +1074,43 @@ class PerturbedCellDataset(Dataset):
         x[entries_to_corrupt] = 0.
         return x, mask, entries_to_corrupt
 
-ds0 = PerturbedCellDatasetDebug('train')
-ds1 = PerturbedCellDatasetDebug('train')
-assert ds0[42] == ds1[42]
+
+# if DEBUG:
+#     ds0 = PerturbedCellDatasetDebug('train')
+#     ds1 = PerturbedCellDatasetDebug('train')
+#     assert len(ds0[42]) + len(ds0[42]) == 4
+#     assert torch.all(ds0[42][0] == ds1[42][0])
+#     assert torch.all(ds0[42][1] == ds1[42][1])
+# ##
+# if DEBUG and False:
+#     for a, b in tqdm(zip(ds0, ds1), desc='checking if tensors match', total=len(ds0)):
+#         assert len(a) == len(b)
+#         assert len(a) == 2
+#         assert torch.all(a[0] == b[0])
+#         assert torch.all(a[1] == b[1])
 ##
 print()
 print('done')
 
-    ##
-    #
-    # @staticmethod
-    # def get_mean_and_std(ds):
-    #     l = []
-    #     for x in ds:
-    #         l.append(x.numpy())
-    #     z = np.concatenate(l, axis=0)
-    #     mu = np.mean(z, axis=0)
-    #     std = np.std(z, axis=0)
-    #     return mu, std
-    #
-    # def scale(self, x):
-    #     return (x - self.mu) / self.std
-    #
-    # def scale_back(self, z):
-    #     return self.mu + self.std * z
-    #
-    # def __getitem__(self, i):
-    #     x = self.accumulated_ds[i]
-    #     z = self.scale(x)
-    #     return z
+##
+#
+# @staticmethod
+# def get_mean_and_std(ds):
+#     l = []
+#     for x in ds:
+#         l.append(x.numpy())
+#     z = np.concatenate(l, axis=0)
+#     mu = np.mean(z, axis=0)
+#     std = np.std(z, axis=0)
+#     return mu, std
+#
+# def scale(self, x):
+#     return (x - self.mu) / self.std
+#
+# def scale_back(self, z):
+#     return self.mu + self.std * z
+#
+# def __getitem__(self, i):
+#     x = self.accumulated_ds[i]
+#     z = self.scale(x)
+#     return z
