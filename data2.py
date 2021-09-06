@@ -793,46 +793,48 @@ if DEBUG:
     print(f'{exceptions}/{len(ds)} expressions are different when recomputed from ome. I\'m quite sure this happens '
           f'because some cells don\'t fit the tile they are in')
 ##
-# verify that the perturbation is correctly performed
-ds0 = CellDataset('train')
-ds1 = CellDataset('train', perturb_masks=True)
-channel = 20
-plt.figure(figsize=(10, 5))
-plt.subplot(1, 2, 1)
-e, o, m = ds0[412]
-plt.title(f'{e[channel].item()}')
-plt.imshow(o[:, :, channel])
-plt.imshow(m, alpha=0.2, cmap='gray')
-plt.subplot(1, 2, 2)
-e, o, m = ds1[412]
-plt.title(f'{e[channel].item()}')
-plt.imshow(o[:, :, channel])
-plt.imshow(m, alpha=0.2, cmap='gray')
-plt.show()
+if PLOT:
+    # verify that the perturbation is correctly performed
+    ds0 = CellDataset('train')
+    ds1 = CellDataset('train', perturb_masks=True)
+    channel = 20
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    e, o, m = ds0[412]
+    plt.title(f'{e[channel].item()}')
+    plt.imshow(o[:, :, channel])
+    plt.imshow(m, alpha=0.2, cmap='gray')
+    plt.subplot(1, 2, 2)
+    e, o, m = ds1[412]
+    plt.title(f'{e[channel].item()}')
+    plt.imshow(o[:, :, channel])
+    plt.imshow(m, alpha=0.2, cmap='gray')
+    plt.show()
 ##
-# verify that the perturbation is correctly performed and reproducible
-plt.figure(figsize=(15, 5))
-ds0 = CellDataset('train')
-ds1 = CellDataset('train', perturb_pixels=True)
-ds2 = CellDataset('train', perturb_pixels=True)
-channel = 20
+if PLOT:
+    # verify that the perturbation is correctly performed and reproducible
+    plt.figure(figsize=(15, 5))
+    ds0 = CellDataset('train')
+    ds1 = CellDataset('train', perturb_pixels=True)
+    ds2 = CellDataset('train', perturb_pixels=True)
+    channel = 20
 
-plt.subplot(1, 3, 1)
-e, o, m = ds0[412]
-plt.title(f'{e[channel].item()}')
-plt.imshow(o[:, :, channel])
+    plt.subplot(1, 3, 1)
+    e, o, m = ds0[412]
+    plt.title(f'{e[channel].item()}')
+    plt.imshow(o[:, :, channel])
 
-plt.subplot(1, 3, 2)
-e, o, m = ds1[412]
-plt.title(f'{e[channel].item()}')
-plt.imshow(o[:, :, channel])
+    plt.subplot(1, 3, 2)
+    e, o, m = ds1[412]
+    plt.title(f'{e[channel].item()}')
+    plt.imshow(o[:, :, channel])
 
-plt.subplot(1, 3, 3)
-e, o, m = ds2[412]
-plt.title(f'{e[channel].item()}')
-plt.imshow(o[:, :, channel])
+    plt.subplot(1, 3, 3)
+    e, o, m = ds2[412]
+    plt.title(f'{e[channel].item()}')
+    plt.imshow(o[:, :, channel])
 
-plt.show()
+    plt.show()
 
 ##
 

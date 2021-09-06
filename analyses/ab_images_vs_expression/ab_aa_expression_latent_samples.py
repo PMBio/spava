@@ -23,7 +23,7 @@ assert torch.all(ds.corrupted_entries == cells_ds.corrupted_entries)
 
 ##
 # load the correct expression model (51)
-expression_model = '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_74' \
+expression_model = '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_57' \
                    '/checkpoints/last.ckpt'
 # cluster
 # plot clusters

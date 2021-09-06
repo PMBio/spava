@@ -4,27 +4,26 @@ class Ppp:
 
 ppp = Ppp()
 
-# ppp.DEBUG_TORCH = 'yessss'
+ppp.DEBUG_TORCH = 'yessss'
+# ppp.LOG_PER_CHANNEL_VALUES = True
+ppp.LOG_PER_CHANNEL_VALUES = False
 ppp.MAX_EPOCHS = 20
 ppp.BATCH_SIZE = 1024
-ppp.LEARNING_RATE = 0.8e-3
-ppp.LOG_C = 1
-ppp.VAE_BETA = 1e-2
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
-ppp.LATENT_DIMS = 10
 # ppp.DEBUG = True
 ppp.DEBUG = False
-if ppp.DEBUG and not 'DEBUG_TORCH' in ppp.__dict__:
+if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
-    if 'DEBUG_TORCH' in ppp.__dict__:
+    if "DEBUG_TORCH" in ppp.__dict__:
         ppp.NUM_WORKERS = 0
     else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
-ppp.NOISE_MODEL = 'gaussian'
+ppp.NOISE_MODEL = "gaussian"
+
 # ppp.NOISE_MODEL = 'gamma'
 # ppp.NOISE_MODEL = 'zip'
 
@@ -36,15 +35,18 @@ ppp.NOISE_MODEL = 'gaussian'
 # ppp.NOISE_MODEL = 'zi_gamma'
 # ppp.NOISE_MODEL = 'nb'
 
-def set_ppp_from_loaded_model(pl_module):
-    global ppp
-    ppp = pl_module.hparams
+#
+# def set_ppp_from_loaded_model(pl_module):
+#     global ppp
+#     ppp = pl_module.hparams
 
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
+from pprint import pprint
+
 # early stopping
 
 pl.seed_everything(1234)
@@ -61,7 +63,18 @@ import torch.nn.functional as F
 import pyro
 import pyro.distributions
 
-from data2 import PerturbedCellDataset, quantiles_for_normalization
+from data2 import PerturbedCellDataset, file_path
+
+import optuna
+from optuna.integration import PyTorchLightningPruningCallback
+
+
+# sqlite-backed optuna storage does support nan https://github.com/optuna/optuna/issues/2809
+def optuna_nan_workaround(loss):
+    # from torch 1.9.0
+    # loss = torch.nan_to_num(loss, nan=torch.finfo(loss.dtype).max)
+    loss[torch.isnan(loss)] = torch.finfo(loss.dtype).max
+    return loss
 
 
 class ImageSampler(pl.Callback):
@@ -71,8 +84,15 @@ class ImageSampler(pl.Callback):
         self.num_preds = 16
 
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
-        trainer.logger.experiment.add_scalars('c', {f'channel{i}': torch.exp(pl_module.log_c[i]) for i in range(len(
-            pl_module.log_c))}, trainer.global_step)
+        if ppp.LOG_PER_CHANNEL_VALUES:
+            trainer.logger.experiment.add_scalars(
+                "c",
+                {
+                    f"channel{i}": torch.exp(pl_module.log_c[i])
+                    for i in range(len(pl_module.log_c))
+                },
+                trainer.global_step,
+            )
         # trainer.logger.experiment.add_scalars('d', {f'channel{i}': torch.sigmoid(pl_module.logit_d[i]) for i in range(
         #     len(
         #         pl_module.logit_d))}, trainer.global_step)
@@ -105,14 +125,16 @@ class ZeroInflatedNormal(ZeroInflatedDistribution):
     """
     A Zero Inflated Normal distribution.
     """
-    arg_constraints = {"loc": constraints.real,
-                       "scale": constraints.positive,
-                       "gate": constraints.unit_interval,
-                       "gate_logits": constraints.real}
+
+    arg_constraints = {
+        "loc": constraints.real,
+        "scale": constraints.positive,
+        "gate": constraints.unit_interval,
+        "gate_logits": constraints.real,
+    }
     support = constraints.real
 
-    def __init__(self, loc, scale, *, gate=None, gate_logits=None,
-                 validate_args=None):
+    def __init__(self, loc, scale, *, gate=None, gate_logits=None, validate_args=None):
         base_dist = pyro.distributions.Normal(
             loc=loc,
             scale=scale,
@@ -144,14 +166,18 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
     :param torch.Tensor gate: probability of extra zeros.
     :param torch.Tensor gate_logits: logits of extra zeros.
     """
-    arg_constraints = {"concentration": constraints.greater_than(0.),
-                       "rate": constraints.greater_than(0.),
-                       "gate": constraints.unit_interval,
-                       "gate_logits": constraints.real}
-    support = constraints.greater_than(0.)
 
-    def __init__(self, concentration, rate, *, gate=None, gate_logits=None,
-                 validate_args=None):
+    arg_constraints = {
+        "concentration": constraints.greater_than(0.0),
+        "rate": constraints.greater_than(0.0),
+        "gate": constraints.unit_interval,
+        "gate_logits": constraints.real,
+    }
+    support = constraints.greater_than(0.0)
+
+    def __init__(
+        self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
+    ):
         base_dist = Gamma(
             concentration=concentration,
             rate=rate,
@@ -179,8 +205,17 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
 # plt.hist(x.numpy(), bins=100)
 # plt.show()
 
+
 class VAE(pl.LightningModule):
-    def __init__(self, in_channels, latent_dim=10, out_channels=None, mask_loss: bool = None, **kwargs):
+    def __init__(
+        self,
+        optuna_parameters,
+        in_channels,
+        latent_dim=10,
+        out_channels=None,
+        mask_loss: bool = None,
+        **kwargs,
+    ):
         super().__init__()
         self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
@@ -191,6 +226,7 @@ class VAE(pl.LightningModule):
             self.out_channels = out_channels
         self.latent_dim = latent_dim
         self.mask_loss = mask_loss
+        self.optuna_parameters = optuna_parameters
 
         self.encoder0 = nn.Linear(self.in_channels, 30)
         self.encoder1 = nn.Linear(30, 20)
@@ -205,7 +241,7 @@ class VAE(pl.LightningModule):
         self.decoder3_b = nn.Linear(30, self.out_channels)
         self.sigmoid = nn.Sigmoid()
 
-        self.log_c = nn.Parameter(torch.Tensor([ppp.LOG_C] * 39))
+        self.log_c = nn.Parameter(torch.Tensor([self.optuna_parameters["log_c"]] * 39))
         self.logit_d = nn.Parameter(torch.logit(torch.Tensor([0.001] * 39)))
 
     def encoder(self, x):
@@ -222,16 +258,18 @@ class VAE(pl.LightningModule):
         z = F.relu(self.decoder2(z))
         decoded_a = self.decoder3_a(z)
         decoded_b = self.decoder3_b(z)
-        if ppp.NOISE_MODEL in ['gamma', 'zi_gamma', 'nb']:
+        if ppp.NOISE_MODEL in ["gamma", "zi_gamma", "nb"]:
             decoded_a = self.softplus(decoded_a) + 2
-        elif ppp.NOISE_MODEL == 'zip':
+        elif ppp.NOISE_MODEL == "zip":
             decoded_a = self.softplus(decoded_a)
-        if ppp.NOISE_MODEL in ['zip', 'zig', 'zi_gamma']:
+        if ppp.NOISE_MODEL in ["zip", "zig", "zi_gamma"]:
             decoded_b = self.sigmoid(decoded_b)
         return decoded_a, decoded_b
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
+        return torch.optim.Adam(
+            self.parameters(), lr=self.optuna_parameters["learning_rate"]
+        )
 
     @staticmethod
     def kld_loss(mu, log_var):
@@ -250,25 +288,25 @@ class VAE(pl.LightningModule):
         # err_absolute = mse_loss(recon_x, x)
         se_loss = torch.square(recon_x - x)
         if self.mask_loss:
-            se_loss[corrupted_entries] = 0.
+            se_loss[corrupted_entries] = 0.0
         non_corrupted_count = corrupted_entries.logical_not().sum()
         mse_loss = se_loss.sum(dim=-1) / non_corrupted_count
         return mse_loss
 
     def get_dist(self, a, b):
-        if ppp.NOISE_MODEL == 'gaussian':
+        if ppp.NOISE_MODEL == "gaussian":
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
-        elif ppp.NOISE_MODEL == 'zin':
+        elif ppp.NOISE_MODEL == "zin":
             dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
-        elif ppp.NOISE_MODEL == 'gamma':
+        elif ppp.NOISE_MODEL == "gamma":
             dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
-        elif ppp.NOISE_MODEL == 'zi_gamma':
+        elif ppp.NOISE_MODEL == "zi_gamma":
             dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=b)
-        elif ppp.NOISE_MODEL == 'nb':
+        elif ppp.NOISE_MODEL == "nb":
             dist = pyro.distributions.GammaPoisson(a, torch.exp(self.log_c))
-        elif ppp.NOISE_MODEL == 'zip':
+        elif ppp.NOISE_MODEL == "zip":
             dist = pyro.distributions.ZeroInflatedPoisson(a, gate=b)
-        elif ppp.NOISE_MODEL == 'log_normal':
+        elif ppp.NOISE_MODEL == "log_normal":
             dist = pyro.distributions.LogNormal(a, torch.exp(self.log_c))
         else:
             raise RuntimeError()
@@ -278,18 +316,20 @@ class VAE(pl.LightningModule):
         dist = self.get_dist(a, b)
         # measure prob of seeing image under p(x|z)
         # bad variable naming :P
-        zero = torch.tensor([2.]).to(a.device)
+        zero = torch.tensor([2.0]).to(a.device)
         if torch.any(dist.log_prob(zero).isinf()):
-            print('infinite value detected')
+            print("infinite value detected")
+            self.trainer.should_stop = True
         if torch.any(dist.log_prob(zero).isnan()):
-            print('nan value detected')
-        if ppp.NOISE_MODEL in ['gamma, zi_gamma', 'log_normal']:
+            print("nan value detected")
+            self.trainer.should_stop = True
+        if ppp.NOISE_MODEL in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
         else:
-            offset = 0.
+            offset = 0.0
         log_pxz = dist.log_prob(x + offset)
         if self.mask_loss:
-            log_pxz[corrupted_entries] = 0.
+            log_pxz[corrupted_entries] = 0.0
         non_corrupted_count = corrupted_entries.logical_not().sum()
         s = log_pxz.sum(dim=-1) / non_corrupted_count
         return s
@@ -311,7 +351,7 @@ class VAE(pl.LightningModule):
         log_pz = p.log_prob(z)
 
         # kl
-        kl = (log_qzx - log_pz)
+        kl = log_qzx - log_pz
         kl = kl.sum(-1)
         return kl
 
@@ -327,15 +367,18 @@ class VAE(pl.LightningModule):
                 # elbo
                 # elbo = kl - recon_loss
             else:
-                recon_loss = - self.mse_loss(a, x, corrupted_entries)
+                recon_loss = -self.mse_loss(a, x, corrupted_entries)
                 log_var = 2 * torch.log(std)
                 kl = self.kld_loss(mu, log_var)
-            elbo = (ppp.VAE_BETA * kl - recon_loss)
+            elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
-                print('nan in loss detected!')
+                print("nan in loss detected!")
+                self.trainer.should_stop = True
             if torch.isinf(elbo).any():
-                print('inf in loss detected!')
+                print("inf in loss detected!")
+                self.trainer.should_stop = True
+            elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
     def forward(self, x):
@@ -352,8 +395,15 @@ class VAE(pl.LightningModule):
 
             # decoded
             a, b = self.decoder(z)
-            if torch.isnan(a).any() or torch.isnan(mu).any() or torch.isnan(std).any() or torch.isnan(z).any():
-                print('nan in forward detected!')
+            if (
+                torch.isnan(a).any()
+                or torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isnan(z).any()
+            ):
+                print("nan in forward detected!")
+                self.trainer.should_stop = True
+
             # print('so far so good')
             return a, b, mu, std, z
 
@@ -365,13 +415,17 @@ class VAE(pl.LightningModule):
         assert x.shape[-1] == 39
         # encode x to get the mu and variance parameters
         a, b, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, a, b, mu, std, z, corrupted_entries)
+        elbo, kl, recon_loss = self.loss_function(
+            x, a, b, mu, std, z, corrupted_entries
+        )
 
-        self.log_dict({
-            'elbo': elbo,
-            'kl': kl.mean(),
-            'reconstruction': recon_loss.mean(),
-        })
+        self.log_dict(
+            {
+                "elbo": elbo,
+                "kl": kl.mean(),
+                "reconstruction": recon_loss.mean(),
+            }
+        )
 
         return elbo
 
@@ -381,23 +435,29 @@ class VAE(pl.LightningModule):
         assert len(x.shape) == 2
         assert x.shape[-1] == 39
         a, b, mu, std, z = self.forward(x)
-        elbo, kl, recon_loss = self.loss_function(x, a, b, mu, std, z, corrupted_entries)
+        elbo, kl, recon_loss = self.loss_function(
+            x, a, b, mu, std, z, corrupted_entries
+        )
 
+        # print('EHI VECCHIOOOOOOOOOOOOOOOOOOOOOOOOOO')
+        self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
         d = {
-            'elbo': elbo,
-            'kl': kl.mean(),
-            'reconstruction': recon_loss.mean()
+            "elbo": elbo,
+            "kl": kl.mean(),
+            "reconstruction": recon_loss.mean(),
         }
         return d
 
     def validation_epoch_end(self, outputs):
-        if not self.trainer.running_sanity_check:
+        if not self.trainer.sanity_checking:
             assert type(outputs) is list
             for i, o in enumerate(outputs):
-                for k in ['elbo', 'kl', 'reconstruction']:
+                for k in ["elbo", "kl", "reconstruction"]:
                     avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
-                    phase = 'training' if i == 0 else 'validation'
-                    self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.global_step)
+                    phase = "training" if i == 0 else "validation"
+                    self.logger.experiment.add_scalar(
+                        f"avg_metric/{k}/{phase}", avg_loss, self.global_step
+                    )
                     # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
                 # return {'log': d}
 
@@ -408,7 +468,7 @@ class LogComputationalGraph(pl.Callback):
         self.already_logged = False
 
     def on_validation_start(self, trainer: pl.Trainer, pl_module):
-        if not trainer.running_sanity_check:
+        if not trainer.sanity_checking:
             if not self.already_logged:
                 return
                 # this code causes a TracerWarning
@@ -416,9 +476,10 @@ class LogComputationalGraph(pl.Callback):
                 # sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
+
 class AfterTraining(pl.Callback):
     def on_fit_end(self, trainer, pl_module):
-        print('hi from AfterTraining!')
+        print("hi from AfterTraining!")
         # for dataloader_idx in [0, 1]:
         #     loader = trainer.val_dataloaders[dataloader_idx]
         #     dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
@@ -426,28 +487,31 @@ class AfterTraining(pl.Callback):
         #     trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
         #                                         trainer.global_step)
 
+
 # class LogHyperparameters(pl.Callback):
 #     def __init__(self):
 #         self.alredy_logged = False
 #
 #     def on_validation_start(self, trainer, pl_module) -> None:
-#         if not trainer.running_sanity_check:
+#         if not trainer.sanity_checking:
 #             if not self.alredy_logged:
 #                 pl_module.logger.log_hyperparams(ppp.__dict__)
 #                 self.alredy_logged = True
 
 
 def get_loaders(perturb: bool):
-    train_ds = PerturbedCellDataset('train')
-    train_ds_validation = PerturbedCellDataset('train')
-    val_ds = PerturbedCellDataset('validation')
+    train_ds = PerturbedCellDataset("train")
+    train_ds_validation = PerturbedCellDataset("train")
+    val_ds = PerturbedCellDataset("validation")
 
     if perturb:
         train_ds.perturb()
         train_ds_validation.perturb()
         val_ds.perturb()
-    print(f'len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ='
-          f' {train_ds[0][0].shape}')
+    print(
+        f"len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ="
+        f" {train_ds[0][0].shape}"
+    )
 
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
@@ -460,41 +524,30 @@ def get_loaders(perturb: bool):
         d = train_subset
     else:
         d = train_ds
-    train_loader = DataLoader(d, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True,
-                              shuffle=True)
-    train_loader_batch = DataLoader(train_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS,
-                                    pin_memory=True)
+    train_loader = DataLoader(
+        d,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+        shuffle=True,
+    )
+    train_loader_batch = DataLoader(
+        train_subset,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+    )
 
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
-    val_loader = DataLoader(val_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True)
+    val_loader = DataLoader(
+        val_subset,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+    )
     return train_loader, val_loader, train_loader_batch
 
-
-def train(perturb=False):
-    # parser = ArgumentParser()
-    # parser.add_argument('--gpus', type=int, default=1)
-    # args = parser.parse_args()
-
-    from data2 import file_path
-    logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='expression_vae')
-    print(f'logging in {logger.experiment.log_dir}')
-    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
-                                          monitor='elbo',
-                                          # every_n_train_steps=2,
-                                          save_last=True,
-                                          save_top_k=3)
-    early_stop_callback = EarlyStopping(monitor='elbo', min_delta=0.0001, patience=3, verbose=True, mode='max',
-                                        check_finite=True)
-    trainer = pl.Trainer(gpus=1, max_epochs=ppp.MAX_EPOCHS,
-                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback,
-                                    early_stop_callback, AfterTraining()],
-                         logger=logger, num_sanity_val_steps=0,  # track_grad_norm=2,
-                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 200)
-
-    train_loader, val_loader, train_loader_batch = get_loaders(perturb)
-
-    #
     # class MySampler(Sampler):
     #     def __init__(self, my_ordered_indices):
     #         self.my_ordered_indices = my_ordered_indices
@@ -513,10 +566,103 @@ def train(perturb=False):
 
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
-    vae = VAE(in_channels=39, latent_dim=ppp.LATENT_DIMS, out_channels=None, mask_loss=ppp.MASK_LOSS, **ppp.__dict__)
-    trainer.fit(vae, train_dataloaders=train_loader, val_dataloaders=[train_loader_batch, val_loader])
-    print(f'finished logging in {logger.experiment.log_dir}')
 
 
-if __name__ == '__main__':
-    train(perturb=False)
+def objective(trial: optuna.trial.Trial) -> float:
+    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="expression_vae")
+    print(f"logging in {logger.experiment.log_dir}")
+    version = int(logger.experiment.log_dir.split("version_")[-1])
+    trial.set_user_attr("version", version)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
+        monitor="elbo",
+        # every_n_train_steps=2,
+        save_last=True,
+        save_top_k=3,
+    )
+    early_stop_callback = EarlyStopping(
+        monitor="elbo",
+        min_delta=0.0001,
+        patience=3,
+        verbose=True,
+        mode="max",
+        check_finite=True,
+    )
+    trainer = pl.Trainer(
+        gpus=1,
+        max_epochs=ppp.MAX_EPOCHS,
+        callbacks=[
+            ImageSampler(),
+            LogComputationalGraph(),
+            checkpoint_callback,
+            early_stop_callback,
+            AfterTraining(),
+            PyTorchLightningPruningCallback(trial, monitor="elbo"),
+        ],
+        logger=logger,
+        num_sanity_val_steps=0,  # track_grad_norm=2,
+        log_every_n_steps=15 if not ppp.DEBUG else 1,
+        val_check_interval=1 if ppp.DEBUG else 200,
+    )
+
+    train_loader, val_loader, train_loader_batch = get_loaders(perturb=False)
+    # hyperparameters
+    latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
+    log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
+    optuna_parameters = dict(
+        latent_dims=latent_dims,
+        vae_beta=vae_beta,
+        log_c=log_c,
+        learning_rate=learning_rate,
+    )
+    pprint(optuna_parameters)
+    trainer.logger.log_hyperparams(optuna_parameters)
+
+    vae = VAE(
+        optuna_parameters=optuna_parameters,
+        in_channels=39,
+        latent_dim=latent_dims,
+        out_channels=None,
+        mask_loss=ppp.MASK_LOSS,
+        **ppp.__dict__,
+    )
+
+    trainer.fit(
+        vae,
+        train_dataloaders=train_loader,
+        val_dataloaders=[train_loader_batch, val_loader],
+    )
+    print(f"finished logging in {logger.experiment.log_dir}")
+
+    elbo = trainer.callback_metrics["elbo"].item()
+    return elbo
+
+
+if __name__ == "__main__":
+    # alternative: optuna.pruners.NopPruner()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    study = optuna.create_study(
+        direction="minimize",
+        pruner=pruner,
+        storage="sqlite:///" + file_path("optuna_ah.sqlite"),
+        load_if_exists=True,
+        study_name="no-name-fbdac942-b370-43af-a619-621755ee9d1f",
+    )
+    OPTIMIZE = True
+    # OPTIMIZE = False
+    if OPTIMIZE:
+        study.optimize(objective, n_trials=3, timeout=3600)
+        print("Number of finished trials: {}".format(len(study.trials)))
+        print("Best trial:")
+        trial = study.best_trial
+        print("  Value: {}".format(trial.value))
+        print("  Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+    else:
+        objective(study.best_trial)
+
+    # study = optuna.create_study(study_name=study_name, storage=storage_name, load_if_exists=True)
+    # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
