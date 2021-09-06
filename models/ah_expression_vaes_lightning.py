@@ -24,9 +24,9 @@ else:
     else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
-# ppp.NOISE_MODEL = 'gaussian'
+ppp.NOISE_MODEL = 'gaussian'
 # ppp.NOISE_MODEL = 'gamma'
-ppp.NOISE_MODEL = 'zip'
+# ppp.NOISE_MODEL = 'zip'
 
 
 # ppp.NOISE_MODEL = 'zin'
@@ -43,7 +43,9 @@ def set_ppp_from_loaded_model(pl_module):
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
+# early stopping
 
 pl.seed_everything(1234)
 
@@ -71,9 +73,10 @@ class ImageSampler(pl.Callback):
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
         trainer.logger.experiment.add_scalars('c', {f'channel{i}': torch.exp(pl_module.log_c[i]) for i in range(len(
             pl_module.log_c))}, trainer.global_step)
-        trainer.logger.experiment.add_scalars('d', {f'channel{i}': torch.sigmoid(pl_module.logit_d[i]) for i in range(
-            len(
-                pl_module.logit_d))}, trainer.global_step)
+        # trainer.logger.experiment.add_scalars('d', {f'channel{i}': torch.sigmoid(pl_module.logit_d[i]) for i in range(
+        #     len(
+        #         pl_module.logit_d))}, trainer.global_step)
+
         # for dataloader_idx in [0, 1]:
         # loader = trainer.val_dataloaders[dataloader_idx]
         # dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
@@ -356,7 +359,7 @@ class VAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        x, corrupted_entries = batch
+        x, _, corrupted_entries = batch
         # assert x.shape == (BATCH_SIZE, 39)
         assert len(x.shape) == 2
         assert x.shape[-1] == 39
@@ -373,7 +376,7 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        x, corrupted_entries = batch
+        x, _, corrupted_entries = batch
         # assert x.shape == (BATCH_SIZE, 39)
         assert len(x.shape) == 2
         assert x.shape[-1] == 39
@@ -413,6 +416,15 @@ class LogComputationalGraph(pl.Callback):
                 # sample_image = torch.rand((BATCH_SIZE, len(COOL_CHANNELS), 32, 32))
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
+class AfterTraining(pl.Callback):
+    def on_fit_end(self, trainer, pl_module):
+        print('hi from AfterTraining!')
+        # for dataloader_idx in [0, 1]:
+        #     loader = trainer.val_dataloaders[dataloader_idx]
+        #     dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
+        #     img = get_image(loader, pl_module)
+        #     trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
+        #                                         trainer.global_step)
 
 # class LogHyperparameters(pl.Callback):
 #     def __init__(self):
@@ -472,13 +484,15 @@ def train(perturb=False):
                                           # every_n_train_steps=2,
                                           save_last=True,
                                           save_top_k=3)
+    early_stop_callback = EarlyStopping(monitor='elbo', min_delta=0.0001, patience=3, verbose=True, mode='max',
+                                        check_finite=True)
     trainer = pl.Trainer(gpus=1, max_epochs=ppp.MAX_EPOCHS,
-                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
+                         callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback,
+                                    early_stop_callback, AfterTraining()],
                          logger=logger, num_sanity_val_steps=0,  # track_grad_norm=2,
-                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 400)
+                         log_every_n_steps=15 if not ppp.DEBUG else 1, val_check_interval=1 if ppp.DEBUG else 200)
 
     train_loader, val_loader, train_loader_batch = get_loaders(perturb)
-    # set back val_check_interval to 200
 
     #
     # class MySampler(Sampler):
@@ -500,7 +514,7 @@ def train(perturb=False):
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
     vae = VAE(in_channels=39, latent_dim=ppp.LATENT_DIMS, out_channels=None, mask_loss=ppp.MASK_LOSS, **ppp.__dict__)
-    trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
+    trainer.fit(vae, train_dataloaders=train_loader, val_dataloaders=[train_loader_batch, val_loader])
     print(f'finished logging in {logger.experiment.log_dir}')
 
 

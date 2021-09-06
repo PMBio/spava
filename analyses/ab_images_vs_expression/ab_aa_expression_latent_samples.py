@@ -23,7 +23,7 @@ assert torch.all(ds.corrupted_entries == cells_ds.corrupted_entries)
 
 ##
 # load the correct expression model (51)
-expression_model = '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_66' \
+expression_model = '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_74' \
                    '/checkpoints/last.ckpt'
 # cluster
 # plot clusters
@@ -41,7 +41,7 @@ all_expression = []
 # for data in train_loader:
 # data = train_loader.__iter__().__next__()
 for data in tqdm(train_loader, desc='embedding expression'):
-    expression, is_perturbed = data
+    expression, _, is_perturbed = data
     a, b, mu, std, z = expression_vae(expression)
     all_mu.append(mu)
     all_expression.append(expression)
@@ -96,6 +96,3 @@ plt.show()
 # d = {0: 'subcellular', 37: 'subcellular', 38: 'subcellular',
 #      3: 'boundary', 4: 'boundary', 5: 'boundary',
 #      10: 'both', 35: 'both'}
-c0 = 0
-c1 = 3
-c2 = 10

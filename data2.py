@@ -748,12 +748,12 @@ class CellDataset(Dataset):
     def __getitem__(self, i):
         l = []
         # if mask is required
-        if self.features['mask'] or self.perturb_masks:
+        if self.features['mask'] or self.perturb_masks or self.FORCE_RECOMPUTE_EXPRESSION:
             mask = self.f5_masks[f'{i}'][...]
             if self.perturb_masks:
                 mask = self.recompute_mask(mask)
         # if ome is required
-        if self.features['ome'] or self.perturb_masks or self.perturb_pixels:
+        if self.features['ome'] or self.perturb_masks or self.perturb_pixels or self.FORCE_RECOMPUTE_EXPRESSION:
             ome = self.f5_omes[f'{i}'][...]
             if self.perturb_pixels:
                 ome = self.recompute_ome(ome, ome_index=i)
@@ -873,25 +873,25 @@ if PLOT:
 if DEBUG:
     # recompute acculated features easily from cell tiles
     ds = CellDataset('test')
-e, o, m = ds[0]
-x = o.transpose(2, 0, 1) * (m > 0)
-ee = np.sum(x, axis=(1, 2))
-ee /= m.sum()
-ee = np.arcsinh(ee)
-e_ds = ExpressionFilteredDataset('test')
-# ee = e_ds.ds.scale(ee)
-assert np.allclose(e, e_ds[0][0])
-assert np.allclose(e, ee)
+    e, o, m = ds[0]
+    x = o.transpose(2, 0, 1) * (m > 0)
+    ee = np.sum(x, axis=(1, 2))
+    ee /= m.sum()
+    ee = np.arcsinh(ee)
+    e_ds = ExpressionFilteredDataset('test')
+    # ee = e_ds.ds.scale(ee)
+    assert np.allclose(e, e_ds[0][0])
+    assert np.allclose(e, ee)
 ##
 import torch
 from torch.utils.data import DataLoader  # SequentialSampler
 
 if DEBUG:
     dataset = CellDataset('train')
-loader = DataLoader(dataset, batch_size=1024, num_workers=16, pin_memory=True,
-                    shuffle=True)
+    loader = DataLoader(dataset, batch_size=1024, num_workers=16, pin_memory=True,
+                        shuffle=True)
 
-print(loader.__iter__().__next__())
+    print(loader.__iter__().__next__())
 
 ##
 quantiles_for_normalization = np.array([4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621,
@@ -1048,7 +1048,7 @@ class PerturbedRGBCells(Dataset):
 class PerturbedCellDataset(Dataset):
     def __init__(self, split: str, perturb_pixels=False, perturb_masks=False):
         self.cell_dataset = CellDataset(split, features={'expression': True, 'center': False, 'ome': False,
-                                                         'mask': False}, perturb_pixels=perturb_pixels,
+                                                         'mask': True}, perturb_pixels=perturb_pixels,
                                         perturb_masks=perturb_masks)
         self.seed = None
         # first element of the ds -> first elemnet of the tuple (=expression matrix) -> shape[0]
@@ -1072,6 +1072,7 @@ class PerturbedCellDataset(Dataset):
         x, mask = self.cell_dataset[i]
         entries_to_corrupt = self.corrupted_entries[i, :]
         x[entries_to_corrupt] = 0.
+        x = x.astype(np.float32)
         return x, mask, entries_to_corrupt
 
 
