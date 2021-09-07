@@ -176,7 +176,7 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
     support = constraints.greater_than(0.0)
 
     def __init__(
-            self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
+        self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
     ):
         base_dist = Gamma(
             concentration=concentration,
@@ -208,13 +208,13 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
 
 class VAE(pl.LightningModule):
     def __init__(
-            self,
-            optuna_parameters,
-            in_channels,
-            latent_dim=10,
-            out_channels=None,
-            mask_loss: bool = None,
-            **kwargs,
+        self,
+        optuna_parameters,
+        in_channels,
+        latent_dim=10,
+        out_channels=None,
+        mask_loss: bool = None,
+        **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
@@ -396,10 +396,10 @@ class VAE(pl.LightningModule):
             # decoded
             a, b = self.decoder(z)
             if (
-                    torch.isnan(a).any()
-                    or torch.isnan(mu).any()
-                    or torch.isnan(std).any()
-                    or torch.isnan(z).any()
+                torch.isnan(a).any()
+                or torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 self.trainer.should_stop = True
@@ -498,10 +498,31 @@ class AfterTraining(pl.Callback):
 #                 self.alredy_logged = True
 
 
-def get_loaders(perturb: bool, perturb_masks: bool = False, shuffle_train=False):
-    train_ds = PerturbedCellDataset("train", perturb_masks=perturb_masks)
-    train_ds_validation = PerturbedCellDataset("train", perturb_masks=perturb_masks)
-    val_ds = PerturbedCellDataset("validation", perturb_masks=perturb_masks)
+def get_loaders(
+    perturb: bool,
+    perturb_masks: bool = False,
+    perturb_pixels: bool = False,
+    perturb_pixels_seed=42,
+    shuffle_train=False,
+):
+    train_ds = PerturbedCellDataset(
+        "train",
+        perturb_pixels=perturb_pixels,
+        perturb_pixels_seed=perturb_pixels_seed,
+        perturb_masks=perturb_masks,
+    )
+    train_ds_validation = PerturbedCellDataset(
+        "train",
+        perturb_pixels=perturb_pixels,
+        perturb_pixels_seed=perturb_pixels_seed,
+        perturb_masks=perturb_masks,
+    )
+    val_ds = PerturbedCellDataset(
+        "validation",
+        perturb_pixels=perturb_pixels,
+        perturb_pixels_seed=perturb_pixels_seed,
+        perturb_masks=perturb_masks,
+    )
 
     if perturb:
         train_ds.perturb()
@@ -604,9 +625,15 @@ def objective(trial: optuna.trial.Trial) -> float:
         val_check_interval=1 if ppp.DEBUG else 200,
     )
 
-    print(f'ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}')
+    print(f"ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}")
+    print(f"ppp.PERTURB_PIXELS = {ppp.PERTURB_PIXELS}")
+    print(f"ppp.PERTURB_PIXELS_SEED = {ppp.PERTURB_PIXELS_SEED}")
     train_loader, val_loader, train_loader_batch = get_loaders(
-        perturb=False, shuffle_train=True, perturb_masks=ppp.PERTURB_MASKS
+        perturb=False,
+        shuffle_train=True,
+        perturb_pixels=ppp.PERTURB_PIXELS,
+        perturb_pixels_seed=ppp.PERTURB_PIXELS_SEED,
+        perturb_masks=ppp.PERTURB_MASKS,
     )
     # hyperparameters
     latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
@@ -647,10 +674,16 @@ if __name__ == "__main__":
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
     study_name = "ah_perturbed_masks"
     # study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
-    if study_name == 'ah_perturbed_masks':
+    if study_name == "ah_perturbed_masks":
         ppp.PERTURB_MASKS = True
-    else:
+        ppp.PERTURB_PIXELS = False
+        ppp.PERTURB_PIXELS_SEED = None
+    elif study_name == "no-name-fbdac942-b370-43af-a619-621755ee9d1f":
         ppp.PERTURB_MASKS = False
+        ppp.PERTURB_PIXELS = False
+        ppp.PERTURB_PIXELS_SEED = None
+    else:
+        raise NotImplementedError()
     study = optuna.create_study(
         direction="minimize",
         pruner=pruner,

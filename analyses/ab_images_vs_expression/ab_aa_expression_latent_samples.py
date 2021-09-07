@@ -28,20 +28,31 @@ if PERTURB:
 assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
 
 ##
-# train the model on dilated masks using the hyperparameters from the best model for original expression
-from models.ah_expression_vaes_lightning import objective, ppp
-from data2 import file_path
-pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
-ppp.PERTURB_MASKS = True
-study = optuna.load_study(study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite"))
-objective(study.best_trial)
+if False:
+    # train the model on dilated masks using the hyperparameters from the best model for original expression
+    from models.ah_expression_vaes_lightning import objective, ppp
+    from data2 import file_path
+
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
+    ppp.PERTURB_MASKS = True
+    study = optuna.load_study(
+        study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite")
+    )
+    objective(study.best_trial)
 
 ##
 ii = IndexInfo(SPLIT)
 n = ii.filtered_ends[-1]
 random_indices = np.random.choice(n, 10000, replace=False)
+##
 
+def compute_knn(b: ad.AnnData):
+    print("computing nearest neighbors on subsetted data... ", end="")
+    nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(b.X)
+    distances, indices = nbrs.kneighbors(b.X)
+    b.obsm["nearest_neighbors"] = indices
+    print("done")
 
 def precompute(data_loaders, expression_model_checkpoint, random_indices):
     loader = data_loaders[["train", "validation", "test"].index(SPLIT)]
@@ -65,7 +76,6 @@ def precompute(data_loaders, expression_model_checkpoint, random_indices):
 
     b0 = a0[random_indices]
     b1 = a1[random_indices]
-    ##
     # a, b = a0, b0
     # for a, b in tqdm(zip([a0, a1], [b0, b1]), desc="AnnData objects", total=2):
     for b in tqdm([b0, b1], desc="AnnData objects", total=2):
@@ -75,11 +85,7 @@ def precompute(data_loaders, expression_model_checkpoint, random_indices):
         sc.tl.louvain(b)
         print("done")
 
-        print("computing nearest neighbors on subsetted data... ", end="")
-        nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(b.X)
-        distances, indices = nbrs.kneighbors(b.X)
-        b.obsm["nearest_neighbors"] = indices
-        print("done")
+        compute_knn(b)
 
         # print("computing nearest neighbors on the full data... ", end="")
         # nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(a.X)
@@ -171,6 +177,20 @@ compare_clusters(
 
 
 ##
+def compute_knn_purity(ad0: ad.AnnData, ad1: ad.AnnData) -> float:
+    nn0 = ad0.obsm["nearest_neighbors"]
+    nn1 = ad1.obsm["nearest_neighbors"]
+    assert nn0.shape[1] == nn1.shape[1]
+    k = nn0.shape[1]
+    # let's use a list in the case in which we are interested in a histogram
+    scores = []
+    for x0, x1 in zip(nn0, nn1):
+        common = np.intersect1d(x0, x1, assume_unique=True)
+        scores.append(len(common) / k)
+    m = np.mean(scores)
+    return m.item()
+
+
 def nearest_neighbors(nn_from: ad.AnnData, plot_onto: ad.AnnData, title: str):
     some_cells = list(range(5))
     plt.style.use("dark_background")
@@ -194,10 +214,12 @@ def nearest_neighbors(nn_from: ad.AnnData, plot_onto: ad.AnnData, title: str):
             s=1,
             color="w",
         )
-    plt.suptitle(title)
+    p = compute_knn_purity(nn_from, plot_onto)
+    plt.suptitle(f"knn purity: {p:0.2f}, {title}")
     plt.tight_layout()
     plt.show()
     plt.style.use("default")
+
 
 ##
 nearest_neighbors(
@@ -222,18 +244,137 @@ nearest_neighbors(
 )
 ##
 if False:
-    # plot barplots of expression for nearest neighbors, of subsampled cells
-    some_cells = range(5)
-    rows = len(some_cells)
-    cols = len(indices[42])
-    axes = plt.subplots(rows, cols, figsize=(30, 20))[1].flatten()
-    k = 0
-    for cell in tqdm(some_cells):
-        for i in indices[cell]:
-            ax = axes[k]
-            e = c1[i]
-            ax.bar(np.arange(len(e)), e)
-            ax.set(title=f"cell {i}, nn of {cell}")
-            k += 1
-    plt.tight_layout()
-    plt.show()
+    from data2 import CellDataset
+
+    r = CellDataset("train").FRACTION_OF_PIXELS_TO_MASK
+    print(f"fraction of pixels to mask = {r}")
+    # train various models of perturbed pixels using the hyperparameters from the best model for expression
+    # training time is approx 5 minutes per model
+    for seed in tqdm(range(12), desc=f"perturbed pixels model"):
+        print(f"seed = {seed}")
+        from models.ah_expression_vaes_lightning import objective, ppp
+        from data2 import file_path
+
+        pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+        study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
+        ppp.PERTURB_PIXELS = True
+        ppp.PERTURB_PIXELS_SEED = seed
+        ppp.PERTURB_MASKS = False
+        study = optuna.load_study(
+            study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite")
+        )
+        objective(study.best_trial)
+##
+perturbed_expressions = []
+perturbed_mus = []
+for i in tqdm(range(12), "perturbed model"):
+    loader = get_loaders(
+        perturb=PERTURB, perturb_pixels=True, perturb_pixels_seed=i, perturb_masks=False
+    )[["train", "validation", "test"].index(SPLIT)]
+    expression_model_checkpoint = (
+        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae"
+        f"/version_{i + 110}/checkpoints/last.ckpt"
+    )
+    expression_vae = ExpressionVAE.load_from_checkpoint(expression_model_checkpoint)
+    l = []
+    for data in tqdm(loader, desc="embedding expression", leave=False):
+        expression, _, is_perturbed = data
+        l.append(expression)
+    expressions = torch.cat(l, dim=0)
+    random_expressions = expressions[random_indices]
+    # a, b, mu, std, z = expression_vae(expression)
+    _, _, random_mu, _, _ = expression_vae(random_expressions)
+    perturbed_expressions.append(random_expressions)
+    perturbed_mus.append(random_mu)
+##
+a_expr = [ad.AnnData(x.numpy()) for x in perturbed_expressions]
+a_mus = [ad.AnnData(x.detach().numpy()) for x in perturbed_mus]
+##
+for i in tqdm(range(12), desc='computing nearest neighbors'):
+    compute_knn(a_expr[i])
+    compute_knn(a_mus[i])
+##
+purities_against_expression = []
+purities_against_latent = []
+for i in tqdm(range(12), desc='computing knn purity'):
+    p = compute_knn_purity(a_expr[i], b1)
+    purities_against_expression.append(p)
+    p = compute_knn_purity(a_mus[i], b0m)
+    purities_against_latent.append(p)
+p_e = np.array(purities_against_expression)
+p_l = np.array(purities_against_latent)
+print(p_e)
+# gives: [0.77087  0.769275 0.76964  0.770855 0.76818  0.76979  0.77168  0.770635
+#  0.772285 0.7698   0.769245 0.77139 ]
+print(p_l)
+# gives: [0.259405 0.212675 0.22681  0.30572  0.270595 0.19452  0.294845 0.20003
+#  0.24315  0.240395 0.292055 0.21468 ]
+##
+# assessing the stability of the model (let's retrain a few more times the expression model with the same
+# hyperparameters)
+if False:
+    for _ in range(3):
+        from models.ah_expression_vaes_lightning import objective, ppp
+        from data2 import file_path
+
+        pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+        study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
+        ppp.PERTURB_PIXELS = False
+        ppp.PERTURB_PIXELS_SEED = 42
+        ppp.PERTURB_MASKS = False
+        study = optuna.load_study(
+            study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite")
+        )
+        objective(study.best_trial)
+##
+b0s = []
+b1s = []
+for i in tqdm(range(3), 'precomputing'):
+    bb0, bb1 = precompute(
+        data_loaders=get_loaders(perturb=PERTURB),
+        expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
+                                    f"/expression_vae/version_{i + 124}/checkpoints/last.ckpt",
+        random_indices=random_indices,
+    )
+    b0s.append(bb0)
+    b1s.append(bb1)
+##
+for i in range(3):
+    louvain_plot(b1s[i], title=f'expression, clone {i}')
+
+for i in range(3):
+    louvain_plot(b0s[i], title=f'latent, clone {i}')
+
+##
+for i in range(3):
+    compare_clusters(b1, b1s[i], description=f'"expression" vs "expression, clone {i}"')
+
+for i in range(3):
+    compare_clusters(b0, b0s[i], description=f'"latent" vs "latent, clone {i}"')
+
+for i in range(3):
+    compare_clusters(b1, b0s[i], description=f'"expression" vs "latent, clone {i}"')
+##
+for i in range(3):
+    nearest_neighbors(
+        nn_from=b1,
+        plot_onto=b0s[i],
+        title=f'nn from "expression" plotted plotted onto "latent space, clone {i}"',
+    )
+##
+# if False:
+#     # plot barplots of expression for nearest neighbors, of subsampled cells
+#     some_cells = range(5)
+#     rows = len(some_cells)
+#     cols = len(indices[42])
+#     axes = plt.subplots(rows, cols, figsize=(30, 20))[1].flatten()
+#     k = 0
+#     for cell in tqdm(some_cells):
+#         for i in indices[cell]:
+#             ax = axes[k]
+#             e = c1[i]
+#             ax.bar(np.arange(len(e)), e)
+#             ax.set(title=f"cell {i}, nn of {cell}")
+#             k += 1
+#     plt.tight_layout()
+#     plt.show()
