@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import skimage.measure
+from data2 import PerturbedRGBCells, PerturbedCellDataset
 
 ds = PerturbedRGBCells(split="validation")
 
@@ -22,12 +23,14 @@ assert torch.all(ds.corrupted_entries == cells_ds.corrupted_entries)
 ##
 
 models = {
-    "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/checkpoints"
+    "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/old_checkpoints"
                   "/epoch=3-step=1610.ckpt",
-    "resnet_vae_perturbed": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_12"
+    "resnet_vae_perturbed": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae/version_12"
                             "/checkpoints/last.ckpt",
-    "resnet_vae_perturbed_long": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_14/checkpoints/last.ckpt",
-    "resnet_vae_last_channel": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_20"
+    "resnet_vae_perturbed_long": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae"
+                                 "/version_14/checkpoints/last.ckpt",
+    "resnet_vae_last_channel": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae"
+                               "/version_20"
                                "/checkpoints/last.ckpt",
 }
 

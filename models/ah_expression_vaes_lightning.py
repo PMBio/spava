@@ -4,7 +4,7 @@ class Ppp:
 
 ppp = Ppp()
 
-ppp.DEBUG_TORCH = 'yessss'
+# ppp.DEBUG_TORCH = 'yessss'
 # ppp.LOG_PER_CHANNEL_VALUES = True
 ppp.LOG_PER_CHANNEL_VALUES = False
 ppp.MAX_EPOCHS = 20
@@ -176,7 +176,7 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
     support = constraints.greater_than(0.0)
 
     def __init__(
-        self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
+            self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
     ):
         base_dist = Gamma(
             concentration=concentration,
@@ -208,13 +208,13 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
 
 class VAE(pl.LightningModule):
     def __init__(
-        self,
-        optuna_parameters,
-        in_channels,
-        latent_dim=10,
-        out_channels=None,
-        mask_loss: bool = None,
-        **kwargs,
+            self,
+            optuna_parameters,
+            in_channels,
+            latent_dim=10,
+            out_channels=None,
+            mask_loss: bool = None,
+            **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
@@ -396,10 +396,10 @@ class VAE(pl.LightningModule):
             # decoded
             a, b = self.decoder(z)
             if (
-                torch.isnan(a).any()
-                or torch.isnan(mu).any()
-                or torch.isnan(std).any()
-                or torch.isnan(z).any()
+                    torch.isnan(a).any()
+                    or torch.isnan(mu).any()
+                    or torch.isnan(std).any()
+                    or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 self.trainer.should_stop = True
@@ -439,7 +439,6 @@ class VAE(pl.LightningModule):
             x, a, b, mu, std, z, corrupted_entries
         )
 
-        # print('EHI VECCHIOOOOOOOOOOOOOOOOOOOOOOOOOO')
         self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
         d = {
             "elbo": elbo,
@@ -499,10 +498,10 @@ class AfterTraining(pl.Callback):
 #                 self.alredy_logged = True
 
 
-def get_loaders(perturb: bool):
-    train_ds = PerturbedCellDataset("train")
-    train_ds_validation = PerturbedCellDataset("train")
-    val_ds = PerturbedCellDataset("validation")
+def get_loaders(perturb: bool, perturb_masks: bool = False, shuffle_train=False):
+    train_ds = PerturbedCellDataset("train", perturb_masks=perturb_masks)
+    train_ds_validation = PerturbedCellDataset("train", perturb_masks=perturb_masks)
+    val_ds = PerturbedCellDataset("validation", perturb_masks=perturb_masks)
 
     if perturb:
         train_ds.perturb()
@@ -529,7 +528,7 @@ def get_loaders(perturb: bool):
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
-        shuffle=True,
+        shuffle=shuffle_train,
     )
     train_loader_batch = DataLoader(
         train_subset,
@@ -605,7 +604,10 @@ def objective(trial: optuna.trial.Trial) -> float:
         val_check_interval=1 if ppp.DEBUG else 200,
     )
 
-    train_loader, val_loader, train_loader_batch = get_loaders(perturb=False)
+    print(f'ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}')
+    train_loader, val_loader, train_loader_batch = get_loaders(
+        perturb=False, shuffle_train=True, perturb_masks=ppp.PERTURB_MASKS
+    )
     # hyperparameters
     latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
@@ -643,17 +645,23 @@ def objective(trial: optuna.trial.Trial) -> float:
 if __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    study_name = "ah_perturbed_masks"
+    # study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
+    if study_name == 'ah_perturbed_masks':
+        ppp.PERTURB_MASKS = True
+    else:
+        ppp.PERTURB_MASKS = False
     study = optuna.create_study(
         direction="minimize",
         pruner=pruner,
         storage="sqlite:///" + file_path("optuna_ah.sqlite"),
         load_if_exists=True,
-        study_name="no-name-fbdac942-b370-43af-a619-621755ee9d1f",
+        study_name=study_name,
     )
     OPTIMIZE = True
     # OPTIMIZE = False
     if OPTIMIZE:
-        study.optimize(objective, n_trials=3, timeout=3600)
+        study.optimize(objective, n_trials=100, timeout=3600)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
