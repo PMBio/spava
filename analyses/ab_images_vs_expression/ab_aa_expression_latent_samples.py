@@ -15,20 +15,22 @@ import anndata as ad
 import seaborn as sns
 import pandas as pd
 import optuna
+m = __name__ == '__main__'
 
 ##
-SPLIT = "train"
-ds = PerturbedRGBCells(split=SPLIT)
-cells_ds = PerturbedCellDataset(split=SPLIT)
+if m:
+    SPLIT = "train"
+    ds = PerturbedRGBCells(split=SPLIT)
+    cells_ds = PerturbedCellDataset(split=SPLIT)
 
-PERTURB = False
-if PERTURB:
-    ds.perturb()
-    cells_ds.perturb()
-assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
+    PERTURB = False
+    if PERTURB:
+        ds.perturb()
+        cells_ds.perturb()
+    assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
 
 ##
-if False:
+if m and False:
     # train the model on dilated masks using the hyperparameters from the best model for original expression
     from models.ah_expression_vaes_lightning import objective, ppp
     from data2 import file_path
@@ -42,9 +44,10 @@ if False:
     objective(study.best_trial)
 
 ##
-ii = IndexInfo(SPLIT)
-n = ii.filtered_ends[-1]
-random_indices = np.random.choice(n, 10000, replace=False)
+if m:
+    ii = IndexInfo(SPLIT)
+    n = ii.filtered_ends[-1]
+    random_indices = np.random.choice(n, 10000, replace=False)
 ##
 
 def compute_knn(b: ad.AnnData):
@@ -54,8 +57,8 @@ def compute_knn(b: ad.AnnData):
     b.obsm["nearest_neighbors"] = indices
     print("done")
 
-def precompute(data_loaders, expression_model_checkpoint, random_indices):
-    loader = data_loaders[["train", "validation", "test"].index(SPLIT)]
+def precompute(data_loaders, expression_model_checkpoint, random_indices, split):
+    loader = data_loaders[["train", "validation"].index(split)]
     expression_vae = ExpressionVAE.load_from_checkpoint(expression_model_checkpoint)
     print("merging expressions and computing embeddings... ", end="")
     all_mu = []
@@ -97,22 +100,26 @@ def precompute(data_loaders, expression_model_checkpoint, random_indices):
 
 
 ##
-# best expression model
-b0, b1 = precompute(
-    data_loaders=get_loaders(perturb=PERTURB),
-    expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
-    "/expression_vae/version_57/checkpoints/last.ckpt",
-    random_indices=random_indices,
-)
+if m:
+    # best expression model
+    b0, b1 = precompute(
+        data_loaders=get_loaders(perturb=PERTURB),
+        expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
+        "/expression_vae/version_57/checkpoints/last.ckpt",
+        random_indices=random_indices,
+        split=SPLIT
+    )
 
 ##
-# best expression model trainined on dilated masks
-b0m, b1m = precompute(
-    get_loaders(perturb=PERTURB, perturb_masks=True),
-    expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
-    "/expression_vae/version_108/checkpoints/last.ckpt",
-    random_indices=random_indices,
-)
+if m:
+    # best expression model trainined on dilated masks
+    b0m, b1m = precompute(
+        get_loaders(perturb=PERTURB, perturb_masks=True),
+        expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
+        "/expression_vae/version_108/checkpoints/last.ckpt",
+        random_indices=random_indices,
+        split=SPLIT
+    )
 
 
 ##
@@ -132,10 +139,11 @@ def louvain_plot(an: ad.AnnData, title: str):
 
 
 ##
-louvain_plot(b0, title="expression latent space")
-louvain_plot(b1, title="expression space")
-louvain_plot(b0m, title="expression latent space (dilated masks)")
-louvain_plot(b1m, title="expression space (dilated masks)")
+if m:
+    louvain_plot(b0, title="expression latent space")
+    louvain_plot(b1, title="expression space")
+    louvain_plot(b0m, title="expression latent space (dilated masks)")
+    louvain_plot(b1m, title="expression space (dilated masks)")
 
 
 ##
@@ -168,12 +176,13 @@ def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
 
 
 ##
-compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
-compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')
-compare_clusters(b1, b0, description='"expression" vs "latent"')
-compare_clusters(
-    b1m, b0m, description='"expression (dilated masks)" vs "latent (dilated masks)"'
-)
+if m:
+    compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
+    compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')
+    compare_clusters(b1, b0, description='"expression" vs "latent"')
+    compare_clusters(
+        b1m, b0m, description='"expression (dilated masks)" vs "latent (dilated masks)"'
+    )
 
 
 ##
@@ -222,28 +231,29 @@ def nearest_neighbors(nn_from: ad.AnnData, plot_onto: ad.AnnData, title: str):
 
 
 ##
-nearest_neighbors(
-    nn_from=b1,
-    plot_onto=b1,
-    title='nn from "expression" plotted plotted onto "expression"',
-)
-nearest_neighbors(
-    nn_from=b1,
-    plot_onto=b1m,
-    title='nn from "expression" plotted plotted onto "expression (dilated masks)"',
-)
-nearest_neighbors(
-    nn_from=b1,
-    plot_onto=b0,
-    title='nn from "expression" plotted plotted onto "latent space"',
-)
-nearest_neighbors(
-    nn_from=b1,
-    plot_onto=b0m,
-    title='nn from "expression" plotted plotted onto "latent space (dilated masks)"',
-)
+if m:
+    nearest_neighbors(
+        nn_from=b1,
+        plot_onto=b1,
+        title='nn from "expression" plotted plotted onto "expression"',
+    )
+    nearest_neighbors(
+        nn_from=b1,
+        plot_onto=b1m,
+        title='nn from "expression" plotted plotted onto "expression (dilated masks)"',
+    )
+    nearest_neighbors(
+        nn_from=b1,
+        plot_onto=b0,
+        title='nn from "expression" plotted plotted onto "latent space"',
+    )
+    nearest_neighbors(
+        nn_from=b1,
+        plot_onto=b0m,
+        title='nn from "expression" plotted plotted onto "latent space (dilated masks)"',
+    )
 ##
-if False:
+if m and False:
     from data2 import CellDataset
 
     r = CellDataset("train").FRACTION_OF_PIXELS_TO_MASK
@@ -265,54 +275,58 @@ if False:
         )
         objective(study.best_trial)
 ##
-perturbed_expressions = []
-perturbed_mus = []
-for i in tqdm(range(12), "perturbed model"):
-    loader = get_loaders(
-        perturb=PERTURB, perturb_pixels=True, perturb_pixels_seed=i, perturb_masks=False
-    )[["train", "validation", "test"].index(SPLIT)]
-    expression_model_checkpoint = (
-        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae"
-        f"/version_{i + 110}/checkpoints/last.ckpt"
-    )
-    expression_vae = ExpressionVAE.load_from_checkpoint(expression_model_checkpoint)
-    l = []
-    for data in tqdm(loader, desc="embedding expression", leave=False):
-        expression, _, is_perturbed = data
-        l.append(expression)
-    expressions = torch.cat(l, dim=0)
-    random_expressions = expressions[random_indices]
-    # a, b, mu, std, z = expression_vae(expression)
-    _, _, random_mu, _, _ = expression_vae(random_expressions)
-    perturbed_expressions.append(random_expressions)
-    perturbed_mus.append(random_mu)
+if m:
+    perturbed_expressions = []
+    perturbed_mus = []
+    for i in tqdm(range(12), "perturbed model"):
+        loader = get_loaders(
+            perturb=PERTURB, perturb_pixels=True, perturb_pixels_seed=i, perturb_masks=False
+        )[["train", "validation"].index(SPLIT)]
+        expression_model_checkpoint = (
+            f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae"
+            f"/version_{i + 110}/checkpoints/last.ckpt"
+        )
+        expression_vae = ExpressionVAE.load_from_checkpoint(expression_model_checkpoint)
+        l = []
+        for data in tqdm(loader, desc="embedding expression", leave=False):
+            expression, _, is_perturbed = data
+            l.append(expression)
+        expressions = torch.cat(l, dim=0)
+        random_expressions = expressions[random_indices]
+        # a, b, mu, std, z = expression_vae(expression)
+        _, _, random_mu, _, _ = expression_vae(random_expressions)
+        perturbed_expressions.append(random_expressions)
+        perturbed_mus.append(random_mu)
 ##
-a_expr = [ad.AnnData(x.numpy()) for x in perturbed_expressions]
-a_mus = [ad.AnnData(x.detach().numpy()) for x in perturbed_mus]
+if m:
+    a_expr = [ad.AnnData(x.numpy()) for x in perturbed_expressions]
+    a_mus = [ad.AnnData(x.detach().numpy()) for x in perturbed_mus]
 ##
-for i in tqdm(range(12), desc='computing nearest neighbors'):
-    compute_knn(a_expr[i])
-    compute_knn(a_mus[i])
+if m:
+    for i in tqdm(range(12), desc='computing nearest neighbors'):
+        compute_knn(a_expr[i])
+        compute_knn(a_mus[i])
 ##
-purities_against_expression = []
-purities_against_latent = []
-for i in tqdm(range(12), desc='computing knn purity'):
-    p = compute_knn_purity(a_expr[i], b1)
-    purities_against_expression.append(p)
-    p = compute_knn_purity(a_mus[i], b0m)
-    purities_against_latent.append(p)
-p_e = np.array(purities_against_expression)
-p_l = np.array(purities_against_latent)
-print(p_e)
-# gives: [0.77087  0.769275 0.76964  0.770855 0.76818  0.76979  0.77168  0.770635
-#  0.772285 0.7698   0.769245 0.77139 ]
-print(p_l)
-# gives: [0.259405 0.212675 0.22681  0.30572  0.270595 0.19452  0.294845 0.20003
-#  0.24315  0.240395 0.292055 0.21468 ]
+if m:
+    purities_against_expression = []
+    purities_against_latent = []
+    for i in tqdm(range(12), desc='computing knn purity'):
+        p = compute_knn_purity(a_expr[i], b1)
+        purities_against_expression.append(p)
+        p = compute_knn_purity(a_mus[i], b0m)
+        purities_against_latent.append(p)
+    p_e = np.array(purities_against_expression)
+    p_l = np.array(purities_against_latent)
+    print(p_e)
+    # gives: [0.77087  0.769275 0.76964  0.770855 0.76818  0.76979  0.77168  0.770635
+    #  0.772285 0.7698   0.769245 0.77139 ]
+    print(p_l)
+    # gives: [0.259405 0.212675 0.22681  0.30572  0.270595 0.19452  0.294845 0.20003
+    #  0.24315  0.240395 0.292055 0.21468 ]
 ##
 # assessing the stability of the model (let's retrain a few more times the expression model with the same
 # hyperparameters)
-if False:
+if m and False:
     for _ in range(3):
         from models.ah_expression_vaes_lightning import objective, ppp
         from data2 import file_path
@@ -327,40 +341,53 @@ if False:
         )
         objective(study.best_trial)
 ##
-b0s = []
-b1s = []
-for i in tqdm(range(3), 'precomputing'):
-    bb0, bb1 = precompute(
-        data_loaders=get_loaders(perturb=PERTURB),
-        expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
-                                    f"/expression_vae/version_{i + 124}/checkpoints/last.ckpt",
-        random_indices=random_indices,
-    )
-    b0s.append(bb0)
-    b1s.append(bb1)
+if m:
+    b0s = []
+    b1s = []
+    for i in tqdm(range(3), 'precomputing'):
+        bb0, bb1 = precompute(
+            data_loaders=get_loaders(perturb=PERTURB),
+            expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
+                                        f"/expression_vae/version_{i + 124}/checkpoints/last.ckpt",
+            random_indices=random_indices,
+            split=SPLIT
+        )
+        b0s.append(bb0)
+        b1s.append(bb1)
 ##
-for i in range(3):
-    louvain_plot(b1s[i], title=f'expression, clone {i}')
+if m:
+    for i in range(3):
+        louvain_plot(b1s[i], title=f'expression, clone {i}')
 
-for i in range(3):
-    louvain_plot(b0s[i], title=f'latent, clone {i}')
+    for i in range(3):
+        louvain_plot(b0s[i], title=f'latent, clone {i}')
 
 ##
-for i in range(3):
-    compare_clusters(b1, b1s[i], description=f'"expression" vs "expression, clone {i}"')
+if m:
+    for i in range(3):
+        compare_clusters(b1, b1s[i], description=f'"expression" vs "expression, clone {i}"')
 
-for i in range(3):
-    compare_clusters(b0, b0s[i], description=f'"latent" vs "latent, clone {i}"')
+    for i in range(3):
+        compare_clusters(b0, b0s[i], description=f'"latent" vs "latent, clone {i}"')
 
-for i in range(3):
-    compare_clusters(b1, b0s[i], description=f'"expression" vs "latent, clone {i}"')
+    for i in range(3):
+        compare_clusters(b1, b0s[i], description=f'"expression" vs "latent, clone {i}"')
 ##
-for i in range(3):
-    nearest_neighbors(
-        nn_from=b1,
-        plot_onto=b0s[i],
-        title=f'nn from "expression" plotted plotted onto "latent space, clone {i}"',
-    )
+if m:
+    for i in range(3):
+        nearest_neighbors(
+            nn_from=b1,
+            plot_onto=b0s[i],
+            title=f'nn from "expression" plotted plotted onto "latent space, clone {i}"',
+        )
+##
+if m:
+    for i in range(3):
+        nearest_neighbors(
+            nn_from=b0,
+            plot_onto=b0s[i],
+            title=f'nn from "latent" plotted plotted onto "latent space, clone {i}"',
+        )
 ##
 # if False:
 #     # plot barplots of expression for nearest neighbors, of subsampled cells

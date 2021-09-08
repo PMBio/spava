@@ -558,8 +558,9 @@ def get_loaders(
         pin_memory=True,
     )
 
-    indices = np.random.choice(len(val_ds), n, replace=False)
-    val_subset = Subset(val_ds, indices)
+    # indices = np.random.choice(len(val_ds), n, replace=False)
+    # val_subset = Subset(val_ds, indices)
+    val_subset = val_ds
     val_loader = DataLoader(
         val_subset,
         batch_size=ppp.BATCH_SIZE,
@@ -622,14 +623,19 @@ def objective(trial: optuna.trial.Trial) -> float:
         logger=logger,
         num_sanity_val_steps=0,  # track_grad_norm=2,
         log_every_n_steps=15 if not ppp.DEBUG else 1,
-        val_check_interval=1 if ppp.DEBUG else 200,
+        val_check_interval=1 if ppp.DEBUG else 300,
     )
 
-    print(f"ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}")
+    ppp.PERTURB_MASKS = ppp.PERTURB_MASKS or False
+    ppp.PERTURB_PIXELS = ppp.PERTURB_PIXELS or False
+    ppp.PERTURB_PIXELS_SEED = ppp.PERTURB_PIXELS_SEED or 42
+    ppp.PERTURB = ppp.PERTURB or False
+    print(f"ppp.PERTURB = {ppp.PERTURB}")
     print(f"ppp.PERTURB_PIXELS = {ppp.PERTURB_PIXELS}")
     print(f"ppp.PERTURB_PIXELS_SEED = {ppp.PERTURB_PIXELS_SEED}")
+    print(f"ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}")
     train_loader, val_loader, train_loader_batch = get_loaders(
-        perturb=False,
+        perturb=ppp.PERTURB,
         shuffle_train=True,
         perturb_pixels=ppp.PERTURB_PIXELS,
         perturb_pixels_seed=ppp.PERTURB_PIXELS_SEED,
