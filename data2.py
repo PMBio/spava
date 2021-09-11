@@ -569,9 +569,10 @@ class ExpressionFilteredDataset(Dataset):
         return new_e
 
 
-class CenterFilteredDataset(Dataset):
-    def __init__(self, split):
+class RawFeatureFilteredDataset_(Dataset):
+    def __init__(self, split, feature):
         self.split = split
+        self.feature = feature
         self.ds = ExpressionFilteredDataset(split)
         self.filenames = get_split(self.split)
 
@@ -582,27 +583,26 @@ class CenterFilteredDataset(Dataset):
         f_in = file_path("accumulated_features/raw_accumulated.hdf5")
         with h5py.File(f_in, "r") as f5:
             o = self.filenames[i]
-            e = f5[f"{o}/region_center"][...]
+            e = f5[f"{o}/{self.feature}"][...]
+            if len(e.shape) == 1:
+                e = e.reshape((-1, 1))
         new_e = self.ds.expression_old_to_new(e, i, self.ds.index_converter)
         return new_e
 
 
-class SumFilteredDataset(Dataset):
+class CenterFilteredDataset(RawFeatureFilteredDataset_):
     def __init__(self, split):
-        self.split = split
-        self.ds = ExpressionFilteredDataset(split)
-        self.filenames = get_split(self.split)
+        super().__init__(split, feature='region_center')
 
-    def __len__(self):
-        return len(self.ds)
 
-    def __getitem__(self, i):
-        f_in = file_path("accumulated_features/raw_accumulated.hdf5")
-        with h5py.File(f_in, "r") as f5:
-            o = self.filenames[i]
-            e = f5[f"{o}/sum"][...]
-        new_e = self.ds.expression_old_to_new(e, i, self.ds.index_converter)
-        return new_e
+class SumFilteredDataset(RawFeatureFilteredDataset_):
+    def __init__(self, split):
+        super().__init__(split, feature='sum')
+
+
+class AreaFilteredDataset(RawFeatureFilteredDataset_):
+    def __init__(self, split):
+        super().__init__(split, feature='count')
 
 
 ##
