@@ -153,7 +153,7 @@ if m:
 
 
 ##
-def plot_imputation(imputed, original, xtext, ax):  # , zeros, i, j, ix, xtext):
+def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
     # all_index = i[ix], j[ix]
     # x, y = imputed[all_index], original[all_index]
     #
@@ -236,7 +236,6 @@ for i in tqdm(range(n_channels), desc="channels"):
     plot_imputation(
         original=original,
         imputed=imputed,
-        xtext=f"imputation benchmark, channel {i}",
         ax=ax,
     )
     score = np.median(np.abs(original - imputed))

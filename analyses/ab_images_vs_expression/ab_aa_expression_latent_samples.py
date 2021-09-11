@@ -51,7 +51,6 @@ if m:
 ##
 
 def compute_knn(b: ad.AnnData):
-    print("computing nearest neighbors on subsetted data... ", end="")
     nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(b.X)
     distances, indices = nbrs.kneighbors(b.X)
     b.obsm["nearest_neighbors"] = indices
@@ -88,6 +87,7 @@ def precompute(data_loaders, expression_model_checkpoint, random_indices, split)
         sc.tl.louvain(b)
         print("done")
 
+        print("computing nearest neighbors on subsetted data... ", end="")
         compute_knn(b)
 
         # print("computing nearest neighbors on the full data... ", end="")
