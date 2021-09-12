@@ -31,7 +31,6 @@ import pathlib
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
 
-
     def file_path(f):
         return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
 
@@ -39,9 +38,9 @@ try:
 except NameError:
     print("setting data path manually")
 
-
     def file_path(f):
         return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
+
 
 if __name__ == "__main__":
     # PLOT = True
@@ -54,90 +53,15 @@ else:
     COMPUTE = False
     DEBUG = False
 
-CHANNEL_NAMES = [
-    "H3tot",
-    "H3met",
-    "CK5",
-    "Fibronectin",
-    "CK19",
-    "CK8/18",
-    "TWIST1",
-    "CD68",
-    "CK14",
-    "SMA",
-    "Vimentin",
-    "Myc",
-    "HER2",
-    "CD3",
-    "H3phospho",
-    "ERK1/2",
-    "SLUG",
-    "ER",
-    "PR",
-    "p53",
-    "CD44",
-    "EpCAM",
-    "CD45",
-    "GATA3",
-    "CD20",
-    "betaCatenin",
-    "CAIX",
-    "Ecadherin",
-    "Ki67",
-    "EGFR",
-    "S6",
-    "Sox9",
-    "vWf_CD31",
-    "mTOR",
-    "CK7",
-    "panCK",
-    "cPARP_cCasp3",
-    "DNA1",
-    "DNA2",
-]
+# fmt: off
+CHANNEL_NAMES = ["H3tot", "H3met", "CK5", "Fibronectin", "CK19", "CK8/18", "TWIST1", "CD68", "CK14", "SMA", "Vimentin",
+                 "Myc", "HER2", "CD3", "H3phospho", "ERK1/2", "SLUG", "ER", "PR", "p53", "CD44", "EpCAM", "CD45",
+                 "GATA3", "CD20", "betaCatenin", "CAIX", "Ecadherin", "Ki67", "EGFR", "S6", "Sox9", "vWf_CD31", "mTOR",
+                 "CK7", "panCK", "cPARP_cCasp3", "DNA1", "DNA2", ]
 
-CHANNELS_TO_KEEP = [
-    8,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-    29,
-    30,
-    31,
-    32,
-    33,
-    34,
-    35,
-    36,
-    37,
-    38,
-    39,
-    40,
-    41,
-    42,
-    43,
-    44,
-    45,
-    46,
-    47,
-    48,
-]
-
+CHANNELS_TO_KEEP = [8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+                    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, ]
+# fmt: on
 assert len(CHANNEL_NAMES) == len(CHANNELS_TO_KEEP)
 
 
@@ -280,14 +204,13 @@ if COMPUTE:
             masks_dataset = MasksDataset(split)
             assert len(ome_dataset) == len(masks_dataset)
             for ome_filename, ome, masks in tqdm(
-                    zip(ome_dataset.filenames, ome_dataset, masks_dataset),
-                    total=len(ome_dataset),
-                    desc=f"accumulating {split} set",
+                zip(ome_dataset.filenames, ome_dataset, masks_dataset),
+                total=len(ome_dataset),
+                desc=f"accumulating {split} set",
             ):
                 g5 = f5.create_group(ome_filename)
                 features = extract_features_for_ome(ome, masks)
                 save_features(features, g5)
-
 
         accumulate_split("train")
         accumulate_split("validation")
@@ -554,7 +477,7 @@ class ExpressionFilteredDataset(Dataset):
             new.append(old_e[(i - 1,), :])
         new_e = np.concatenate(new, axis=0)
         assert (
-                len(new_e) == len(new_to_old) - 1
+            len(new_e) == len(new_to_old) - 1
         ), f"len(new_e) = {len(new_e)}, len(new_to_old) = {len(new_to_old)}"
         return new_e
 
@@ -592,17 +515,17 @@ class RawFeatureFilteredDataset_(Dataset):
 
 class CenterFilteredDataset(RawFeatureFilteredDataset_):
     def __init__(self, split):
-        super().__init__(split, feature='region_center')
+        super().__init__(split, feature="region_center")
 
 
 class SumFilteredDataset(RawFeatureFilteredDataset_):
     def __init__(self, split):
-        super().__init__(split, feature='sum')
+        super().__init__(split, feature="sum")
 
 
 class AreaFilteredDataset(RawFeatureFilteredDataset_):
     def __init__(self, split):
-        super().__init__(split, feature='count')
+        super().__init__(split, feature="count")
 
 
 ##
@@ -625,7 +548,7 @@ if COMPUTE:
                 masks_ds = FilteredMasksRelabeled(split)
                 old_masks_ds = MasksDataset(split)  # used for debugging
                 for ome_index, e in enumerate(
-                        tqdm(ds, desc=f"isolating all cells {split}")
+                    tqdm(ds, desc=f"isolating all cells {split}")
                 ):
                     ome = ome_ds[ome_index].numpy()
                     masks = masks_ds[ome_index]
@@ -694,7 +617,6 @@ if COMPUTE:
                         square_ome = np.zeros((l, l, ome.shape[2]))
                         square_mask = np.zeros((l, l))
 
-
                         def get_coords_for_padding(des_r, src_shape, src_center):
                             des_l = 2 * des_r + 1
 
@@ -731,7 +653,6 @@ if COMPUTE:
                                 des1_b,
                             )
 
-
                         (
                             src0_a,
                             src0_b,
@@ -744,11 +665,11 @@ if COMPUTE:
                         ) = get_coords_for_padding(r, y.shape, y_center)
 
                         square_ome[des0_a:des0_b, des1_a:des1_b, :] = ome[
-                                                                      a1:b1, a0:b0, :
-                                                                      ][src0_a:src0_b, src1_a:src1_b, :]
+                            a1:b1, a0:b0, :
+                        ][src0_a:src0_b, src1_a:src1_b, :]
                         square_mask[des0_a:des0_b, des1_a:des1_b] = y[
-                                                                    src0_a:src0_b, src1_a:src1_b
-                                                                    ]
+                            src0_a:src0_b, src1_a:src1_b
+                        ]
 
                         if DEBUG_WITH_PLOTS:
                             plt.figure()
@@ -827,7 +748,7 @@ if PLOT:
 ##
 if COMPUTE:
     with h5py.File(
-            file_path("merged_filtered_centers_and_expressions.hdf5"), "w"
+        file_path("merged_filtered_centers_and_expressions.hdf5"), "w"
     ) as f5:
         for split in ["train", "validation", "test"]:
             filenames = get_split(split)
@@ -848,7 +769,14 @@ if COMPUTE:
 
 ##
 class CellDataset(Dataset):
-    def __init__(self, split, features=None, perturb_pixels=False, perturb_pixels_seed=42, perturb_masks=False):
+    def __init__(
+        self,
+        split,
+        features=None,
+        perturb_pixels=False,
+        perturb_pixels_seed=42,
+        perturb_masks=False,
+    ):
         self.features = features or {
             "expression": True,
             "center": False,
@@ -857,7 +785,7 @@ class CellDataset(Dataset):
         }
         self.split = split
         with h5py.File(
-                file_path("merged_filtered_centers_and_expressions.hdf5"), "r"
+            file_path("merged_filtered_centers_and_expressions.hdf5"), "r"
         ) as f5:
             self.expressions = f5[f"{split}/expressions"][...]
             self.centers = f5[f"{split}/centers"][...]
@@ -909,19 +837,19 @@ class CellDataset(Dataset):
         l = []
         # if mask is required
         if (
-                self.features["mask"]
-                or self.perturb_masks
-                or self.FORCE_RECOMPUTE_EXPRESSION
+            self.features["mask"]
+            or self.perturb_masks
+            or self.FORCE_RECOMPUTE_EXPRESSION
         ):
             mask = self.f5_masks[f"{i}"][...]
             if self.perturb_masks:
                 mask = self.recompute_mask(mask)
         # if ome is required
         if (
-                self.features["ome"]
-                or self.perturb_masks
-                or self.perturb_pixels
-                or self.FORCE_RECOMPUTE_EXPRESSION
+            self.features["ome"]
+            or self.perturb_masks
+            or self.perturb_pixels
+            or self.FORCE_RECOMPUTE_EXPRESSION
         ):
             ome = self.f5_omes[f"{i}"][...]
             if self.perturb_pixels:
@@ -929,9 +857,9 @@ class CellDataset(Dataset):
 
         if self.features["expression"]:
             if (
-                    self.perturb_pixels
-                    or self.perturb_masks
-                    or self.FORCE_RECOMPUTE_EXPRESSION
+                self.perturb_pixels
+                or self.perturb_masks
+                or self.FORCE_RECOMPUTE_EXPRESSION
             ):
                 recomputed_expression = self.recompute_expression(ome, mask)
                 l.append(recomputed_expression)
@@ -1074,50 +1002,12 @@ if DEBUG:
     print(loader.__iter__().__next__())
 
 ##
+# fmt: off
 quantiles_for_normalization = np.array(
-    [
-        4.0549,
-        1.8684,
-        1.3117,
-        3.8141,
-        2.6172,
-        3.1571,
-        1.4984,
-        1.8866,
-        1.2621,
-        3.7035,
-        3.6496,
-        1.8566,
-        2.5784,
-        0.9939,
-        1.4314,
-        2.1803,
-        1.8672,
-        1.6674,
-        2.3555,
-        0.8917,
-        5.1779,
-        1.8002,
-        1.4042,
-        2.3873,
-        1.0509,
-        1.0892,
-        2.2708,
-        3.4417,
-        1.8348,
-        1.8449,
-        2.8699,
-        2.2071,
-        1.0464,
-        2.5855,
-        2.0384,
-        4.8609,
-        2.0277,
-        3.3281,
-        3.9273,
-    ]
-)
-
+    [4.0549, 1.8684, 1.3117, 3.8141, 2.6172, 3.1571, 1.4984, 1.8866, 1.2621, 3.7035, 3.6496, 1.8566, 2.5784, 0.9939,
+     1.4314, 2.1803, 1.8672, 1.6674, 2.3555, 0.8917, 5.1779, 1.8002, 1.4042, 2.3873, 1.0509, 1.0892, 2.2708, 3.4417,
+     1.8348, 1.8449, 2.8699, 2.2071, 1.0464, 2.5855, 2.0384, 4.8609, 2.0277, 3.3281, 3.9273, ])
+# fmt: on
 
 # class PadByOne:
 #     def __call__(self, image):
@@ -1137,13 +1027,13 @@ class MyRotationTransform:
 
 class RGBCells(Dataset):
     def __init__(
-            self,
-            split,
-            augment=False,
-            aggressive_rotation=False,
-            perturb_pixels=False,
-            perturb_pixels_seed=42,
-            perturb_masks=False,
+        self,
+        split,
+        augment=False,
+        aggressive_rotation=False,
+        perturb_pixels=False,
+        perturb_pixels_seed=42,
+        perturb_masks=False,
     ):
         assert not (augment is False and aggressive_rotation is True)
         d = {"expression": False, "center": False, "ome": True, "mask": True}
@@ -1209,13 +1099,13 @@ class RGBCells(Dataset):
 
 class PerturbedRGBCells(Dataset):
     def __init__(
-            self,
-            split: str,
-            augment=False,
-            aggressive_rotation=False,
-            perturb_pixels=False,
-            perturb_pixels_seed=42,
-            perturb_masks=False,
+        self,
+        split: str,
+        augment=False,
+        aggressive_rotation=False,
+        perturb_pixels=False,
+        perturb_pixels_seed=42,
+        perturb_masks=False,
     ):
         self.rgb_cells = RGBCells(
             split,
@@ -1302,11 +1192,11 @@ class PerturbedRGBCells(Dataset):
 
 class PerturbedCellDataset(Dataset):
     def __init__(
-            self,
-            split: str,
-            perturb_pixels=False,
-            perturb_pixels_seed=42,
-            perturb_masks=False,
+        self,
+        split: str,
+        perturb_pixels=False,
+        perturb_pixels_seed=42,
+        perturb_masks=False,
     ):
         self.cell_dataset = CellDataset(
             split,

@@ -70,6 +70,7 @@ b0, b1 = precompute(
 if m:
     louvain_plot(b1, "expression (perturbed)")
     louvain_plot(b0, "latent (perturbed)")
+
 ##
 if m:
     loader = get_loaders(perturb=True)[["train", "validation"].index(SPLIT)]
@@ -82,6 +83,13 @@ if m:
     # perturbed data are zero, non perturbed data are ok
     print(data[0][i0, i1])
     print(data_non_perturbed[0][i0, i1])
+    # just a hash
+    h = torch.sum(torch.cat(torch.where(loader.dataset.corrupted_entries == 1)))
+    print(
+        "corrupted entries hash:",
+        h,
+    )
+
 ##
 if m:
     debug_i = 0
@@ -206,44 +214,47 @@ def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
 
 
 ##
-from matplotlib.lines import Line2D
+def plot_reconstruction(original_non_perturbed, reconstructed_zero, n_channels):
+    from matplotlib.lines import Line2D
 
-d = 3
-fig, axes = plt.subplots(5, 8, figsize=(8 * d, 5 * d))
-axes = axes.flatten()
+    d = 3
+    fig, axes = plt.subplots(5, 8, figsize=(8 * d, 5 * d))
+    axes = axes.flatten()
 
-custom_lines = [
-    Line2D([0], [0], color="black", linestyle=":", lw=1),
-    Line2D([0], [0], color="black", lw=1),
-    # Line2D([0], [0], color="red", lw=1),
-]
+    custom_lines = [
+        Line2D([0], [0], color="black", linestyle=":", lw=1),
+        Line2D([0], [0], color="black", lw=1),
+        # Line2D([0], [0], color="red", lw=1),
+    ]
 
-axes[0].legend(
-    custom_lines,
-    [
-        "identity",
-        "linear model",
-        # "affine model"
-    ],
-    loc="center",
-)
-axes[0].set_axis_off()
-
-for i in tqdm(range(n_channels), desc="channels"):
-    ax = axes[i + 1]
-    original = original_non_perturbed[i].detach().numpy()
-    imputed = reconstructed_zero[i].detach().numpy()
-    plot_imputation(
-        original=original,
-        imputed=imputed,
-        ax=ax,
+    axes[0].legend(
+        custom_lines,
+        [
+            "identity",
+            "linear model",
+            # "affine model"
+        ],
+        loc="center",
     )
-    score = np.median(np.abs(original - imputed))
-    ax.set(title=f"ch {i}, score: {score:0.2f}")
-    if i == 0:
-        ax.set(xlabel="original", ylabel="imputed")
-    # if i > 2:
-    #     break
-plt.tight_layout()
-plt.show()
+    axes[0].set_axis_off()
+
+    for i in tqdm(range(n_channels), desc="channels"):
+        ax = axes[i + 1]
+        original = original_non_perturbed[i].detach().numpy()
+        imputed = reconstructed_zero[i].detach().numpy()
+        plot_imputation(
+            original=original,
+            imputed=imputed,
+            ax=ax,
+        )
+        score = np.median(np.abs(original - imputed))
+        ax.set(title=f"ch {i}, score: {score:0.2f}")
+        if i == 0:
+            ax.set(xlabel="original", ylabel="imputed")
+        # if i > 2:
+        #     break
+    plt.tight_layout()
+    plt.show()
+
+
 ##
