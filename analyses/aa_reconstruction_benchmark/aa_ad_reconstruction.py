@@ -1,5 +1,8 @@
 ##
 from __future__ import annotations
+
+import sys
+
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import time
@@ -16,6 +19,9 @@ import anndata as ad
 import seaborn as sns
 import pandas as pd
 import optuna
+from utils import memory, reproducible_random_choice
+
+COMPLETE_RUN = False
 
 m = __name__ == "__main__"
 ##
@@ -32,7 +38,7 @@ if m:
 if m:
     ii = IndexInfo(SPLIT)
     n = ii.filtered_ends[-1]
-    random_indices = np.random.choice(n, 10000, replace=False)
+    random_indices = reproducible_random_choice(n, 10000)
 
 ##
 # retrain the best model but by perturbing the dataset
@@ -51,6 +57,7 @@ if m and False:
         study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite")
     )
     objective(study.best_trial)
+    sys.exit(0)
 
 ##
 from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
@@ -59,7 +66,10 @@ from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
 )
 
 if m:
-    MODEL_CHECKPOINT = "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_128/checkpoints/last.ckpt"
+    MODEL_CHECKPOINT = "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_129" \
+                       "/checkpoints/last.ckpt"
+##
+if m and COMPLETE_RUN:
     b0, b1 = precompute(
         data_loaders=get_loaders(perturb=True),
         expression_model_checkpoint=MODEL_CHECKPOINT,
@@ -67,7 +77,7 @@ if m:
         split=SPLIT,
     )
 ##
-if m:
+if m and COMPLETE_RUN:
     louvain_plot(b1, "expression (perturbed)")
     louvain_plot(b0, "latent (perturbed)")
 
@@ -92,8 +102,9 @@ if m:
 
 ##
 if m:
-    debug_i = 0
     expression_vae = ExpressionVAE.load_from_checkpoint(MODEL_CHECKPOINT)
+
+    debug_i = 0
     print("merging expressions and computing embeddings... ", end="")
     all_mu = []
     all_expression = []
@@ -123,50 +134,42 @@ if m:
             assert torch.isclose(torch.sum(expression[i0, i1]), torch.tensor([0.0]))
             assert torch.all(expression[j0, j1] == expression_non_perturbed[j0, j1])
         debug_i += 1
+
     mus = torch.cat(all_mu, dim=0)
     expressions = torch.cat(all_expression, dim=0)
     expressions_non_perturbed = torch.cat(all_expression_non_perturbed, dim=0)
     a_s = torch.cat(all_a, dim=0)
     b_s = torch.cat(all_b, dim=0)
     are_perturbed = torch.cat(all_is_perturbed, dim=0)
-    print("done")
-
-##
-if m:
-    n_channels = expressions.shape[1]
     reconstructed = expression_vae.expected_value(a_s, b_s)
-
-    original_non_perturbed = []
-    reconstructed_zero = []
-    for i in range(n_channels):
-        x = expressions_non_perturbed[:, i][are_perturbed[:, i]]
-        original_non_perturbed.append(x)
-        x = reconstructed[:, i][are_perturbed[:, i]]
-        reconstructed_zero.append(x)
-
-##
-if m:
-    scores = []
-    for i in range(n_channels):
-        score = torch.median(
-            torch.abs(original_non_perturbed[i] - reconstructed_zero[i])
-        ).item()
-        scores.append(score)
-    plt.figure()
-    plt.bar(np.arange(n_channels), np.array(scores))
-    plt.title("reconstruction scores")
-    plt.xlabel("channel")
-    plt.ylabel("score")
-    plt.show()
-
-##
 
 ##
 from enum import IntEnum
 from typing import Callable
 from data2 import quantiles_for_normalization
 
-Space = IntEnum("Space", "raw asinh scaled", start=0)
+from data2 import AreaFilteredDataset
+from utils import memory
+from tqdm import tqdm
+import numpy as np
+
+@memory.cache
+def f_xqoifaowi():
+    d = {}
+    for split in ["train", "validation", "test"]:
+        area_ds = AreaFilteredDataset(split)
+
+        l = []
+        for x in tqdm(area_ds, desc="merging"):
+            l.append(x)
+        areas = np.concatenate(l, axis=0)
+        d[split] = areas
+    return d
+areas = f_xqoifaowi()
+##
+Space = IntEnum(
+    "Space", "raw_sum raw_mean asinh_sum asinh_mean scaled_mean", start=0
+)
 
 from_to = [[None for _ in range(len(Space))] for _ in range(len(Space))]
 
@@ -179,25 +182,74 @@ def f_get(space0: Space, space1: Space):
     return from_to[space0.value][space1.value]
 
 
-f_set(Space.raw, Space.raw, lambda x: x)
-f_set(Space.asinh, Space.asinh, lambda x: x)
-f_set(Space.scaled, Space.scaled, lambda x: x)
-f_set(Space.raw, Space.asinh, lambda x: np.arcsinh(x))
-f_set(Space.asinh, Space.raw, lambda x: np.sinh(x))
-f_set(Space.asinh, Space.scaled, lambda x: x / quantiles_for_normalization)
-f_set(Space.scaled, Space.asinh, lambda x: x * quantiles_for_normalization)
-f_set(
-    Space.raw,
-    Space.scaled,
-    lambda x: f_get(Space.asinh, Space.scaled)(f_get(Space.raw, Space.asinh)(x)),
-)
-f_set(
-    Space.scaled,
-    Space.raw,
-    lambda x: f_get(Space.asinh, Space.raw)(f_get(Space.scaled, Space.asinh)(x)),
-)
+f_set(Space.raw_sum, Space.asinh_sum, lambda x, a: np.arcsinh(x))
+f_set(Space.raw_mean, Space.asinh_mean, lambda x, a: np.arcsinh(x))
+f_set(Space.asinh_mean, Space.scaled_mean, lambda x, a: x / quantiles_for_normalization)
+f_set(Space.raw_sum, Space.raw_mean, lambda x, a: x / a)
 
-##
+f_set(Space.asinh_sum, Space.raw_sum, lambda x, a: np.sinh(x))
+f_set(Space.asinh_mean, Space.raw_mean, lambda x, a: np.sinh(x))
+f_set(Space.scaled_mean, Space.asinh_mean, lambda x, a: x * quantiles_for_normalization)
+f_set(Space.raw_mean, Space.raw_sum, lambda x, a: x * a)
+
+from typing import List
+
+
+def find_path(from_node: int, to_node: int):
+    def dfs(from_node: int, to_node: int, visited: List[int], path: List[int]):
+        if from_node == to_node:
+            return True
+        for j, to in enumerate(from_to[from_node]):
+            if to is not None:
+                if not visited[j]:
+                    visited[j] = True
+                    b = dfs(from_node=j, to_node=to_node, visited=visited, path=path)
+                    if b:
+                        path.append(j)
+                        return True
+        return False
+
+    visited = [False for _ in range(len(Space))]
+    path = []
+    dfs(from_node=from_node, to_node=to_node, visited=visited, path=path)
+    path.append(from_node)
+    return list(reversed(path))
+
+
+test_path = find_path(from_node=Space.scaled_mean.value, to_node=Space.asinh_sum.value)
+assert test_path == [4, 3, 1, 0, 2], test_path
+
+
+def transform(x: np.ndarray, from_space: Space, to_space: Space, split: str):
+    a = areas[split]
+    assert len(a) == len(x)
+    path = find_path(from_node=from_space.value, to_node=to_space.value)
+    for i in range(len(path) - 1):
+        start, end = path[i], path[i + 1]
+        s, e = Space(start), Space(end)
+        f = f_get(s, e)
+        print(f'applying transformation from {s.name} to {e.name}')
+        x = f(x, a)
+    return x
+
+# transform(x=np.random.rand(218618, 39), from_space=Space.scaled_sum, to_space=Space.scaled_mean, split='test')
+
+
+# f_set(Space.raw, Space.asinh, lambda x: np.arcsinh(x))
+# f_set(Space.asinh, Space.raw, lambda x: np.sinh(x))
+# f_set(Space.asinh, Space.scaled, lambda x: x / quantiles_for_normalization)
+# f_set(Space.scaled, Space.asinh, lambda x: x * quantiles_for_normalization)
+# f_set(
+#     Space.raw,
+#     Space.scaled,
+#     lambda x: f_get(Space.asinh, Space.scaled)(f_get(Space.raw, Space.asinh)(x)),
+# )
+# f_set(
+#     Space.scaled,
+#     Space.raw,
+#     lambda x: f_get(Space.asinh, Space.raw)(f_get(Space.scaled, Space.asinh)(x)),
+# )
+
 import math
 from scipy.stats import t as t_dist
 
@@ -209,26 +261,40 @@ class Prediction:
             corrupted_entries: np.ndarray,
             predictions_from_perturbed: np.ndarray,
             space: Space,
-            name: str
+            name: str,
+            split: str,
     ):
         self.original = original
         self.corrupted_entries = corrupted_entries
         self.predictions_from_perturbed = predictions_from_perturbed
         self.space = space
         self.name = name
+        self.split = split
         self.scores_non_perturbed = None
         self.scores_perturbed = None
         assert self.original.shape == self.corrupted_entries.shape
         assert self.original.shape == self.predictions_from_perturbed.shape
 
     def transform_to(self, space: Space) -> Prediction:
-        f = f_get(self.space, space)
+        original_transformed = transform(
+            x=self.original,
+            from_space=self.space,
+            to_space=space,
+            split=self.split,
+        )
+        predictions_from_perturbed_transformed = transform(
+            x=self.predictions_from_perturbed,
+            from_space=self.space,
+            to_space=space,
+            split=self.split,
+        )
         p = Prediction(
-            original=f(self.original),
+            original=original_transformed,
             corrupted_entries=self.corrupted_entries,
-            predictions_from_perturbed=f(self.predictions_from_perturbed),
+            predictions_from_perturbed=predictions_from_perturbed_transformed,
             space=space,
-            name=self.name
+            name=self.name,
+            split=self.split
         )
         return p
 
@@ -262,14 +328,14 @@ class Prediction:
         fig = plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
         plt.hist(s)
-        m_s = np.median(s)
-        plt.title(f"scores for imputed entries\nmedian: {m_s:0.2f}")
+        m_s = np.mean(s)
+        plt.title(f"scores for imputed entries\nmean: {m_s:0.2f}")
         plt.yscale("log")
 
         plt.subplot(1, 2, 2)
         plt.hist(t)
-        m_t = np.median(t)
-        plt.title(f"control: normal entries\nmedian: {m_t:0.2f}")
+        m_t = np.mean(t)
+        plt.title(f"control: normal entries\nmean: {m_t:0.2f}")
         plt.yscale("log")
 
         fig.suptitle(f"{self.name}: abs(original vs predicted)")
@@ -306,6 +372,7 @@ class Prediction:
     def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
         from scipy.stats import kde
         import time
+
         # all_index = i[ix], j[ix]
         # x, y = imputed[all_index], original[all_index]
         #
@@ -313,7 +380,14 @@ class Prediction:
         # y = y[zeros[all_index] == 0]
         #
         q = 0.9
-        cutoff = max(np.quantile(original, q), np.quantile(imputed, q))
+        # cutoff = max(np.quantile(original, q), np.quantile(imputed, q))
+        cutoff = np.quantile(original, q) * 1.2
+        # debug stuff
+        # print(f"cutoff = {cutoff}")
+        # print(f"len(original) = {len(original)}")
+        # print(f"original[:3] = {original[:3]}")
+        # print(f"np.quantile(original, q) = {np.quantile(original, q)}")
+        # sys.exit(1)
         mask = imputed < cutoff
         imputed = imputed[mask]
         original = original[mask]
@@ -337,7 +411,16 @@ class Prediction:
         nbins = 50
 
         # Evaluate a gaussian kde on a regular grid of nbins x nbins over data extents
-        k = kde.gaussian_kde(data)
+        try:
+            k = kde.gaussian_kde(data)
+        except ValueError as e:
+            print(data)
+            print(data.shape)
+            print(data.min())
+            print(data.max())
+            print(cutoff)
+            print(original.max())
+            raise e
         xi, yi = np.mgrid[0: cutoff: nbins * 1j, 0: cutoff: nbins * 1j]
 
         start = time.time()
@@ -356,19 +439,27 @@ class Prediction:
 
         ax.plot(l, l, color="black", linestyle=":")
 
-    # def plot_reconstruction(original_non_perturbed, reconstructed_zero, n_channels):
-    def plot_reconstruction(self):
+    def _get_corrupted_entries_values_by_channel(self):
         if not self.check_scores_defined(test=True):
             self.compute_scores()
 
         n_channels = self.original.shape[-1]
-        original_non_perturbed = []
-        reconstructed_zero = []
+        original_non_perturbed_by_channel = []
+        reconstructed_zero_by_channel = []
         for i in range(n_channels):
             x = self.original[:, i][self.corrupted_entries[:, i]]
-            original_non_perturbed.append(x)
+            original_non_perturbed_by_channel.append(x)
             x = self.predictions_from_perturbed[:, i][self.corrupted_entries[:, i]]
-            reconstructed_zero.append(x)
+            reconstructed_zero_by_channel.append(x)
+        return original_non_perturbed_by_channel, reconstructed_zero_by_channel
+
+    # def plot_reconstruction(original_non_perturbed, reconstructed_zero, n_channels):
+    def plot_reconstruction(self):
+        n_channels = self.original.shape[-1]
+        (
+            original_non_perturbed_by_channel,
+            reconstructed_zero_by_channel,
+        ) = self._get_corrupted_entries_values_by_channel()
 
         from matplotlib.lines import Line2D
 
@@ -395,20 +486,48 @@ class Prediction:
 
         for i in tqdm(range(n_channels), desc="channels"):
             ax = axes[i + 1]
-            original = original_non_perturbed[i]
-            imputed = reconstructed_zero[i]
+            original = original_non_perturbed_by_channel[i]
+            imputed = reconstructed_zero_by_channel[i]
             Prediction.plot_imputation(
                 original=original,
                 imputed=imputed,
                 ax=ax,
             )
-            score = np.median(np.abs(original - imputed))
+            score = np.mean(np.abs(original - imputed))
             ax.set(title=f"ch {i}, score: {score:0.2f}")
             if i == 0:
                 ax.set(xlabel="original", ylabel="imputed")
             # if i > 2:
             #     break
+        fig.suptitle(
+            f"{self.name}, global score: {np.mean(self.scores_perturbed):0.2f}"
+        )
         plt.tight_layout()
+        plt.show()
+
+    def plot_scores(self):
+        n_channels = self.original.shape[-1]
+        (
+            original_non_perturbed_by_channel,
+            reconstructed_zero_by_channel,
+        ) = self._get_corrupted_entries_values_by_channel()
+
+        scores = []
+        for i in range(n_channels):
+            score = np.mean(
+                np.abs(
+                    original_non_perturbed_by_channel[i]
+                    - reconstructed_zero_by_channel[i]
+                )
+            ).item()
+            scores.append(score)
+        plt.figure()
+        plt.bar(np.arange(n_channels), np.array(scores))
+        plt.title(
+            f"{self.name}, reconstruction scores, global score: {np.mean(self.scores_perturbed):0.2f}"
+        )
+        plt.xlabel("channel")
+        plt.ylabel("score")
         plt.show()
 
 
@@ -418,3 +537,36 @@ def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):
     m0, s0 = q0.compute_and_plot_scores()
     m1, s1 = q1.compute_and_plot_scores()
     Prediction.welch_t_test(s0, s1)
+
+
+##
+# if m:
+#     n_channels = expressions.shape[1]
+#
+#     original_non_perturbed = []
+#     reconstructed_zero = []
+#     for i in range(n_channels):
+#         x = expressions_non_perturbed[:, i][are_perturbed[:, i]]
+#         original_non_perturbed.append(x)
+#         x = reconstructed[:, i][are_perturbed[:, i]]
+#         reconstructed_zero.append(x)
+
+##
+if m:
+    ah_predictions = Prediction(
+        original=expressions_non_perturbed.cpu().numpy(),
+        corrupted_entries=are_perturbed.cpu().numpy(),
+        predictions_from_perturbed=reconstructed.detach().cpu().numpy(),
+        space=Space.scaled_mean,
+        name="ah_expression",
+        split='validation'
+    )
+
+    ah_predictions.plot_reconstruction()
+    ah_predictions.plot_scores()
+#
+if m:
+    p = ah_predictions.transform_to(Space.raw_sum)
+    p.name = "ah_expression raw"
+    p.plot_reconstruction()
+    p.plot_scores()

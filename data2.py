@@ -1230,6 +1230,7 @@ class PerturbedCellDataset(Dataset):
         x, mask = self.cell_dataset[i]
         entries_to_corrupt = self.corrupted_entries[i, :]
         x[entries_to_corrupt] = 0.0
+        x = x / quantiles_for_normalization
         x = x.astype(np.float32)
         return x, mask, entries_to_corrupt
 

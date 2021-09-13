@@ -171,7 +171,7 @@ def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
     plt.figure(figsize=(9, 9))
     plt.imshow(mm0)
     plt.colorbar()
-    plt.title(f"{description}: adjusted rand score: {adjusted_rand_score(c0, c1)}")
+    plt.title(f"{description}: adjusted rand score: {adjusted_rand_score(c0, c1):.02f}")
     plt.show()
 
 
