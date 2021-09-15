@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import skimage.measure
 from data2 import PerturbedRGBCells, PerturbedCellDataset
+from utils import memory
 
 ds = PerturbedRGBCells(split="validation")
 
@@ -23,15 +24,10 @@ assert torch.all(ds.corrupted_entries == cells_ds.corrupted_entries)
 ##
 
 models = {
-    "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/old_checkpoints"
-                  "/epoch=3-step=1610.ckpt",
-    "resnet_vae_perturbed": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae/version_12"
-                            "/checkpoints/last.ckpt",
-    "resnet_vae_perturbed_long": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae"
-                                 "/version_14/checkpoints/last.ckpt",
-    "resnet_vae_last_channel": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/old_checkpoints/resnet_vae"
-                               "/version_20"
-                               "/checkpoints/last.ckpt",
+    # "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/old_checkpoints"
+    #               "/epoch=3-step=1610.ckpt",
+    "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_35"
+                  "/checkpoints/last.ckpt",
 }
 
 rgb_ds = ds.rgb_cells
@@ -40,22 +36,28 @@ from models.ag_conv_vae_lightning import VAE as ResNetVAE
 the_model = "resnet_vae"
 # the_model = 'resnet_vae_last_channel'
 resnet_vae = ResNetVAE.load_from_checkpoint(models[the_model])
-loader = DataLoader(rgb_ds, batch_size=16, num_workers=8, pin_memory=True)
+loader = DataLoader(rgb_ds, batch_size=1024, num_workers=8, pin_memory=True)
 data = loader.__iter__().__next__()
 
 ##
-if False:
+@memory.cache
+def f_mcowijfaiiw():
     start = time.time()
     list_of_z = []
     with torch.no_grad():
         for data in tqdm(loader, desc="embedding the whole validation set"):
             data = [d.to(resnet_vae.device) for d in data]
+            # workaround for the model trained without expression
+            assert len(data) == 3
+            data = data[1:]
             z = [zz.cpu() for zz in resnet_vae(*data)]
             list_of_z.append(z)
     print(f"forwarning the data to the resnets: {time.time() - start}")
 
     torch.cuda.empty_cache()
+    return list_of_z
 
+list_of_z = f_mcowijfaiiw()
 ##
 from data2 import file_path, PerturbedRGBCells, PerturbedCellDataset
 

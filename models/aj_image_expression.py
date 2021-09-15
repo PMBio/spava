@@ -375,9 +375,9 @@ if __name__ == "__main__":
         load_if_exists=True,
         study_name=study_name,
     )
-    OPTIMIZE = True
-    # OPTIMIZE = False
-    if OPTIMIZE:
+    TRAIN_PERTURBED = True
+    # TRAIN_PERTURBED = False
+    if not TRAIN_PERTURBED:
         HOURS = 60 * 60
         study.optimize(objective, n_trials=100, timeout=3 * HOURS)
         print("Number of finished trials: {}".format(len(study.trials)))
@@ -388,4 +388,5 @@ if __name__ == "__main__":
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
     else:
+        ppp.PERTURB = True
         objective(study.best_trial)
