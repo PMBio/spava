@@ -1,5 +1,4 @@
 # aaa = True
-import numpy as np
 
 
 class Ppp:
@@ -10,10 +9,7 @@ ppp = Ppp()
 if "aaa" in locals():
     ppp.DEBUG_TORCH = "yessss"
 ppp.MAX_EPOCHS = 20
-# ppp.COOL_CHANNELS = np.array([38, 38, 38])
 ppp.BATCH_SIZE = 1024
-ppp.LEARNING_RATE = 0.8e-3
-ppp.VAE_BETA = 100
 # ppp.DEBUG = True
 ppp.DEBUG = False
 if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
@@ -26,321 +22,33 @@ else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
 
-
 # ppp.NOISE_MODEL = 'gaussian'
 # ppp.NOISE_MODEL = 'nb'
 
 
-def set_ppp_from_loaded_model(pl_module):
-    global ppp
-    ppp = pl_module.hparams
-
-
-from data2 import quantiles_for_normalization
-
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-
-pl.seed_everything(1234)
-
-from torch import nn
-
-from models.ag_resnet_vae import resnet_encoder, resnet_decoder
-
-# from pl_bolts.models.autoencoders.components import (
-# resnet18_decoder,
-# resnet18_encoder,
-# )
+import contextlib
 from argparse import ArgumentParser
 
-# matplotlib.use('Agg')
-from torchvision.utils import make_grid
-import PIL
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from torch.utils.data import DataLoader, Subset
-from torch import autograd
-import contextlib
-import torch
+import numpy as np
+import optuna
 import pyro
+import pyro.distributions
+import pytorch_lightning as pl
+import torch
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from optuna.integration import PyTorchLightningPruningCallback
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
+from torch import autograd
+from torch import nn
+from torch.utils.data import DataLoader, Subset
+from pprint import pprint
 
-# from pl_bolts.utils import _TORCHVISION_AVAILABLE
-# from pl_bolts.utils.warnings import warn_missing_pkg
+from analyses.ab_images_vs_expression.ab_ae_image_viz import get_image
+from data2 import PerturbedRGBCells, quantiles_for_normalization, file_path
+from models.ag_resnet_vae import resnet_encoder, resnet_decoder
 
-import torchvision.transforms
-from data2 import PerturbedRGBCells
-
-# def imagenet_normalization():
-#     if not _TORCHVISION_AVAILABLE:  # pragma: no cover
-#         raise ModuleNotFoundError(
-#             'You want to use `torchvision` which is not installed yet, install it with `pip install torchvision`.'
-#         )
-#
-#     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-#     return normalize
-#
-#
-
-# def ome_normalization():
-#     mean = np.array([0.3128328, 0.08154685, 0.02617499, 0.31149776, 0.10011313,
-#                      0.13143819, 0.04897958, 0.05522078, 0.02628855, 0.12524123,
-#                      0.15552816, 0.08004793, 0.13349437, 0.02045013, 0.04155505,
-#                      0.07637688, 0.05526352, 0.04818857, 0.11221485, 0.01779799,
-#                      0.53215206, 0.08219107, 0.03510931, 0.08550659, 0.02237169,
-#                      0.02657647, 0.09854327, 0.22031476, 0.04274541, 0.06778383,
-#                      0.24079644, 0.09004467, 0.0234197, 0.13312621, 0.04914724,
-#                      0.29719813, 0.10172928, 0.18843424, 0.25893724])
-#     std = np.sqrt(np.array([0.81152901, 0.11195328, 0.03844969, 0.76020458, 0.19636732,
-#                             0.30648388, 0.06448294, 0.08879372, 0.03747649, 0.32956727,
-#                             0.40133228, 0.11878445, 0.24177647, 0.02510913, 0.05398327,
-#                             0.15110854, 0.09525968, 0.07278724, 0.17972434, 0.01950939,
-#                             1.73329118, 0.11334923, 0.04934192, 0.15689578, 0.02762272,
-#                             0.03045641, 0.16039316, 0.49438282, 0.07485281, 0.10151964,
-#                             0.45035213, 0.15424273, 0.02854364, 0.23177609, 0.09494518,
-#                             0.98995058, 0.14861627, 0.41785507, 0.66190155]))
-#     mean = mean[COOL_CHANNELS]
-#     std = std[COOL_CHANNELS]
-#     normalize = transforms.Normalize(mean=mean, std=std)
-#     return normalize
-
-
-# print('fino a qui tutto bene')
-
-
-def get_image(loader, model, return_cells=False):
-    all_originals = []
-    all_reconstructed = []
-    all_masks = []
-    mask_color = torch.tensor([x / 255 for x in [254, 112, 31]]).float()
-    red_color = torch.tensor([x / 255 for x in [255, 0, 0]]).float()
-    new_size = (128, 128)
-    upscale = torchvision.transforms.Resize(new_size, interpolation=PIL.Image.NEAREST)
-    n = 15
-    with torch.no_grad():
-        batch = loader.__iter__().__next__()
-        omes = batch[0]
-        masks = batch[1]
-        if len(batch) == 3:
-            perturbed_entries = batch[2]
-        else:
-            perturbed_entries = None
-        assert len(omes.shape) == 4
-        assert len(omes) >= n
-        data = omes[:n].to(model.device)
-        masks_data = masks[:n].to(model.device)
-        alpha_pred, beta_pred, mu, std, z = model.forward(data, masks_data)
-    n_channels = data.shape[1]
-    # I'm lazy
-    full_mask = torch.tensor(
-        [[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)]
-    )
-    full_mask = upscale(full_mask.permute(2, 0, 1))
-    all_original_c = {c: [] for c in range(n_channels)}
-    all_original_masked_c = {c: [] for c in range(n_channels)}
-    all_reconstructed_c = {c: [] for c in range(n_channels)}
-    all_reconstructed_masked_c = {c: [] for c in range(n_channels)}
-
-    for i in range(n):
-        original = data[i].cpu().permute(1, 2, 0) * quantiles_for_normalization
-        alpha = alpha_pred[i].cpu().permute(1, 2, 0)
-        beta = beta_pred[i].cpu().permute(1, 2, 0)
-        dist = model.get_dist(alpha, beta)
-        mean = dist.mean
-        # r = alpha
-        # p = 1 / (1 + beta)
-        # # r_hat = pred[i].cpu().permute(1, 2, 0)
-        # # p = torch.sigmoid(model.negative_binomial_p_logit).cpu().detach()
-        # # mean = model.negative_binomial_mean(r=r_hat, p=p)
-        # mean = p * r / (1 - p)
-        reconstructed = mean * quantiles_for_normalization
-
-        a_original = original.amin(dim=(0, 1))
-        b_original = original.amax(dim=(0, 1))
-        m = masks_data[i].cpu().bool()
-        mm = torch.squeeze(m, 0)
-        reconstructed_flattened = torch.reshape(
-            reconstructed, (-1, reconstructed.shape[-1])
-        )
-        mask_flattened = mm.flatten()
-        if mask_flattened.sum() > 0:
-            a_reconstructed = reconstructed_flattened[mask_flattened, :].amin(dim=0)
-            b_reconstructed = reconstructed_flattened[mask_flattened, :].amax(dim=0)
-            a = torch.min(a_original, a_reconstructed)
-            b = torch.max(b_original, b_reconstructed)
-
-            original = ((original - a) / (b - a)).float()
-            reconstructed = ((reconstructed - a) / (b - a)).float()
-
-            mm_not = torch.logical_not(mm)
-            assert torch.all(reconstructed[mm, :] >= 0.0)
-            assert torch.all(reconstructed[mm, :] <= 1.0)
-            reconstructed = torch.clamp(reconstructed, 0.0, 1.0)
-
-            all_masks.append(mm)
-            #### original_masked = original.clone()
-            #### original_masked[mm_not, :] = mask_color
-            #### reconstructed_masked = reconstructed.clone()
-            #### reconstructed_masked[mm_not, :] = mask_color
-
-            for c in range(n_channels):
-                is_perturbed_entry = (
-                    perturbed_entries is not None and perturbed_entries[i, c]
-                )
-                original_c = original[:, :, c]
-                original_c = torch.stack([original_c] * 3, dim=2)
-
-                reconstructed_c = reconstructed[:, :, c]
-                reconstructed_c = torch.stack([reconstructed_c] * 3, dim=2)
-
-                def f(t):
-                    t = t.permute(2, 0, 1)
-                    t = upscale(t)
-                    return t
-
-                def overlay_mask(t, is_perturbed_entry=False):
-                    t = t.clone()
-                    if not is_perturbed_entry:
-                        color = mask_color
-                    else:
-                        color = red_color
-                    t[mm_not, :] = color
-                    return t
-
-                a_original_c = original_c.amin(dim=(0, 1))
-                b_original_c = original_c.amax(dim=(0, 1))
-                reconstructed_flattened_c = torch.reshape(
-                    reconstructed_c, (-1, reconstructed_c.shape[-1])
-                )
-                mask_flattened = mm.flatten()
-                a_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amin(
-                    dim=0
-                )
-                b_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amax(
-                    dim=0
-                )
-                a_c = torch.min(a_original_c, a_reconstructed_c)
-                b_c = torch.max(b_original_c, b_reconstructed_c)
-
-                t = (original_c - a_c) / (b_c - a_c)
-                all_original_c[c].append(f(t))
-                all_original_masked_c[c].append(f(overlay_mask(t, is_perturbed_entry)))
-                t = (reconstructed_c - a_c) / (b_c - a_c)
-                all_reconstructed_c[c].append(f(t))
-                all_reconstructed_masked_c[c].append(
-                    f(overlay_mask(t, is_perturbed_entry))
-                )
-
-            original = upscale(original.permute(2, 0, 1))
-            reconstructed = upscale(reconstructed.permute(2, 0, 1))
-            #### original_masked = upscale(original_masked.permute(2, 0, 1))
-            #### reconstructed_masked = upscale(reconstructed_masked.permute(2, 0, 1))
-
-            all_originals.append(original)
-            all_reconstructed.append(reconstructed)
-            #### all_originals_masked.append(original_masked)
-            #### all_reconstructed_masked.append(reconstructed_masked)
-        else:
-            all_originals.append(upscale(original.permute(2, 0, 1)))
-            all_reconstructed.append(upscale(reconstructed.permute(2, 0, 1)))
-            all_masks.append(torch.tensor(np.zeros(new_size, dtype=bool)))
-            for c in range(n_channels):
-                all_original_c[c].append(full_mask)
-                all_reconstructed_c[c].append(full_mask)
-                all_original_masked_c[c].append(full_mask)
-                all_reconstructed_masked_c[c].append(full_mask)
-
-    l = []  ####
-    pixels = []
-    for original, reconstructed, mask in zip(
-        all_originals, all_reconstructed, all_masks
-    ):
-        pixels.extend(original.permute(1, 2, 0).reshape((-1, n_channels)))
-        upscaled_mask = upscale(torch.unsqueeze(mask, 0))
-        upscaled_mask = torch.squeeze(upscaled_mask, 0).bool()
-        masked_reconstructed = reconstructed[:, upscaled_mask]
-        pixels.extend(masked_reconstructed.permute(1, 0))
-    from sklearn.decomposition import PCA
-
-    all_pixels = torch.stack(pixels).numpy()
-    reducer = PCA(3)
-    reducer.fit(all_pixels)
-    transformed = reducer.transform(all_pixels)
-    a = np.min(transformed, axis=0)
-    b = np.max(transformed, axis=0)
-    all_originals_pca = []
-    all_reconstructed_pca = []
-    all_originals_pca_masked = []
-    all_reconstructed_pca_masked = []
-
-    def scale(x, a, b):
-        x = np.transpose(x, (1, 2, 0))
-        x = (x - a) / (b - a)
-        x = np.transpose(x, (2, 0, 1))
-        return x
-
-    for original, reconstructed, mask in zip(
-        all_originals, all_reconstructed, all_masks
-    ):
-        to_transform = original.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
-        pca = reducer.transform(to_transform)
-        pca.shape = (original.shape[1], original.shape[2], 3)
-        original_pca = np.transpose(pca, (2, 0, 1))
-        original_pca = scale(original_pca, a, b)
-        all_originals_pca.append(torch.tensor(original_pca))
-
-        to_transform = reconstructed.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
-        pca = reducer.transform(to_transform)
-        pca.shape = (reconstructed.shape[1], reconstructed.shape[2], 3)
-        reconstructed_pca = np.transpose(pca, (2, 0, 1))
-        reconstructed_pca = scale(reconstructed_pca, a, b)
-        all_reconstructed_pca.append(torch.tensor(reconstructed_pca))
-
-        mask = torch.logical_not(mask)
-        upscaled_mask = upscale(torch.unsqueeze(mask, 0))
-        upscaled_mask = torch.squeeze(upscaled_mask, 0).bool()
-
-        original_pca_masked = original_pca.copy()
-        original_pca_masked = original_pca_masked.transpose((1, 2, 0))
-        original_pca_masked[upscaled_mask, :] = mask_color
-        original_pca_masked = original_pca_masked.transpose((2, 0, 1))
-        all_originals_pca_masked.append(torch.tensor(original_pca_masked))
-
-        reconstructed_pca_masked = reconstructed_pca.copy()
-        reconstructed_pca_masked = reconstructed_pca_masked.transpose((1, 2, 0))
-        reconstructed_pca_masked[upscaled_mask, :] = mask_color
-        reconstructed_pca_masked = reconstructed_pca_masked.transpose((2, 0, 1))
-        all_reconstructed_pca_masked.append(torch.tensor(reconstructed_pca_masked))
-
-    l.extend(
-        all_originals_pca
-        + all_reconstructed_pca
-        + all_originals_pca_masked
-        + all_reconstructed_pca_masked
-    )
-
-    for c in range(n_channels):
-        l += (
-            all_original_c[c]
-            + all_reconstructed_c[c]
-            + all_original_masked_c[c]
-            + all_reconstructed_masked_c[c]
-        )
-
-    #### from sklearn.decomposition import PCA
-    #### reducer = PCA(3)
-
-    img = make_grid(l, nrow=n)
-    if not return_cells:
-        return img
-    else:
-        return img, all_original_c, all_reconstructed_c, all_masks
-
-
-# plt.figure(figsize=(30, 30))
-# im = img.permute(1, 2, 0).numpy()
-# print(im.shape, im.min(), im.max())
-# plt.imshow(im)
-# plt.show()
+pl.seed_everything(1234)
 
 
 class ImageSampler(pl.Callback):
@@ -350,12 +58,6 @@ class ImageSampler(pl.Callback):
         self.num_preds = 16
 
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
-        # def on_train_epoch_end(self, trainer: pl.Trainer, pl_module, outputs):
-        # Z COMES FROM NORMAL(0, 1)
-        # rand_v = torch.rand((self.num_preds, pl_module.hparams.latent_dim), device=pl_module.device)
-        # p = torch.distributions.Normal(torch.zeros_like(rand_v), torch.ones_like(rand_v))
-        # z = p.rsample()
-
         # normalize = ome_normalization()
         # a = pl_module.negative_binomial_p_logit
         # b = pl_module.boosted_sigmoid(a)
@@ -389,40 +91,34 @@ def get_detect_anomaly_cm():
 
 
 class VAE(pl.LightningModule):
-    def __init__(
-        self, n_channels, enc_out_dim=256, latent_dim=64, input_height=32, **kwargs
-    ):
+    def __init__(self, optuna_parameters, n_channels, input_height=32, **kwargs):
         super().__init__()
 
-        # self.save_hyperparameters(kwargs)
+        self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
-
-        # encoder, decoder
+        self.optuna_parameters = optuna_parameters
         self.n_channels = n_channels
+        self.enc_out_dim = self.optuna_parameters["enc_out_dim"]
+        self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.encoder = resnet_encoder(
             first_conv=False, maxpool1=False, n_channels=self.n_channels
         )
         self.decoder = resnet_decoder(
-            latent_dim=latent_dim,
+            latent_dim=self.latent_dim,
             input_height=input_height,
             first_conv=False,
             maxpool1=False,
             n_channels=self.n_channels,
         )
 
-        # distribution parameters
-        self.fc_mu = nn.Linear(enc_out_dim, latent_dim)
-        self.fc_var = nn.Linear(enc_out_dim, latent_dim)
+        self.fc_mu = nn.Linear(self.enc_out_dim, self.latent_dim)
+        self.fc_var = nn.Linear(self.enc_out_dim, self.latent_dim)
         self.softplus = nn.Softplus()
 
-        # for the gaussian likelihood
-        # self.log_scale = nn.Parameter(torch.Tensor([0.4]))
-
-        # value such that if we apply the sigmoid function we get the p parameter of a negative binomial,
-        # one per channel
-
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=ppp.LEARNING_RATE)
+        return torch.optim.Adam(
+            self.parameters(), lr=self.optuna_parameters["learning_rate"]
+        )
 
     def get_dist(self, alpha, beta):
         return pyro.distributions.GammaPoisson(alpha, beta)
@@ -459,7 +155,6 @@ class VAE(pl.LightningModule):
 
     def loss_function(self, x, alpha, beta, mu, std, z, mask, corrupted_entries):
         # reconstruction loss
-        # print(x_hat.shape)
         cm = get_detect_anomaly_cm()
         with cm:
             recon_loss = self.reconstruction_likelihood(
@@ -468,7 +163,7 @@ class VAE(pl.LightningModule):
             # kl
             kl = self.kl_divergence(z, mu, std)
             # elbo
-            elbo = ppp.VAE_BETA * kl - recon_loss
+            elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print("nan in loss detected!")
@@ -492,7 +187,6 @@ class VAE(pl.LightningModule):
             return alpha, beta, mu, std, z
 
     def training_step(self, batch, batch_idx):
-        # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         x = batch[0]
         mask = batch[1]
         corrupted_entries = batch[2]
@@ -534,8 +228,6 @@ class VAE(pl.LightningModule):
                     self.logger.experiment.add_scalar(
                         f"avg_metric/{k}/{phase}", avg_loss, self.global_step
                     )
-                    # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
-                # return {'log': d}
 
     def on_post_move_to_device(self):
         self.decoder.mask_conv1.weight = self.encoder.mask_conv1.weight
@@ -561,14 +253,10 @@ class LogComputationalGraph(pl.Callback):
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
-# maybe use inheritance
-
-
-def train(perturb=False):
-    parser = ArgumentParser()
-    parser.add_argument("--gpus", type=int, default=1)
-    args = parser.parse_args()
-
+def get_loaders(
+    perturb: bool,
+    shuffle_train=False,
+):
     train_ds = PerturbedRGBCells("train", augment=True, aggressive_rotation=True)
     train_ds_validation = PerturbedRGBCells("train")
     val_ds = PerturbedRGBCells("validation")
@@ -577,26 +265,7 @@ def train(perturb=False):
         train_ds.perturb()
         train_ds_validation.perturb()
         val_ds.perturb()
-    from data2 import file_path
 
-    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="resnet_vae")
-    print(f"logging in {logger.experiment.log_dir}")
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
-        monitor="elbo",
-        # every_n_train_steps=2,
-        save_last=True,
-        save_top_k=1,
-    )
-    trainer = pl.Trainer(
-        gpus=args.gpus,
-        max_epochs=ppp.MAX_EPOCHS,
-        callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
-        logger=logger,
-        log_every_n_steps=15,
-        val_check_interval=2 if ppp.DEBUG else 50,
-    )
-    # set back val_check_interval to 200
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
     else:
@@ -613,7 +282,7 @@ def train(perturb=False):
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
-        shuffle=True,
+        shuffle=shuffle_train,
     )
     train_loader_batch = DataLoader(
         train_subset,
@@ -622,34 +291,81 @@ def train(perturb=False):
         pin_memory=True,
     )
 
-    indices = np.random.choice(len(val_ds), n, replace=False)
-    val_subset = Subset(val_ds, indices)
+    # indices = np.random.choice(len(val_ds), n, replace=False)
+    # val_subset = Subset(val_ds, indices)
+    val_subset = val_ds
     val_loader = DataLoader(
         val_subset,
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
     )
-    #
-    # class MySampler(Sampler):
-    #     def __init__(self, my_ordered_indices):
-    #         self.my_ordered_indices = my_ordered_indices
-    #
-    #     def __iter__(self):
-    #         return self.my_ordered_indices.__iter__()
-    #
-    #     def __len__(self):
-    #         return len(self.my_ordered_indices)
-    #
-    # faulty_epoch = 181
-    # l = list(range(len(train_ds)))
-    # indices = l[n:] + l[:n]
-    # indices = indices[:10]
-    # debug_sampler = MySampler(indices)
+    return train_loader, val_loader, train_loader_batch
 
-    # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
-    #                                 sampler=debug_sampler)
-    vae = VAE(n_channels=len(quantiles_for_normalization), **ppp.__dict__)
+
+def objective(trial: optuna.trial.Trial) -> float:
+    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="resnet_vae")
+    print(f"logging in {logger.experiment.log_dir}")
+    version = int(logger.experiment.log_dir.split("version_")[-1])
+    trial.set_user_attr("version", version)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
+        monitor="elbo",
+        # every_n_train_steps=2,
+        save_last=True,
+        save_top_k=1,
+    )
+    early_stop_callback = EarlyStopping(
+        monitor="elbo",
+        min_delta=0.0001,
+        patience=3,
+        verbose=True,
+        mode="max",
+        check_finite=True,
+    )
+    trainer = pl.Trainer(
+        gpus=1,
+        max_epochs=ppp.MAX_EPOCHS,
+        callbacks=[
+            ImageSampler(),
+            LogComputationalGraph(),
+            checkpoint_callback,
+            early_stop_callback,
+            PyTorchLightningPruningCallback(trial, monitor="elbo"),
+        ],
+        logger=logger,
+        num_sanity_val_steps=0,
+        log_every_n_steps=15,
+        val_check_interval=2 if ppp.DEBUG else 300,
+    )
+    ppp.PERTURB = ppp.PERTURB or False
+    print(f"ppp.PERTURB = {ppp.PERTURB}")
+    train_loader, val_loader, train_loader_batch = get_loaders(
+        perturb=ppp.PERTURB,
+        shuffle_train=True,
+    )
+
+    # hyperparameters
+    latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
+    log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
+    enc_out_dim = trial.suggest_categorical("enc_out_dim", [4, 16, 64, 256])
+    optuna_parameters = dict(
+        latent_dims=latent_dims,
+        vae_beta=vae_beta,
+        log_c=log_c,
+        learning_rate=learning_rate,
+        enc_out_dim=enc_out_dim,
+    )
+    pprint(optuna_parameters)
+    trainer.logger.log_hyperparams(optuna_parameters)
+
+    vae = VAE(
+        optuna_parameters=optuna_parameters,
+        n_channels=len(quantiles_for_normalization),
+        **ppp.__dict__,
+    )
     trainer.fit(
         vae,
         train_dataloader=train_loader,
@@ -657,6 +373,32 @@ def train(perturb=False):
     )
     print(f"finished logging in {logger.experiment.log_dir}")
 
+    elbo = trainer.callback_metrics["elbo"].item()
+    return elbo
+
 
 if __name__ == "__main__":
-    train(perturb=True)
+    # alternative: optuna.pruners.NopPruner()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    study_name = "ag_conv_vae_lightning"
+    study = optuna.create_study(
+        direction="minimize",
+        pruner=pruner,
+        storage="sqlite:///" + file_path("optuna_ah.sqlite"),
+        load_if_exists=True,
+        study_name=study_name,
+    )
+    OPTIMIZE = True
+    # OPTIMIZE = False
+    if OPTIMIZE:
+        HOURS = 60 * 60
+        study.optimize(objective, n_trials=1, timeout=5 * HOURS)
+        print("Number of finished trials: {}".format(len(study.trials)))
+        print("Best trial:")
+        trial = study.best_trial
+        print("  Value: {}".format(trial.value))
+        print("  Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+    else:
+        objective(study.best_trial)

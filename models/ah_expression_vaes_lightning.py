@@ -1,11 +1,9 @@
-class Ppp:
+lass Ppp:
     pass
 
 
 ppp = Ppp()
 
-# ppp.DEBUG_TORCH = 'yessss'
-# ppp.LOG_PER_CHANNEL_VALUES = True
 ppp.LOG_PER_CHANNEL_VALUES = False
 ppp.MAX_EPOCHS = 20
 ppp.BATCH_SIZE = 1024
@@ -13,60 +11,42 @@ ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
 # ppp.DEBUG = True
 ppp.DEBUG = False
-if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
+if ppp.DEBUG:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
-    if "DEBUG_TORCH" in ppp.__dict__:
-        ppp.NUM_WORKERS = 0
-    else:
-        ppp.NUM_WORKERS = 16
+    ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
 ppp.NOISE_MODEL = "gaussian"
 
 # ppp.NOISE_MODEL = 'gamma'
 # ppp.NOISE_MODEL = 'zip'
-
-
 # ppp.NOISE_MODEL = 'zin'
 # ppp.NOISE_MODEL = 'log_normal'
-
-
 # ppp.NOISE_MODEL = 'zi_gamma'
 # ppp.NOISE_MODEL = 'nb'
 
-#
-# def set_ppp_from_loaded_model(pl_module):
-#     global ppp
-#     ppp = pl_module.hparams
-
-
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.loggers import TensorBoardLogger
+import contextlib
 from pprint import pprint
 
-# early stopping
-
-pl.seed_everything(1234)
-
-from torch import nn
-
 import numpy as np
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader, Subset
-from torch import autograd
-import contextlib
-import torch
-import torch.nn.functional as F
+import optuna
 import pyro
 import pyro.distributions
+import pytorch_lightning as pl
+import torch
+import torch.nn.functional as F
+from optuna.integration import PyTorchLightningPruningCallback
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+from torch import autograd
+from torch import nn
+from torch.utils.data import DataLoader, Subset
 
 from data2 import PerturbedCellDataset, file_path
 
-import optuna
-from optuna.integration import PyTorchLightningPruningCallback
+pl.seed_everything(1234)
 
 
 # sqlite-backed optuna storage does support nan https://github.com/optuna/optuna/issues/2809
@@ -211,8 +191,6 @@ class VAE(pl.LightningModule):
         self,
         optuna_parameters,
         in_channels,
-        latent_dim=10,
-        out_channels=None,
         mask_loss: bool = None,
         **kwargs,
     ):
@@ -220,11 +198,8 @@ class VAE(pl.LightningModule):
         self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
         self.in_channels = in_channels
-        if out_channels is None:
-            self.out_channels = self.in_channels
-        else:
-            self.out_channels = out_channels
-        self.latent_dim = latent_dim
+        self.out_channels = self.in_channels
+        self.latent_dim = self.optuna_parameters['vae_latent_dims']
         self.mask_loss = mask_loss
         self.optuna_parameters = optuna_parameters
 
@@ -658,7 +633,6 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae = VAE(
         optuna_parameters=optuna_parameters,
         in_channels=39,
-        latent_dim=latent_dims,
         out_channels=None,
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
