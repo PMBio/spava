@@ -7,8 +7,8 @@ class Ppp:
 
 
 ppp = Ppp()
-if 'aaa' in locals():
-    ppp.DEBUG_TORCH = 'yessss'
+if "aaa" in locals():
+    ppp.DEBUG_TORCH = "yessss"
 ppp.MAX_EPOCHS = 20
 # ppp.COOL_CHANNELS = np.array([38, 38, 38])
 ppp.BATCH_SIZE = 1024
@@ -16,11 +16,11 @@ ppp.LEARNING_RATE = 0.8e-3
 ppp.VAE_BETA = 100
 # ppp.DEBUG = True
 ppp.DEBUG = False
-if ppp.DEBUG and not 'DEBUG_TORCH' in ppp.__dict__:
+if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
-    if 'DEBUG_TORCH' in ppp.__dict__:
+    if "DEBUG_TORCH" in ppp.__dict__:
         ppp.NUM_WORKERS = 0
     else:
         ppp.NUM_WORKERS = 16
@@ -30,9 +30,11 @@ else:
 # ppp.NOISE_MODEL = 'gaussian'
 # ppp.NOISE_MODEL = 'nb'
 
+
 def set_ppp_from_loaded_model(pl_module):
     global ppp
     ppp = pl_module.hparams
+
 
 from data2 import quantiles_for_normalization
 
@@ -44,6 +46,7 @@ pl.seed_everything(1234)
 from torch import nn
 
 from models.ag_resnet_vae import resnet_encoder, resnet_decoder
+
 # from pl_bolts.models.autoencoders.components import (
 # resnet18_decoder,
 # resnet18_encoder,
@@ -101,8 +104,8 @@ from data2 import PerturbedRGBCells
 #     return normalize
 
 
-
 # print('fino a qui tutto bene')
+
 
 def get_image(loader, model, return_cells=False):
     all_originals = []
@@ -128,7 +131,9 @@ def get_image(loader, model, return_cells=False):
         alpha_pred, beta_pred, mu, std, z = model.forward(data, masks_data)
     n_channels = data.shape[1]
     # I'm lazy
-    full_mask = torch.tensor([[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)])
+    full_mask = torch.tensor(
+        [[mask_color.tolist() for _ in range(n_channels)] for _ in range(n_channels)]
+    )
     full_mask = upscale(full_mask.permute(2, 0, 1))
     all_original_c = {c: [] for c in range(n_channels)}
     all_original_masked_c = {c: [] for c in range(n_channels)}
@@ -153,7 +158,9 @@ def get_image(loader, model, return_cells=False):
         b_original = original.amax(dim=(0, 1))
         m = masks_data[i].cpu().bool()
         mm = torch.squeeze(m, 0)
-        reconstructed_flattened = torch.reshape(reconstructed, (-1, reconstructed.shape[-1]))
+        reconstructed_flattened = torch.reshape(
+            reconstructed, (-1, reconstructed.shape[-1])
+        )
         mask_flattened = mm.flatten()
         if mask_flattened.sum() > 0:
             a_reconstructed = reconstructed_flattened[mask_flattened, :].amin(dim=0)
@@ -165,9 +172,9 @@ def get_image(loader, model, return_cells=False):
             reconstructed = ((reconstructed - a) / (b - a)).float()
 
             mm_not = torch.logical_not(mm)
-            assert torch.all(reconstructed[mm, :] >= 0.)
-            assert torch.all(reconstructed[mm, :] <= 1.)
-            reconstructed = torch.clamp(reconstructed, 0., 1.)
+            assert torch.all(reconstructed[mm, :] >= 0.0)
+            assert torch.all(reconstructed[mm, :] <= 1.0)
+            reconstructed = torch.clamp(reconstructed, 0.0, 1.0)
 
             all_masks.append(mm)
             #### original_masked = original.clone()
@@ -176,7 +183,9 @@ def get_image(loader, model, return_cells=False):
             #### reconstructed_masked[mm_not, :] = mask_color
 
             for c in range(n_channels):
-                is_perturbed_entry = perturbed_entries is not None and perturbed_entries[i, c]
+                is_perturbed_entry = (
+                    perturbed_entries is not None and perturbed_entries[i, c]
+                )
                 original_c = original[:, :, c]
                 original_c = torch.stack([original_c] * 3, dim=2)
 
@@ -199,10 +208,16 @@ def get_image(loader, model, return_cells=False):
 
                 a_original_c = original_c.amin(dim=(0, 1))
                 b_original_c = original_c.amax(dim=(0, 1))
-                reconstructed_flattened_c = torch.reshape(reconstructed_c, (-1, reconstructed_c.shape[-1]))
+                reconstructed_flattened_c = torch.reshape(
+                    reconstructed_c, (-1, reconstructed_c.shape[-1])
+                )
                 mask_flattened = mm.flatten()
-                a_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amin(dim=0)
-                b_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amax(dim=0)
+                a_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amin(
+                    dim=0
+                )
+                b_reconstructed_c = reconstructed_flattened_c[mask_flattened, :].amax(
+                    dim=0
+                )
                 a_c = torch.min(a_original_c, a_reconstructed_c)
                 b_c = torch.max(b_original_c, b_reconstructed_c)
 
@@ -211,7 +226,9 @@ def get_image(loader, model, return_cells=False):
                 all_original_masked_c[c].append(f(overlay_mask(t, is_perturbed_entry)))
                 t = (reconstructed_c - a_c) / (b_c - a_c)
                 all_reconstructed_c[c].append(f(t))
-                all_reconstructed_masked_c[c].append(f(overlay_mask(t, is_perturbed_entry)))
+                all_reconstructed_masked_c[c].append(
+                    f(overlay_mask(t, is_perturbed_entry))
+                )
 
             original = upscale(original.permute(2, 0, 1))
             reconstructed = upscale(reconstructed.permute(2, 0, 1))
@@ -234,13 +251,16 @@ def get_image(loader, model, return_cells=False):
 
     l = []  ####
     pixels = []
-    for original, reconstructed, mask in zip(all_originals, all_reconstructed, all_masks):
+    for original, reconstructed, mask in zip(
+        all_originals, all_reconstructed, all_masks
+    ):
         pixels.extend(original.permute(1, 2, 0).reshape((-1, n_channels)))
         upscaled_mask = upscale(torch.unsqueeze(mask, 0))
         upscaled_mask = torch.squeeze(upscaled_mask, 0).bool()
         masked_reconstructed = reconstructed[:, upscaled_mask]
         pixels.extend(masked_reconstructed.permute(1, 0))
     from sklearn.decomposition import PCA
+
     all_pixels = torch.stack(pixels).numpy()
     reducer = PCA(3)
     reducer.fit(all_pixels)
@@ -258,7 +278,9 @@ def get_image(loader, model, return_cells=False):
         x = np.transpose(x, (2, 0, 1))
         return x
 
-    for original, reconstructed, mask in zip(all_originals, all_reconstructed, all_masks):
+    for original, reconstructed, mask in zip(
+        all_originals, all_reconstructed, all_masks
+    ):
         to_transform = original.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
         pca = reducer.transform(to_transform)
         pca.shape = (original.shape[1], original.shape[2], 3)
@@ -289,10 +311,20 @@ def get_image(loader, model, return_cells=False):
         reconstructed_pca_masked = reconstructed_pca_masked.transpose((2, 0, 1))
         all_reconstructed_pca_masked.append(torch.tensor(reconstructed_pca_masked))
 
-    l.extend(all_originals_pca + all_reconstructed_pca + all_originals_pca_masked + all_reconstructed_pca_masked)
+    l.extend(
+        all_originals_pca
+        + all_reconstructed_pca
+        + all_originals_pca_masked
+        + all_reconstructed_pca_masked
+    )
 
     for c in range(n_channels):
-        l += (all_original_c[c] + all_reconstructed_c[c] + all_original_masked_c[c] + all_reconstructed_masked_c[c])
+        l += (
+            all_original_c[c]
+            + all_reconstructed_c[c]
+            + all_original_masked_c[c]
+            + all_reconstructed_masked_c[c]
+        )
 
     #### from sklearn.decomposition import PCA
     #### reducer = PCA(3)
@@ -309,6 +341,7 @@ def get_image(loader, model, return_cells=False):
 # print(im.shape, im.min(), im.max())
 # plt.imshow(im)
 # plt.show()
+
 
 class ImageSampler(pl.Callback):
     def __init__(self):
@@ -333,10 +366,11 @@ class ImageSampler(pl.Callback):
 
         for dataloader_idx in [0, 1]:
             loader = trainer.val_dataloaders[dataloader_idx]
-            dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
+            dataloader_label = "training" if dataloader_idx == 0 else "validation"
             img = get_image(loader, pl_module)
-            trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
-                                                trainer.global_step)
+            trainer.logger.experiment.add_image(
+                f"reconstruction/{dataloader_label}", img, trainer.global_step
+            )
 
             # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
             #                                         f'{c}/original', original_masked_c[0].flatten(),
@@ -355,7 +389,9 @@ def get_detect_anomaly_cm():
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, n_channels, enc_out_dim=256, latent_dim=64, input_height=32, **kwargs):
+    def __init__(
+        self, n_channels, enc_out_dim=256, latent_dim=64, input_height=32, **kwargs
+    ):
         super().__init__()
 
         # self.save_hyperparameters(kwargs)
@@ -363,13 +399,15 @@ class VAE(pl.LightningModule):
 
         # encoder, decoder
         self.n_channels = n_channels
-        self.encoder = resnet_encoder(first_conv=False, maxpool1=False, n_channels=self.n_channels)
+        self.encoder = resnet_encoder(
+            first_conv=False, maxpool1=False, n_channels=self.n_channels
+        )
         self.decoder = resnet_decoder(
             latent_dim=latent_dim,
             input_height=input_height,
             first_conv=False,
             maxpool1=False,
-            n_channels=self.n_channels
+            n_channels=self.n_channels,
         )
 
         # distribution parameters
@@ -397,7 +435,7 @@ class VAE(pl.LightningModule):
         # log_pxz = dist.log_prob(x)
         if mask is None:
             mask = torch.ones_like(log_pxz)
-        log_pxz[corrupted_entries, :, :] = 0.
+        log_pxz[corrupted_entries, :, :] = 0.0
         non_corrupted_count = corrupted_entries.logical_not().sum()
         s = (mask * log_pxz).sum(dim=(1, 2, 3)) / non_corrupted_count
         return s
@@ -415,7 +453,7 @@ class VAE(pl.LightningModule):
         log_pz = p.log_prob(z)
 
         # kl
-        kl = (log_qzx - log_pz)
+        kl = log_qzx - log_pz
         kl = kl.sum(-1)
         return kl
 
@@ -424,14 +462,16 @@ class VAE(pl.LightningModule):
         # print(x_hat.shape)
         cm = get_detect_anomaly_cm()
         with cm:
-            recon_loss = self.reconstruction_likelihood(alpha, beta, x, mask, corrupted_entries)
+            recon_loss = self.reconstruction_likelihood(
+                alpha, beta, x, mask, corrupted_entries
+            )
             # kl
             kl = self.kl_divergence(z, mu, std)
             # elbo
-            elbo = (ppp.VAE_BETA * kl - recon_loss)
+            elbo = ppp.VAE_BETA * kl - recon_loss
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
-                print('nan in loss detected!')
+                print("nan in loss detected!")
             return elbo, kl, recon_loss
 
     def forward(self, x, mask):
@@ -458,13 +498,17 @@ class VAE(pl.LightningModule):
         corrupted_entries = batch[2]
         # encode x to get the mu and variance parameters
         alpha, beta, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask, corrupted_entries)
+        elbo, kl, recon_loss = self.loss_function(
+            x, alpha, beta, mu, std, z, mask, corrupted_entries
+        )
 
-        self.log_dict({
-            'elbo': elbo,
-            'kl': kl.mean(),
-            'reconstruction': recon_loss.mean(),
-        })
+        self.log_dict(
+            {
+                "elbo": elbo,
+                "kl": kl.mean(),
+                "reconstruction": recon_loss.mean(),
+            }
+        )
 
         return elbo
 
@@ -473,23 +517,23 @@ class VAE(pl.LightningModule):
         mask = batch[1]
         corrupted_entries = batch[2]
         alpha, beta, mu, std, z = self.forward(x, mask)
-        elbo, kl, recon_loss = self.loss_function(x, alpha, beta, mu, std, z, mask, corrupted_entries)
+        elbo, kl, recon_loss = self.loss_function(
+            x, alpha, beta, mu, std, z, mask, corrupted_entries
+        )
 
-        d = {
-            'elbo': elbo,
-            'kl': kl.mean(),
-            'reconstruction': recon_loss.mean()
-        }
+        d = {"elbo": elbo, "kl": kl.mean(), "reconstruction": recon_loss.mean()}
         return d
 
     def validation_epoch_end(self, outputs):
         if not self.trainer.running_sanity_check:
             assert type(outputs) is list
             for i, o in enumerate(outputs):
-                for k in ['elbo', 'kl', 'reconstruction']:
+                for k in ["elbo", "kl", "reconstruction"]:
                     avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
-                    phase = 'training' if i == 0 else 'validation'
-                    self.logger.experiment.add_scalar(f'avg_metric/{k}/{phase}', avg_loss, self.global_step)
+                    phase = "training" if i == 0 else "validation"
+                    self.logger.experiment.add_scalar(
+                        f"avg_metric/{k}/{phase}", avg_loss, self.global_step
+                    )
                     # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
                 # return {'log': d}
 
@@ -497,7 +541,9 @@ class VAE(pl.LightningModule):
         self.decoder.mask_conv1.weight = self.encoder.mask_conv1.weight
         self.decoder.mask_conv2.weight = self.encoder.mask_conv2.weight
         self.decoder.mask_conv1x1.weight = self.encoder.mask_conv1x1.weight
-        print('sharing the weights between encoder and decoder for the convnet operating on the mask')
+        print(
+            "sharing the weights between encoder and decoder for the convnet operating on the mask"
+        )
 
 
 # from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
@@ -520,30 +566,36 @@ class LogComputationalGraph(pl.Callback):
 
 def train(perturb=False):
     parser = ArgumentParser()
-    parser.add_argument('--gpus', type=int, default=1)
+    parser.add_argument("--gpus", type=int, default=1)
     args = parser.parse_args()
 
-    train_ds = PerturbedRGBCells('train', augment=True, aggressive_rotation=True)
-    train_ds_validation = PerturbedRGBCells('train')
-    val_ds = PerturbedRGBCells('validation')
+    train_ds = PerturbedRGBCells("train", augment=True, aggressive_rotation=True)
+    train_ds_validation = PerturbedRGBCells("train")
+    val_ds = PerturbedRGBCells("validation")
 
     if perturb:
         train_ds.perturb()
         train_ds_validation.perturb()
         val_ds.perturb()
     from data2 import file_path
-    logger = TensorBoardLogger(save_dir=file_path('checkpoints'), name='resnet_vae')
-    print(f'logging in {logger.experiment.log_dir}')
-    checkpoint_callback = ModelCheckpoint(dirpath=file_path(f'{logger.experiment.log_dir}/checkpoints'),
-                                          monitor='elbo',
-                                          # every_n_train_steps=2,
-                                          save_last=True,
-                                          save_top_k=1)
-    trainer = pl.Trainer(gpus=args.gpus, max_epochs=ppp.MAX_EPOCHS, callbacks=[
-        ImageSampler(), LogComputationalGraph(), checkpoint_callback
-    ],
-                         logger=logger,
-                         log_every_n_steps=15, val_check_interval=2 if ppp.DEBUG else 50)
+
+    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="resnet_vae")
+    print(f"logging in {logger.experiment.log_dir}")
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
+        monitor="elbo",
+        # every_n_train_steps=2,
+        save_last=True,
+        save_top_k=1,
+    )
+    trainer = pl.Trainer(
+        gpus=args.gpus,
+        max_epochs=ppp.MAX_EPOCHS,
+        callbacks=[ImageSampler(), LogComputationalGraph(), checkpoint_callback],
+        logger=logger,
+        log_every_n_steps=15,
+        val_check_interval=2 if ppp.DEBUG else 50,
+    )
     # set back val_check_interval to 200
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
@@ -556,14 +608,28 @@ def train(perturb=False):
         d = train_subset
     else:
         d = train_ds
-    train_loader = DataLoader(d, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True,
-                              shuffle=True)
-    train_loader_batch = DataLoader(train_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS,
-                                    pin_memory=True)
+    train_loader = DataLoader(
+        d,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+        shuffle=True,
+    )
+    train_loader_batch = DataLoader(
+        train_subset,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+    )
 
     indices = np.random.choice(len(val_ds), n, replace=False)
     val_subset = Subset(val_ds, indices)
-    val_loader = DataLoader(val_subset, batch_size=ppp.BATCH_SIZE, num_workers=ppp.NUM_WORKERS, pin_memory=True)
+    val_loader = DataLoader(
+        val_subset,
+        batch_size=ppp.BATCH_SIZE,
+        num_workers=ppp.NUM_WORKERS,
+        pin_memory=True,
+    )
     #
     # class MySampler(Sampler):
     #     def __init__(self, my_ordered_indices):
@@ -584,9 +650,13 @@ def train(perturb=False):
     # debug_train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True,
     #                                 sampler=debug_sampler)
     vae = VAE(n_channels=len(quantiles_for_normalization), **ppp.__dict__)
-    trainer.fit(vae, train_dataloader=train_loader, val_dataloaders=[train_loader_batch, val_loader])
-    print(f'finished logging in {logger.experiment.log_dir}')
+    trainer.fit(
+        vae,
+        train_dataloader=train_loader,
+        val_dataloaders=[train_loader_batch, val_loader],
+    )
+    print(f"finished logging in {logger.experiment.log_dir}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     train(perturb=True)
