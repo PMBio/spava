@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import skimage.measure
-from data2 import PerturbedRGBCells, PerturbedCellDataset
+from data2 import PerturbedRGBCells, PerturbedCellDataset, file_path
 from utils import memory
 
 ds = PerturbedRGBCells(split="validation")
@@ -36,32 +36,28 @@ from models.ag_conv_vae_lightning import VAE as ResNetVAE
 the_model = "resnet_vae"
 # the_model = 'resnet_vae_last_channel'
 resnet_vae = ResNetVAE.load_from_checkpoint(models[the_model])
+resnet_vae.cuda()
 loader = DataLoader(rgb_ds, batch_size=1024, num_workers=8, pin_memory=True)
 data = loader.__iter__().__next__()
 
 ##
-@memory.cache
-def f_mcowijfaiiw():
-    start = time.time()
-    list_of_z = []
-    with torch.no_grad():
-        for data in tqdm(loader, desc="embedding the whole validation set"):
-            data = [d.to(resnet_vae.device) for d in data]
-            # workaround for the model trained without expression
-            assert len(data) == 3
-            data = data[1:]
-            z = [zz.cpu() for zz in resnet_vae(*data)]
-            list_of_z.append(z)
-    print(f"forwarning the data to the resnets: {time.time() - start}")
+start = time.time()
+list_of_z = []
+with torch.no_grad():
+    for data in tqdm(loader, desc="embedding the whole validation set"):
+        data = [d.to(resnet_vae.device) for d in data]
+        # workaround for the model trained without expression
+        assert len(data) == 3
+        data = data[1:]
+        z = [zz.cpu() for zz in resnet_vae(*data)]
+        list_of_z.append(z)
+print(f"forwarning the data to the resnets: {time.time() - start}")
+torch.cuda.empty_cache()
 
-    torch.cuda.empty_cache()
-    return list_of_z
-
-list_of_z = f_mcowijfaiiw()
 ##
-from data2 import file_path, PerturbedRGBCells, PerturbedCellDataset
 
 f = file_path("image_features.npy")
+# if True:
 if False:
     mus = torch.cat([zz[2] for zz in list_of_z], dim=0).numpy()
     np.save(f, mus)
@@ -74,7 +70,9 @@ a = ad.AnnData(mus)
 sc.tl.pca(a)
 sc.pl.pca(a)
 ##
-random_indices = np.random.choice(len(a), 10000, replace=False)
+from utils import reproducible_random_choice
+random_indices = reproducible_random_choice(len(a), 10000)
+##
 b = a[random_indices]
 ##
 print("computing umap... ", end="")
@@ -102,7 +100,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 fig, ax = plt.subplots(figsize=(24, 14))
 u = b.obsm["X_umap"]
 for j, i in enumerate(tqdm(random_indices[:500], desc="scatterplot with images")):
-    ome, mask, _ = ds[i]
+    _, ome, mask, _ = ds[i]
     ome = ome.numpy()
     mask = torch.squeeze(mask, 0).numpy()
     im = OffsetImage(mask, zoom=0.7)
@@ -112,18 +110,18 @@ ax.set(xlim=(min(u[:, 0]), max(u[:, 0])), ylim=(min(u[:, 1]), max(u[:, 1])))
 plt.tight_layout()
 plt.show()
 ##
-if False:
+if True:
     # n_channels = ds[42][0].shape[0]
     # channels = list(range(n_channels))
     channels = [10, 34, 35, 38]
     #     ax.autoscale()
-    for c in tqdm(channels, desc='channels'):
+    for c in tqdm(channels, desc='channels', position=0, leave=False):
         fig, ax = plt.subplots(figsize=(24, 14))
         ax.set(title=f'ch {c}')
         u = b.obsm["X_umap"]
         for j, i in enumerate(
-                tqdm(random_indices[:2000], desc="scatterplot with images", leave=False)):
-            ome, _, _ = ds[i]
+                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            _, ome, _, _ = ds[i]
             ome = ome[c, :, :].numpy()
             # mask = torch.squeeze(mask, 0).numpy()
             im = OffsetImage(ome, zoom=0.7)
@@ -134,9 +132,11 @@ if False:
         plt.show()
 ##
 # finding similar cells
+loader = DataLoader(cells_ds, batch_size=1024, num_workers=8)
 all_expressions = []
-for expression, _ in tqdm(cells_ds):
-    all_expressions.append(expression.view(1, -1))
+for data in tqdm(loader):
+    expression, _, _ = data
+    all_expressions.append(expression)
 expressions = torch.cat(all_expressions, dim=0).numpy()
 ##
 aa = ad.AnnData(expressions)
@@ -161,6 +161,7 @@ plt.scatter(
     c=colors,
     cmap=matplotlib.cm.tab20,
 )
+plt.title('showing expression clusters on umap of latent points')
 plt.show()
 ##
 plt.figure()
@@ -173,7 +174,45 @@ plt.scatter(
     c=colors,
     cmap=matplotlib.cm.tab20,
 )
+plt.title('showing expression clusters on umap of expression points')
 plt.show()
+##
+uu = bb.obsm['X_umap']
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+fig, ax = plt.subplots(figsize=(24, 14))
+u = b.obsm["X_umap"]
+for j, i in enumerate(tqdm(random_indices[:500], desc="scatterplot with images")):
+    _, ome, mask, _ = ds[i]
+    ome = ome.numpy()
+    mask = torch.squeeze(mask, 0).numpy()
+    im = OffsetImage(mask, zoom=0.7)
+    ab = AnnotationBbox(im, uu[j], xycoords="data", frameon=False)
+    ax.add_artist(ab)
+ax.set(xlim=(min(uu[:, 0]), max(uu[:, 0])), ylim=(min(uu[:, 1]), max(uu[:, 1])))
+plt.tight_layout()
+plt.show()
+##
+if True:
+    # n_channels = ds[42][0].shape[0]
+    # channels = list(range(n_channels))
+    channels = [10, 34, 35, 38]
+    #     ax.autoscale()
+    for c in tqdm(channels, desc='channels', position=0, leave=False):
+        fig, ax = plt.subplots(figsize=(24, 14))
+        ax.set(title=f'ch {c}')
+        u = b.obsm["X_umap"]
+        for j, i in enumerate(
+                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            _, ome, _, _ = ds[i]
+            ome = ome[c, :, :].numpy()
+            # mask = torch.squeeze(mask, 0).numpy()
+            im = OffsetImage(ome, zoom=0.7)
+            ab = AnnotationBbox(im, uu[j], xycoords="data", frameon=False)
+            ax.add_artist(ab)
+        ax.set(xlim=(min(uu[:, 0]), max(uu[:, 0])), ylim=(min(uu[:, 1]), max(uu[:, 1])))
+        plt.tight_layout()
+        plt.show()
 ##
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
@@ -231,7 +270,7 @@ for cell in some_cells:
     list_of_mse = []
     expression = random_expressions[cell]
     a = np.square(random_expressions - expression)
-    b = np.sqrt(np.sum(a, axis=1))
+    b = np.mean(a, axis=1)
     ab_for_cell[cell] = (a, b)
 ##
 for cell, (a, b) in ab_for_cell.items():
@@ -240,6 +279,35 @@ for cell, (a, b) in ab_for_cell.items():
     plt.hist(b)
     plt.show()
 
+##
+class Ecdf:
+    def __init__(self, x):
+        self.x = np.sort(x)
+        self.y = np.arange(0, len(x), 1) / (len(x) - 1)
+
+    def evaluate(self, t):
+        i = np.searchsorted(self.x, t)
+        if i == 0:
+            return 0
+        elif i == len(self.x):
+            return 1
+        else:
+            #            print(f'{self.x[i - 1]} <= {t} <= {self.x[i]}')
+            return self.y[i - 1]
+
+##
+a_ecdfs_for_cell = dict()
+b_ecdf_for_cell = dict()
+
+for cell in some_cells:
+    a, b = ab_for_cell[cell]
+    ecdfs = []
+    for i in range(a.shape[1]):
+        aa = a[:, i]
+        ecdf = Ecdf(aa)
+        ecdfs.append(ecdf)
+    a_ecdfs_for_cell[cell] = ecdfs
+    b_ecdf_for_cell[cell] = Ecdf(b)
 
 ##
 # plot images for nearest neighbors, of one of the subsampled cells and for selected channels
@@ -249,27 +317,30 @@ def aaa(idx0, idx1=None):
     cell = some_cells[idx0]
     expression = random_expressions[idx1]
     selected_channels = [0, 37, 38, 3, 4, 5, 10, 35]
-    axes = plt.subplots(len(selected_channels), len(indices[42]), figsize=(30, 20))[1].flatten()
+    fig, axes = plt.subplots(len(selected_channels), len(indices[42]), figsize=(30, 20))
+    axes = axes.flatten()
     k = 0
     for channel in tqdm(selected_channels):
         for i in indices[cell]:
             ax = axes[k]
-            ome, mask, _ = ds[random_indices[i]]
+            _, ome, mask, _ = ds[random_indices[i]]
             im = ome[channel, :, :].numpy()
             ax.imshow(im)
-            other_expression, _ = cells_ds[random_indices[i]]
-            other_expression = other_expression.numpy()
+            other_expression, _, _ = cells_ds[random_indices[i]]
 
             def to_simplex(x, left, right):
                 return (x - left) / (right - left)
 
-            a_for_cell, b_for_cell = ab_for_cell[idx1]
-            a_for_cell = a_for_cell[:, channel]
+
             aaaa = np.square(other_expression - expression)
-            bbbb = np.sqrt(np.sum(aaaa))
+            bbbb = np.mean(aaaa)
             aaaa = aaaa[channel]
-            a_score = to_simplex(aaaa, np.min(a_for_cell), np.max(a_for_cell))
-            b_score = to_simplex(bbbb, np.min(b_for_cell), np.max(b_for_cell))
+            a_score = a_ecdfs_for_cell[cell][channel].evaluate(aaaa)
+            b_score = b_ecdf_for_cell[cell].evaluate(bbbb)
+            # a_for_cell, b_for_cell = ab_for_cell[idx1]
+            # a_for_cell = a_for_cell[:, channel]
+            # a_score = to_simplex(aaaa, np.min(a_for_cell), np.max(a_for_cell))
+            # b_score = to_simplex(bbbb, np.min(b_for_cell), np.max(b_for_cell))
 
             ax.set(title=f'{a_score:0.3f}, {b_score:0.3f}')
             k += 1
@@ -280,6 +351,7 @@ def aaa(idx0, idx1=None):
             for contour in contours:
                 orange = list(map(lambda x: x / 255, (255, 165, 0)))
                 ax.plot(contour[:, 1], contour[:, 0], linewidth=2, color=orange)
+    fig.suptitle(f'idx0 = {idx0}, idx1 = {idx1}, channels = {selected_channels}')
     plt.tight_layout()
     plt.show()
 
@@ -288,4 +360,65 @@ aaa(0)
 aaa(0, 1)
 aaa(1)
 aaa(2)
-#b#
+
+##
+a = ad.AnnData(mus)
+sc.tl.pca(a)
+sc.pl.pca(a)
+
+b = a[random_indices]
+
+print("recomputing umap... ", end="")
+sc.pp.neighbors(b)
+sc.tl.umap(b)
+sc.tl.louvain(b)
+print("done")
+
+plt.figure()
+l = b.obs["louvain"].tolist()
+colors = list(map(int, l))
+plt.scatter(
+    b.obsm["X_umap"][:, 0],
+    b.obsm["X_umap"][:, 1],
+    s=1,
+    c=colors,
+    cmap=matplotlib.cm.tab20,
+)
+# plt.xlim([10, 20])
+# plt.ylim([0, 10])
+plt.show()
+##
+plt.style.use('dark_background')
+def bbb(idx):
+    # n_channels = ds[42][0].shape[0]
+    # channels = list(range(n_channels))
+    channels = [35, 38]
+    #     ax.autoscale()
+    for c in tqdm(channels, desc='channels', position=0, leave=False):
+        fig, ax = plt.subplots(figsize=(24, 14))
+        ax.set(title=f'ch {c}')
+        u = b.obsm["X_umap"]
+        for j, i in enumerate(
+                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            _, ome, _, _ = ds[i]
+            ome = ome[c, :, :].numpy()
+            # mask = torch.squeeze(mask, 0).numpy()
+            im = OffsetImage(ome, zoom=0.7, cmap='gray')
+            ab = AnnotationBbox(im, u[j], xycoords="data", frameon=False)
+            ax.add_artist(ab)
+        ax.set(xlim=(min(u[:, 0]), max(u[:, 0])), ylim=(min(u[:, 1]), max(u[:, 1])))
+
+        cell = some_cells[idx]
+        for cell_index in indices[cell]:
+            _, ome, _, _ = ds[random_indices[cell_index]]
+            ome = ome[c, :, :].numpy()
+            # mask = torch.squeeze(mask, 0).numpy()
+            im = OffsetImage(ome, zoom=0.7, cmap='viridis')
+            ab = AnnotationBbox(im, u[cell_index], xycoords="data", frameon=False)
+            ax.add_artist(ab)
+
+        plt.tight_layout()
+        plt.show()
+
+bbb(0)
+plt.style.use('default')
