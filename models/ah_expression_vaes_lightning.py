@@ -1,4 +1,4 @@
-lass Ppp:
+class Ppp:
     pass
 
 
@@ -9,6 +9,7 @@ ppp.MAX_EPOCHS = 20
 ppp.BATCH_SIZE = 1024
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
+ppp.PERTURB = None
 # ppp.DEBUG = True
 ppp.DEBUG = False
 if ppp.DEBUG:
@@ -36,10 +37,6 @@ import pyro.distributions
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from optuna.integration import PyTorchLightningPruningCallback
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
 from torch import autograd
 from torch import nn
 from torch.utils.data import DataLoader, Subset
@@ -199,7 +196,7 @@ class VAE(pl.LightningModule):
         self.save_hyperparameters()
         self.in_channels = in_channels
         self.out_channels = self.in_channels
-        self.latent_dim = self.optuna_parameters['vae_latent_dims']
+        self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
         self.optuna_parameters = optuna_parameters
 
@@ -565,42 +562,6 @@ def get_loaders(
 
 
 def objective(trial: optuna.trial.Trial) -> float:
-    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="expression_vae")
-    print(f"logging in {logger.experiment.log_dir}")
-    version = int(logger.experiment.log_dir.split("version_")[-1])
-    trial.set_user_attr("version", version)
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
-        monitor="elbo",
-        # every_n_train_steps=2,
-        save_last=True,
-        save_top_k=3,
-    )
-    early_stop_callback = EarlyStopping(
-        monitor="elbo",
-        min_delta=0.0001,
-        patience=3,
-        verbose=True,
-        mode="max",
-        check_finite=True,
-    )
-    trainer = pl.Trainer(
-        gpus=1,
-        max_epochs=ppp.MAX_EPOCHS,
-        callbacks=[
-            ImageSampler(),
-            LogComputationalGraph(),
-            checkpoint_callback,
-            early_stop_callback,
-            AfterTraining(),
-            PyTorchLightningPruningCallback(trial, monitor="elbo"),
-        ],
-        logger=logger,
-        num_sanity_val_steps=0,  # track_grad_norm=2,
-        log_every_n_steps=15 if not ppp.DEBUG else 1,
-        val_check_interval=1 if ppp.DEBUG else 300,
-    )
-
     ppp.PERTURB_MASKS = ppp.PERTURB_MASKS or False
     ppp.PERTURB_PIXELS = ppp.PERTURB_PIXELS or False
     ppp.PERTURB_PIXELS_SEED = ppp.PERTURB_PIXELS_SEED or 42
@@ -616,13 +577,26 @@ def objective(trial: optuna.trial.Trial) -> float:
         perturb_pixels_seed=ppp.PERTURB_PIXELS_SEED,
         perturb_masks=ppp.PERTURB_MASKS,
     )
+    from models.boilerplate import training_boilerplate
+
+    trainer, logger = training_boilerplate(
+        trial=trial,
+        extra_callbacks=[ImageSampler(), LogComputationalGraph(), AfterTraining()],
+        train_loader=train_loader,
+        val_loader=val_loader,
+        train_loader_batch=train_loader_batch,
+        max_epochs=ppp.MAX_EPOCHS,
+        log_every_n_steps=15 if not ppp.DEBUG else 1,
+        val_check_interval=1 if ppp.DEBUG else 300,
+    )
+
     # hyperparameters
-    latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
     optuna_parameters = dict(
-        latent_dims=latent_dims,
+        vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,

@@ -53,6 +53,8 @@ def get_image(loader, model, return_cells=False):
         # # mean = model.negative_binomial_mean(r=r_hat, p=p)
         # mean = p * r / (1 - p)
         reconstructed = mean * quantiles_for_normalization
+        if torch.any(torch.isnan(reconstructed)):
+            return None
 
         a_original = original.amin(dim=(0, 1))
         b_original = original.amax(dim=(0, 1))

@@ -10,6 +10,7 @@ if "aaa" in locals():
     ppp.DEBUG_TORCH = "yessss"
 ppp.MAX_EPOCHS = 20
 ppp.BATCH_SIZE = 1024
+ppp.PERTURB = None
 # ppp.DEBUG = True
 ppp.DEBUG = False
 if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
@@ -70,9 +71,10 @@ class ImageSampler(pl.Callback):
             loader = trainer.val_dataloaders[dataloader_idx]
             dataloader_label = "training" if dataloader_idx == 0 else "validation"
             img = get_image(loader, pl_module)
-            trainer.logger.experiment.add_image(
-                f"reconstruction/{dataloader_label}", img, trainer.global_step
-            )
+            if img is not None:
+                trainer.logger.experiment.add_image(
+                    f"reconstruction/{dataloader_label}", img, trainer.global_step
+                )
 
             # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
             #                                         f'{c}/original', original_masked_c[0].flatten(),
@@ -101,7 +103,10 @@ class VAE(pl.LightningModule):
         self.enc_out_dim = self.optuna_parameters["enc_out_dim"]
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.encoder = resnet_encoder(
-            first_conv=False, maxpool1=False, n_channels=self.n_channels
+            first_conv=False,
+            maxpool1=False,
+            n_channels=self.n_channels,
+            enc_out_dim=self.enc_out_dim,
         )
         self.decoder = resnet_decoder(
             latent_dim=self.latent_dim,
@@ -167,6 +172,8 @@ class VAE(pl.LightningModule):
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print("nan in loss detected!")
+            from models.ah_expression_vaes_lightning import optuna_nan_workaround
+            elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
     def forward(self, x, mask):
@@ -204,6 +211,11 @@ class VAE(pl.LightningModule):
             }
         )
 
+        # we set the elbo manually to a high value when we find it nan with optuna_nan_workaround(). When this happes
+        # let's tell pytorchlightning to stop traning
+        if elbo > 1e20:
+            self.trainer.should_stop = True
+
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
@@ -215,11 +227,12 @@ class VAE(pl.LightningModule):
             x, alpha, beta, mu, std, z, mask, corrupted_entries
         )
 
+        self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
         d = {"elbo": elbo, "kl": kl.mean(), "reconstruction": recon_loss.mean()}
         return d
 
     def validation_epoch_end(self, outputs):
-        if not self.trainer.running_sanity_check:
+        if not self.trainer.sanity_checking:
             assert type(outputs) is list
             for i, o in enumerate(outputs):
                 for k in ["elbo", "kl", "reconstruction"]:
@@ -244,7 +257,7 @@ class LogComputationalGraph(pl.Callback):
         self.already_logged = False
 
     def on_validation_start(self, trainer: pl.Trainer, pl_module):
-        if not trainer.running_sanity_check:
+        if not trainer.sanity_checking:
             if not self.already_logged:
                 return
                 # this code causes a TracerWarning
@@ -256,6 +269,7 @@ class LogComputationalGraph(pl.Callback):
 def get_loaders(
     perturb: bool,
     shuffle_train=False,
+    val_subset=False,
 ):
     train_ds = PerturbedRGBCells("train", augment=True, aggressive_rotation=True)
     train_ds_validation = PerturbedRGBCells("train")
@@ -291,11 +305,15 @@ def get_loaders(
         pin_memory=True,
     )
 
-    # indices = np.random.choice(len(val_ds), n, replace=False)
-    # val_subset = Subset(val_ds, indices)
-    val_subset = val_ds
+    # the val set is a bit too big for training a lot of image models, we are fine with evaluating the generalization
+    # on a subset of the data
+    if val_subset:
+        indices = np.random.choice(len(val_ds), n, replace=False)
+        subset = Subset(val_ds, indices)
+    else:
+        subset = val_ds
     val_loader = DataLoader(
-        val_subset,
+        subset,
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
@@ -343,16 +361,17 @@ def objective(trial: optuna.trial.Trial) -> float:
     train_loader, val_loader, train_loader_batch = get_loaders(
         perturb=ppp.PERTURB,
         shuffle_train=True,
+        val_subset=True
     )
 
     # hyperparameters
-    latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
-    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    enc_out_dim = trial.suggest_categorical("enc_out_dim", [4, 16, 64, 256])
+    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1, log=True)
+    enc_out_dim = trial.suggest_categorical("enc_out_dim", [128, 256])
     optuna_parameters = dict(
-        latent_dims=latent_dims,
+        vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,
@@ -368,7 +387,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     )
     trainer.fit(
         vae,
-        train_dataloader=train_loader,
+        train_dataloaders=train_loader,
         val_dataloaders=[train_loader_batch, val_loader],
     )
     print(f"finished logging in {logger.experiment.log_dir}")
@@ -381,10 +400,12 @@ if __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
     study_name = "ag_conv_vae_lightning"
+    storage = "sqlite:///" + file_path("optuna_ah.sqlite")
+    # optuna.delete_study(study_name=study_name, storage=storage)
     study = optuna.create_study(
         direction="minimize",
         pruner=pruner,
-        storage="sqlite:///" + file_path("optuna_ah.sqlite"),
+        storage=storage,
         load_if_exists=True,
         study_name=study_name,
     )
@@ -392,7 +413,7 @@ if __name__ == "__main__":
     # OPTIMIZE = False
     if OPTIMIZE:
         HOURS = 60 * 60
-        study.optimize(objective, n_trials=1, timeout=5 * HOURS)
+        study.optimize(objective, n_trials=100, timeout=2 * HOURS)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial

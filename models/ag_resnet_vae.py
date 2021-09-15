@@ -126,7 +126,7 @@ class DecoderBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, block, layers, first_conv, maxpool1, n_channels):
+    def __init__(self, block, layers, first_conv, maxpool1, n_channels, enc_out_dim):
         super().__init__()
 
         self.inplanes = 64
@@ -149,7 +149,7 @@ class ResNetEncoder(nn.Module):
 
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer3 = self._make_layer(block, enc_out_dim, layers[2], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         # using the mask for conditioning the answer
@@ -317,8 +317,8 @@ class ResNetDecoder(nn.Module):
         return xa, xb
 
 
-def resnet_encoder(first_conv, maxpool1, n_channels):
-    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1, n_channels)
+def resnet_encoder(first_conv, maxpool1, n_channels, enc_out_dim):
+    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1, n_channels, enc_out_dim)
 
 
 def resnet_decoder(latent_dim, input_height, first_conv, maxpool1, n_channels):
