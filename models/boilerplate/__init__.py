@@ -19,24 +19,29 @@ from torch.utils.data import DataLoader, Subset
 from data2 import PerturbedCellDataset, file_path
 
 
-
-def training_boilerplate(trial: optuna.trial.Trial, extra_callbacks, train_loader, val_loader,
-                         train_loader_batch, max_epochs: int, log_every_n_steps: int, val_check_interval: int):
-    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="expression_vae")
+def training_boilerplate(
+    trial: optuna.trial.Trial,
+    extra_callbacks,
+    max_epochs: int,
+    log_every_n_steps: int,
+    val_check_interval: int,
+    model_name: str,
+):
+    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name=model_name)
     print(f"logging in {logger.experiment.log_dir}")
     version = int(logger.experiment.log_dir.split("version_")[-1])
     trial.set_user_attr("version", version)
     checkpoint_callback = ModelCheckpoint(
         dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
-        monitor="elbo",
+        monitor="batch_val_elbo",
         # every_n_train_steps=2,
         save_last=True,
         save_top_k=3,
     )
     early_stop_callback = EarlyStopping(
-        monitor="elbo",
+        monitor="batch_val_elbo",
         min_delta=0.0001,
-        patience=3,
+        patience=2,
         verbose=True,
         mode="max",
         check_finite=True,
@@ -47,7 +52,8 @@ def training_boilerplate(trial: optuna.trial.Trial, extra_callbacks, train_loade
         callbacks=[
             checkpoint_callback,
             early_stop_callback,
-            PyTorchLightningPruningCallback(trial, monitor="elbo"),
+            PyTorchLightningPruningCallback(trial, monitor="batch_val_elbo"),
+            *extra_callbacks,
         ],
         logger=logger,
         num_sanity_val_steps=0,  # track_grad_norm=2,
@@ -55,3 +61,11 @@ def training_boilerplate(trial: optuna.trial.Trial, extra_callbacks, train_loade
         val_check_interval=val_check_interval,
     )
     return trainer, logger
+
+
+# sqlite-backed optuna storage does support nan https://github.com/optuna/optuna/issues/2809
+def optuna_nan_workaround(loss):
+    # from torch 1.9.0
+    # loss = torch.nan_to_num(loss, nan=torch.finfo(loss.dtype).max)
+    loss[torch.isnan(loss)] = torch.finfo(loss.dtype).max
+    return loss

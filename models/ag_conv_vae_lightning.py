@@ -8,7 +8,7 @@ class Ppp:
 ppp = Ppp()
 if "aaa" in locals():
     ppp.DEBUG_TORCH = "yessss"
-ppp.MAX_EPOCHS = 20
+ppp.MAX_EPOCHS = 6
 ppp.BATCH_SIZE = 1024
 ppp.PERTURB = None
 # ppp.DEBUG = True
@@ -172,7 +172,8 @@ class VAE(pl.LightningModule):
             elbo = elbo.mean()
             if torch.isnan(elbo).any():
                 print("nan in loss detected!")
-            from models.ah_expression_vaes_lightning import optuna_nan_workaround
+            from models.boilerplate import optuna_nan_workaround
+
             elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
@@ -194,9 +195,8 @@ class VAE(pl.LightningModule):
             return alpha, beta, mu, std, z
 
     def training_step(self, batch, batch_idx):
-        x = batch[0]
-        mask = batch[1]
-        corrupted_entries = batch[2]
+        assert len(batch) == 4
+        expression, x, mask, corrupted_entries = batch
         # encode x to get the mu and variance parameters
         alpha, beta, mu, std, z = self.forward(x, mask)
         elbo, kl, recon_loss = self.loss_function(
@@ -219,9 +219,8 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        x = batch[0]
-        mask = batch[1]
-        corrupted_entries = batch[2]
+        assert len(batch) == 4
+        expression, x, mask, corrupted_entries = batch
         alpha, beta, mu, std, z = self.forward(x, mask)
         elbo, kl, recon_loss = self.loss_function(
             x, alpha, beta, mu, std, z, mask, corrupted_entries
@@ -234,6 +233,7 @@ class VAE(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         if not self.trainer.sanity_checking:
             assert type(outputs) is list
+            batch_val_elbo = None
             for i, o in enumerate(outputs):
                 for k in ["elbo", "kl", "reconstruction"]:
                     avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
@@ -241,6 +241,10 @@ class VAE(pl.LightningModule):
                     self.logger.experiment.add_scalar(
                         f"avg_metric/{k}/{phase}", avg_loss, self.global_step
                     )
+                    if phase == "validation" and k == "elbo":
+                        batch_val_elbo = avg_loss
+            assert batch_val_elbo is not None
+            self.log("batch_val_elbo", batch_val_elbo)
 
     def on_post_move_to_device(self):
         self.decoder.mask_conv1.weight = self.encoder.mask_conv1.weight
@@ -322,58 +326,31 @@ def get_loaders(
 
 
 def objective(trial: optuna.trial.Trial) -> float:
-    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="resnet_vae")
-    print(f"logging in {logger.experiment.log_dir}")
-    version = int(logger.experiment.log_dir.split("version_")[-1])
-    trial.set_user_attr("version", version)
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=file_path(f"{logger.experiment.log_dir}/checkpoints"),
-        monitor="elbo",
-        # every_n_train_steps=2,
-        save_last=True,
-        save_top_k=1,
-    )
-    early_stop_callback = EarlyStopping(
-        monitor="elbo",
-        min_delta=0.0001,
-        patience=3,
-        verbose=True,
-        mode="max",
-        check_finite=True,
-    )
-    trainer = pl.Trainer(
-        gpus=1,
+    from models.boilerplate import training_boilerplate
+
+    trainer, logger = training_boilerplate(
+        trial=trial,
+        extra_callbacks=[ImageSampler(), LogComputationalGraph()],
         max_epochs=ppp.MAX_EPOCHS,
-        callbacks=[
-            ImageSampler(),
-            LogComputationalGraph(),
-            checkpoint_callback,
-            early_stop_callback,
-            PyTorchLightningPruningCallback(trial, monitor="elbo"),
-        ],
-        logger=logger,
-        num_sanity_val_steps=0,
-        log_every_n_steps=15,
-        val_check_interval=2 if ppp.DEBUG else 300,
+        log_every_n_steps=15 if not ppp.DEBUG else 1,
+        val_check_interval=1 if ppp.DEBUG else 300,
+        model_name="resnet_vae",
     )
+
     ppp.PERTURB = ppp.PERTURB or False
     print(f"ppp.PERTURB = {ppp.PERTURB}")
     train_loader, val_loader, train_loader_batch = get_loaders(
-        perturb=ppp.PERTURB,
-        shuffle_train=True,
-        val_subset=True
+        perturb=ppp.PERTURB, shuffle_train=True, val_subset=True
     )
 
     # hyperparameters
-    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 128)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
-    log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1, log=True)
     enc_out_dim = trial.suggest_categorical("enc_out_dim", [128, 256])
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
-        log_c=log_c,
         learning_rate=learning_rate,
         enc_out_dim=enc_out_dim,
     )
@@ -392,7 +369,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     )
     print(f"finished logging in {logger.experiment.log_dir}")
 
-    elbo = trainer.callback_metrics["elbo"].item()
+    elbo = trainer.callback_metrics["batch_val_elbo"].item()
     return elbo
 
 

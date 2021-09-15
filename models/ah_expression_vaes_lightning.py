@@ -1,3 +1,6 @@
+from models.boilerplate import optuna_nan_workaround
+
+
 class Ppp:
     pass
 
@@ -44,14 +47,6 @@ from torch.utils.data import DataLoader, Subset
 from data2 import PerturbedCellDataset, file_path
 
 pl.seed_everything(1234)
-
-
-# sqlite-backed optuna storage does support nan https://github.com/optuna/optuna/issues/2809
-def optuna_nan_workaround(loss):
-    # from torch 1.9.0
-    # loss = torch.nan_to_num(loss, nan=torch.finfo(loss.dtype).max)
-    loss[torch.isnan(loss)] = torch.finfo(loss.dtype).max
-    return loss
 
 
 class ImageSampler(pl.Callback):
@@ -422,6 +417,7 @@ class VAE(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         if not self.trainer.sanity_checking:
             assert type(outputs) is list
+            batch_val_elbo = None
             for i, o in enumerate(outputs):
                 for k in ["elbo", "kl", "reconstruction"]:
                     avg_loss = torch.stack([x[k] for x in o]).mean().cpu().detach()
@@ -430,8 +426,10 @@ class VAE(pl.LightningModule):
                         f"avg_metric/{k}/{phase}", avg_loss, self.global_step
                     )
                     # self.log(f'epoch_{k} {phase}', avg_loss, on_epoch=False)
-                # return {'log': d}
-
+                    if phase == "validation" and k == "elbo":
+                        batch_val_elbo = avg_loss
+            assert batch_val_elbo is not None
+            self.log("batch_val_elbo", batch_val_elbo)
 
 # from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
 class LogComputationalGraph(pl.Callback):
@@ -562,32 +560,15 @@ def get_loaders(
 
 
 def objective(trial: optuna.trial.Trial) -> float:
-    ppp.PERTURB_MASKS = ppp.PERTURB_MASKS or False
-    ppp.PERTURB_PIXELS = ppp.PERTURB_PIXELS or False
-    ppp.PERTURB_PIXELS_SEED = ppp.PERTURB_PIXELS_SEED or 42
-    ppp.PERTURB = ppp.PERTURB or False
-    print(f"ppp.PERTURB = {ppp.PERTURB}")
-    print(f"ppp.PERTURB_PIXELS = {ppp.PERTURB_PIXELS}")
-    print(f"ppp.PERTURB_PIXELS_SEED = {ppp.PERTURB_PIXELS_SEED}")
-    print(f"ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}")
-    train_loader, val_loader, train_loader_batch = get_loaders(
-        perturb=ppp.PERTURB,
-        shuffle_train=True,
-        perturb_pixels=ppp.PERTURB_PIXELS,
-        perturb_pixels_seed=ppp.PERTURB_PIXELS_SEED,
-        perturb_masks=ppp.PERTURB_MASKS,
-    )
     from models.boilerplate import training_boilerplate
 
     trainer, logger = training_boilerplate(
         trial=trial,
         extra_callbacks=[ImageSampler(), LogComputationalGraph(), AfterTraining()],
-        train_loader=train_loader,
-        val_loader=val_loader,
-        train_loader_batch=train_loader_batch,
         max_epochs=ppp.MAX_EPOCHS,
         log_every_n_steps=15 if not ppp.DEBUG else 1,
         val_check_interval=1 if ppp.DEBUG else 300,
+        model_name="expression_vae",
     )
 
     # hyperparameters
@@ -612,6 +593,21 @@ def objective(trial: optuna.trial.Trial) -> float:
         **ppp.__dict__,
     )
 
+    ppp.PERTURB_MASKS = ppp.PERTURB_MASKS or False
+    ppp.PERTURB_PIXELS = ppp.PERTURB_PIXELS or False
+    ppp.PERTURB_PIXELS_SEED = ppp.PERTURB_PIXELS_SEED or 42
+    ppp.PERTURB = ppp.PERTURB or False
+    print(f"ppp.PERTURB = {ppp.PERTURB}")
+    print(f"ppp.PERTURB_PIXELS = {ppp.PERTURB_PIXELS}")
+    print(f"ppp.PERTURB_PIXELS_SEED = {ppp.PERTURB_PIXELS_SEED}")
+    print(f"ppp.PERTURB_MASKS = {ppp.PERTURB_MASKS}")
+    train_loader, val_loader, train_loader_batch = get_loaders(
+        perturb=ppp.PERTURB,
+        shuffle_train=True,
+        perturb_pixels=ppp.PERTURB_PIXELS,
+        perturb_pixels_seed=ppp.PERTURB_PIXELS_SEED,
+        perturb_masks=ppp.PERTURB_MASKS,
+    )
     trainer.fit(
         vae,
         train_dataloaders=train_loader,
@@ -619,7 +615,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     )
     print(f"finished logging in {logger.experiment.log_dir}")
 
-    elbo = trainer.callback_metrics["elbo"].item()
+    elbo = trainer.callback_metrics["batch_val_elbo"].item()
     return elbo
 
 

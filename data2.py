@@ -1036,7 +1036,7 @@ class RGBCells(Dataset):
         perturb_masks=False,
     ):
         assert not (augment is False and aggressive_rotation is True)
-        d = {"expression": False, "center": False, "ome": True, "mask": True}
+        d = {"expression": True, "center": False, "ome": True, "mask": True}
         self.ds = CellDataset(
             split,
             features=d,
@@ -1070,31 +1070,26 @@ class RGBCells(Dataset):
         return len(self.ds)
 
     def __getitem__(self, item):
-        x = self.ds[item][0]
-        if len(self.ds[item]) == 2:
-            mask = self.ds[item][1]
-            mask = self.transform(mask)
-            if self.augment:
-                state = torch.get_rng_state()
-                mask = self.augment_transform(mask)
-            mask = mask.float()
-        elif len(self.ds[item]) == 1:
-            raise ValueError()
-            # mask = None
-        else:
-            raise ValueError()
+        assert len(self.ds[item]) == 3
+        expression = self.ds[item][0]
+        x = self.ds[item][1]
+        mask = self.ds[item][2]
+        mask = self.transform(mask)
+        if self.augment:
+            state = torch.get_rng_state()
+            mask = self.augment_transform(mask)
+        mask = mask.float()
+
         x = self.transform(x)
         if self.augment:
             torch.set_rng_state(state)
             x = self.augment_transform(x)
         x = torch.asinh(x)
-        # x = x[COOL_CHANNELS, :, :]
         x = x.permute(1, 2, 0)
-        # x = (x - self.normalize.mean) / self.normalize.std
         x = x / quantiles_for_normalization
         x = x.permute(2, 0, 1)
         x = x.float()
-        return x, mask
+        return expression, x, mask
 
 
 class PerturbedRGBCells(Dataset):
@@ -1137,10 +1132,11 @@ class PerturbedRGBCells(Dataset):
         return len(self.rgb_cells)
 
     def __getitem__(self, i):
-        x, mask = self.rgb_cells[i]
+        expression, x, mask = self.rgb_cells[i]
         entries_to_corrupt = self.corrupted_entries[i, :]
-        x[entries_to_corrupt] = 0.0
-        return x, mask, entries_to_corrupt
+        expression[entries_to_corrupt] = 0.
+        x[entries_to_corrupt] = 0.
+        return expression, x, mask, entries_to_corrupt
 
 
 ##
