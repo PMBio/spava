@@ -12,6 +12,8 @@ import skimage.measure
 from data2 import PerturbedRGBCells, PerturbedCellDataset, file_path
 from utils import memory
 
+m = __name__ == '__main__'
+
 ds = PerturbedRGBCells(split="validation")
 
 cells_ds = PerturbedCellDataset(split="validation")
@@ -46,10 +48,8 @@ list_of_z = []
 with torch.no_grad():
     for data in tqdm(loader, desc="embedding the whole validation set"):
         data = [d.to(resnet_vae.device) for d in data]
-        # workaround for the model trained without expression
-        assert len(data) == 3
-        data = data[1:]
-        z = [zz.cpu() for zz in resnet_vae(*data)]
+        expression, x, mask = data
+        z = [zz.cpu() for zz in resnet_vae(x, mask)]
         list_of_z.append(z)
 print(f"forwarning the data to the resnets: {time.time() - start}")
 torch.cuda.empty_cache()
@@ -57,9 +57,13 @@ torch.cuda.empty_cache()
 ##
 
 f = file_path("image_features.npy")
-# if True:
-if False:
-    mus = torch.cat([zz[2] for zz in list_of_z], dim=0).numpy()
+if True:
+# if False:
+    l = []
+    for zz in list_of_z:
+        alpha, beta, mu, std, z = zz
+        l.append(mu)
+    mus = torch.cat(l, dim=0).numpy()
     np.save(f, mus)
 mus = np.load(f)
 ##

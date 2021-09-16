@@ -8,7 +8,6 @@ class Ppp:
 ppp = Ppp()
 if "aaa" in locals():
     ppp.DEBUG_TORCH = "yessss"
-# ppp.MAX_EPOCHS = 20
 ppp.MAX_EPOCHS = 6
 ppp.BATCH_SIZE = 1024
 ppp.PERTURB = None
@@ -24,10 +23,6 @@ else:
     else:
         ppp.NUM_WORKERS = 16
     ppp.DETECT_ANOMALY = False
-
-# ppp.NOISE_MODEL = 'gaussian'
-# ppp.NOISE_MODEL = 'nb'
-
 
 import contextlib
 import os
@@ -45,10 +40,9 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 
 from data2 import PerturbedRGBCells, quantiles_for_normalization, file_path
+from models.ag_resnet_vae import resnet_encoder
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
-pl.seed_everything(1234)
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def get_detect_anomaly_cm():
@@ -59,29 +53,25 @@ def get_detect_anomaly_cm():
     return cm
 
 
-class VAE(pl.LightningModule):
+class ResNetToExpression(pl.LightningModule):
     def __init__(self, optuna_parameters, n_channels, input_height=32, **kwargs):
         super().__init__()
-
         self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.n_channels = n_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.out_channels = self.n_channels
-
-        # encoder stuff
-        n = self.n_channels + 1
-        self.conv0 = nn.Conv2d(n, 2 * n, kernel_size=3)
-        self.conv1 = nn.Conv2d(2 * n, 4 * n, kernel_size=3)
-        self.conv2 = nn.Conv2d(4 * n, 4 * n, kernel_size=5)
-        self.linear0 = nn.Linear(160, 20)
+        self.enc_out_dim = self.optuna_parameters["enc_out_dim"]
+        self.resnet_encoder = resnet_encoder(
+            first_conv=False,
+            maxpool1=False,
+            n_channels=n_channels,
+            enc_out_dim=self.enc_out_dim,
+        )
+        self.linear0 = nn.Linear(self.enc_out_dim, 20)
         self.linear1_0 = nn.Linear(20, self.latent_dim)
         self.linear1_1 = nn.Linear(20, self.latent_dim)
-        self.bn0 = nn.BatchNorm2d(2 * n)
-        self.bn1 = nn.BatchNorm2d(4 * n)
-        self.relu = nn.ReLU()
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
 
         # decoder stuff
         self.decoder0 = nn.Linear(self.latent_dim, 15)
@@ -93,12 +83,9 @@ class VAE(pl.LightningModule):
 
         self.log_c = nn.Parameter(torch.Tensor([self.optuna_parameters["log_c"]] * 39))
 
-    def encoder(self, x):
-        y = self.maxpool(self.relu(self.bn0(self.conv0(x))))
-        y = self.maxpool(self.relu(self.bn1(self.conv1(y))))
-        y = self.relu(self.conv2(y))
-        y = torch.flatten(y, start_dim=1)
-        y = self.relu(self.linear0(y))
+    def encoder(self, x, mask):
+        y = F.relu(self.resnet_encoder(x, mask))
+        y = F.relu(self.linear0(y))
         mu = self.linear1_0(y)
         log_var = self.linear1_1(y)
         return mu, log_var
@@ -180,7 +167,7 @@ class VAE(pl.LightningModule):
         x_and_mask = torch.cat((x, mask), dim=1)
         cm = get_detect_anomaly_cm()
         with cm:
-            mu, log_var = self.encoder(x_and_mask)
+            mu, log_var = self.encoder(x, mask)
 
             # sample z from q
             std = torch.exp(log_var / 2)
@@ -190,10 +177,10 @@ class VAE(pl.LightningModule):
             # decoded
             a = self.decoder(z)
             if (
-                torch.isnan(a).any()
-                or torch.isnan(mu).any()
-                or torch.isnan(std).any()
-                or torch.isnan(z).any()
+                    torch.isnan(a).any()
+                    or torch.isnan(mu).any()
+                    or torch.isnan(std).any()
+                    or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 self.trainer.should_stop = True
@@ -256,9 +243,9 @@ class VAE(pl.LightningModule):
 
 
 def get_loaders(
-    perturb: bool,
-    shuffle_train=False,
-    val_subset=False,
+        perturb: bool,
+        shuffle_train=False,
+        val_subset=False,
 ):
     train_ds = PerturbedRGBCells("train", augment=True, aggressive_rotation=True)
     train_ds_validation = PerturbedRGBCells("train")
@@ -318,7 +305,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         extra_callbacks=[],
         max_epochs=ppp.MAX_EPOCHS,
         log_every_n_steps=15 if not ppp.DEBUG else 1,
-        val_check_interval=1 if ppp.DEBUG else 200,
+        val_check_interval=1 if ppp.DEBUG else 300,
         model_name="image_to_expression",
     )
 
@@ -330,21 +317,22 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     # hyperparameters
     vae_latent_dims = 10
-    # vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    # vae_latent_dims = trial.suggest_int("vae_latent_dims", 5, 10)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1, log=True)
-    # enc_out_dim = trial.suggest_categorical("enc_out_dim", [128, 256])
+    enc_out_dim = trial.suggest_categorical("enc_out_dim", [128, 256])
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,
+        enc_out_dim=enc_out_dim,
     )
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)
 
-    vae = VAE(
+    vae = ResNetToExpression(
         optuna_parameters=optuna_parameters,
         n_channels=len(quantiles_for_normalization),
         **ppp.__dict__,
@@ -364,7 +352,7 @@ def objective(trial: optuna.trial.Trial) -> float:
 if __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "aj_convnet_expression"
+    study_name = "ak_resnet_expression"
     storage = "sqlite:///" + file_path("optuna_aj.sqlite")
     # optuna.delete_study(study_name=study_name, storage=storage)
     study = optuna.create_study(
@@ -378,7 +366,7 @@ if __name__ == "__main__":
     TRAIN_PERTURBED = False
     if not TRAIN_PERTURBED:
         HOURS = 60 * 60
-        study.optimize(objective, n_trials=150, timeout=6 * HOURS)
+        study.optimize(objective, n_trials=100, timeout=6 * HOURS)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
@@ -388,22 +376,5 @@ if __name__ == "__main__":
             print("    {}: {}".format(key, value))
     else:
         ppp.PERTURB = True
-        trial = study.trials[28]  # 36, 20, 38, 34
-        # trial = study.best_trial
+        trial = study.best_trial
         objective(trial)
-
-
-if False:
-##
-    from data2 import file_path
-    import optuna
-    study_name = "aj_convnet_expression"
-    storage = "sqlite:///" + file_path("optuna_aj.sqlite")
-    study = optuna.load_study(
-            storage=storage,
-            study_name=study_name,
-        )
-    print(study.best_trial.user_attrs)
-    print(study.trials_dataframe().sort_values(by='value'))
-
-##

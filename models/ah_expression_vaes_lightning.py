@@ -189,11 +189,11 @@ class VAE(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
+        self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
         self.out_channels = self.in_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
-        self.optuna_parameters = optuna_parameters
 
         self.encoder0 = nn.Linear(self.in_channels, 30)
         self.encoder1 = nn.Linear(30, 20)
@@ -574,7 +574,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     # hyperparameters
     vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
-    log_c = trial.suggest_float("log_c", 1e-2, 1e2, log=True)
+    log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,

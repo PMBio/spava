@@ -42,6 +42,7 @@ if m:
 
 ##
 # retrain the best model but by perturbing the dataset
+# if m:
 if m and False:
     # train the model on dilated masks using the hyperparameters from the best model for original expression
     from models.ah_expression_vaes_lightning import objective, ppp
@@ -66,7 +67,7 @@ from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
 )
 
 if m:
-    MODEL_CHECKPOINT = "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_129" \
+    MODEL_CHECKPOINT = "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_133" \
                        "/checkpoints/last.ckpt"
 ##
 if m and COMPLETE_RUN:
@@ -500,7 +501,7 @@ class Prediction:
             # if i > 2:
             #     break
         fig.suptitle(
-            f"{self.name}, global score: {np.mean(self.scores_perturbed):0.2f}"
+            f"{self.name}, {self.space.name}, global score: {np.mean(self.scores_perturbed):0.2f}"
         )
         plt.tight_layout()
         plt.show()

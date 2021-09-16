@@ -1072,6 +1072,7 @@ class RGBCells(Dataset):
     def __getitem__(self, item):
         assert len(self.ds[item]) == 3
         expression = self.ds[item][0]
+        expression = expression / quantiles_for_normalization
         x = self.ds[item][1]
         mask = self.ds[item][2]
         mask = self.transform(mask)
