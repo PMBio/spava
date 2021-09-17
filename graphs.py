@@ -34,9 +34,8 @@ GRAPH_KNN_K = 10
 SUBGRAPH_RADIUS = 75
 
 m = __name__ == "__main__"
-
-
-def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None):
+def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot_expression: bool = False):
+    ##
     # ##
     # data = load_graph('gaussian', 'validation', 0)
     # custom_ax = None
@@ -54,37 +53,57 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None):
         ax = plt.gca()
     else:
         ax = custom_ax
-    ax.set_facecolor((1.0, 0.47, 0.42))
+    ax.set_facecolor((0., 0., 0.))
+    # ax.set_facecolor((1.0, 0.47, 0.42))
     greys = matplotlib.cm.get_cmap("Greys_r")
 
     if ome_index is not None:
         assert split is not None
         masks_ds = FilteredMasksRelabeled(split)
         colors = [
-            colorsys.hsv_to_rgb(5 / 360, 58 / 100, (60 + random.random() * 40) / 100)
+            [r, r, r]
+            # colorsys.hsv_to_rgb(5 / 360, 58 / 100, (60 + random.random() * 40) / 100)
             for _ in range(10000)
+            for r in [20 * random.random() / 100]
         ]
-        colors[0] = colorsys.hsv_to_rgb(5 / 360, 58 / 100, 63 / 100)
-        new_map = matplotlib.colors.LinearSegmentedColormap.from_list(
-            "new_map", colors, N=10000
-        )
+        # colors[0] = colorsys.hsv_to_rgb(5 / 360, 58 / 100, 63 / 100)
+        colors[0] = (0.3, 0.3, 0.3)
 
         masks = masks_ds[ome_index]
-        ax.imshow(np.moveaxis(masks, 0, 1), cmap=new_map, aspect="auto")
+        if plot_expression:
+            x = data.x
+            from sklearn.decomposition import PCA
+            reducer = PCA(3)
+            pca = reducer.fit_transform(x)
+            a = np.min(pca, axis=0)
+            b = np.max(pca, axis=0)
+            pca = (pca - a) / (b - a)
+            is_near = data.is_near
+            cells_to_color = np.arange(masks.max() + 1)[1:][is_near]
+
+        colors = np.array(colors)
+        colors[cells_to_color] = pca
+        ax.imshow(colors[np.moveaxis(masks, 0, 1)], aspect="auto")
         # ax = plt.gca()
     # else:
     #     ax = None
-    node_colors = ["#ff0000"] * len(positions)
+    node_colors = pca
+    # node_colors = ["#ffffff"] * len(positions)
     if hasattr(data, "center_index"):
-        node_colors[data.center_index] = "#00ff00"
-
+        index_of_center = (np.cumsum(is_near) - 1)[data.center_index]
+        node_colors[index_of_center] = [1., 1., 1.]
+        node_size = [0] * len(cells_to_color)
+        node_size[index_of_center] = 100
+    else:
+        node_size = 10
     networkx.drawing.nx_pylab.draw_networkx(
         g,
         pos=positions,
         edgelist=edges_to_plot,
-        node_size=10,
+        node_size=node_size,
+        # linewidths=linewidths,
         with_labels=False,
-        linewidths=0.5,
+        width=0.5,
         arrows=False,
         node_color=node_colors,
         edge_color=weights,
@@ -93,16 +112,33 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None):
         edge_vmax=np.max(weights),
         ax=ax,
     )
-
+    if ome_index is not None:
+        masks_copy = masks.copy()
+        take = np.array([False] * 10000)
+        take[cells_to_color] = True
+        content = take[masks_copy]
+        p0 = np.sum(content, axis=0)
+        p1 = np.sum(content, axis=1)
+        (w0,) = np.where(p0 > 0)
+        (w1,) = np.where(p1 > 0)
+        a0 = w0[0]
+        b0 = w0[-1] + 1
+        a1 = w1[0]
+        b1 = w1[-1] + 1
+        plt.xlim((a1, b1))
+        plt.ylim((a0, b0))
     if custom_ax is None:
         plt.show()
     # return ax
-
     # # -------------
     # plot_hist(data)
     # ##
+    debug = 'uuuuuu'
+
+# plot_single_cell_graph(cell_graph=ds, cell_index=999, plot_expression=True)
 
 
+##
 def plot_hist(data):
     x = data.edge_attr.numpy()
     plt.figure()
@@ -491,7 +527,7 @@ class CellGraph(InMemoryDataset):
         torch.save((data, slices), self.processed_paths[0])
 
     def compute_subgraph(self, cell_index):
-        ome_index, local_cell_index = self.get_ome_index_feom_cell_index(cell_index)
+        ome_index, local_cell_index = self.get_ome_index_from_cell_index(cell_index)
         data = self.graph_imc.graphs[ome_index].clone()
         # we could also remove this assertion...
         assert len(data.regions_centers) == data.num_nodes
@@ -554,13 +590,13 @@ class CellGraph(InMemoryDataset):
     #     return subgraph.data
 
 
-def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int):
+def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int, plot_expression: bool = False):
     data = cell_graph[cell_index]
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
-    plot_imc_graph(data, cell_graph.split, ome_index=ome_index)
+    plot_imc_graph(data, cell_graph.split, ome_index=ome_index, plot_expression=plot_expression)
 
 
-if m:
+if m and False:
     ds = CellGraph("validation", "gaussian")
     print(ds[0])
     plot_single_cell_graph(cell_graph=ds, cell_index=999)
@@ -584,6 +620,8 @@ class CellExpressionGraph(InMemoryDataset):
         self.graph_method = graph_method
         self.cell_graph = CellGraph(split=split, graph_method=graph_method)
         self.cell_ds = PerturbedCellDataset(split=split)
+        # needed from a plotting function, so I can call it also on this class
+        self.get_ome_index_from_cell_index = self.cell_graph.get_ome_index_from_cell_index
         assert len(self.cell_graph) == len(self.cell_ds)
 
     def __len__(self):
@@ -609,6 +647,8 @@ if m:
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
+    plot_single_cell_graph(cell_graph=ds, cell_index=999, plot_expression=True)
+    plot_single_cell_graph(cell_graph=ds, cell_index=100000, plot_expression=True)
 
 ##
 if m:
