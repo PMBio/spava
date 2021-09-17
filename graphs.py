@@ -12,6 +12,7 @@ import networkx
 import numpy as np
 import numpy.linalg
 import torch
+import torch_geometric
 from scipy.ndimage.morphology import binary_dilation
 from scipy.spatial import cKDTree
 from sklearn.neighbors import NearestNeighbors
@@ -423,8 +424,7 @@ class CellGraph(InMemoryDataset):
         self.ii = IndexInfo(split)
         self.begins = np.array(self.ii.filtered_begins)
         self.ends = np.array(self.ii.filtered_ends)
-        # self.cells_count = np.sum(self.ii.ok_size_cells)
-        self.cells_count = 1000
+        self.cells_count = np.sum(self.ii.ok_size_cells)
         super().__init__(self.root)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
@@ -455,7 +455,9 @@ class CellGraph(InMemoryDataset):
 
     def get_ome_index_from_cell_index(self, cell_index: int):
         i = self.begins.searchsorted(cell_index)
-        if self.begins[i] != cell_index:
+        if i == len(self.begins):
+            i -= 1
+        elif self.begins[i] != cell_index:
             assert self.begins[i] > cell_index
             i -= 1
         # print(f'cell_index = {cell_index} -> i = {i}')
@@ -489,7 +491,7 @@ class CellGraph(InMemoryDataset):
         torch.save((data, slices), self.processed_paths[0])
 
     def compute_subgraph(self, cell_index):
-        ome_index, local_cell_index = self.get_ome_index_from_cell_index(cell_index)
+        ome_index, local_cell_index = self.get_ome_index_feom_cell_index(cell_index)
         data = self.graph_imc.graphs[ome_index].clone()
         # we could also remove this assertion...
         assert len(data.regions_centers) == data.num_nodes
@@ -497,37 +499,49 @@ class CellGraph(InMemoryDataset):
         is_near = (
             np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
         )
-        to_keep = set(np.arange(data.num_nodes)[is_near].tolist())
-        edges_to_keep = []
-        for i, (a, b) in enumerate(data.edge_index.T.numpy()):
-            k = a in to_keep and b in to_keep
-            if k:
-                edges_to_keep.append(i)
-        edges_to_keep = np.array(edges_to_keep)
-        data.edge_index = data.edge_index[:, edges_to_keep]
-        data.edge_attr = data.edge_attr[edges_to_keep, :]
-        relabeler = np.cumsum(is_near)
-        # for debugging purposes, see the assert below
-        relabeler[np.logical_not(is_near)] = 0
-        relabeler -= 1
-        data.regions_centers = data.regions_centers[is_near]
-        data.edge_index = relabeler[data.edge_index]
-        # the min must be 0, not -1
-        assert data.edge_index.min() == 0
-        data.num_nodes = len(data.regions_centers)
-        data.edge_index = torch.tensor(data.edge_index)
-        data.regions_centers = torch.tensor(data.regions_centers)
-        data.center_index = relabeler[local_cell_index.item()]
-        # subgraph = Subgraph(
-        #     split=self.split,
-        #     data=data,
-        #     cell_index=cell_index,
-        #     ome_index=ome_index,
-        #     local_cell_index=local_cell_index,
-        #     relabeler=relabeler,
-        # )
-        # return subgraph
-        return data
+        nodes_to_keep = torch.arange(data.num_nodes, dtype=torch.long)[is_near]
+        sub_edge_index, sub_edge_attr = torch_geometric.utils.subgraph(
+            nodes_to_keep,
+            data.edge_index,
+            edge_attr=data.edge_attr,
+            relabel_nodes=True,
+        )
+        sub_data = Data(edge_index=sub_edge_index, edge_attr=sub_edge_attr, regions_centers=data.regions_centers[
+            is_near], center_index=local_cell_index, is_near=is_near)
+        sub_data.num_nodes = len(sub_data.regions_centers)
+        return sub_data
+        # to_keep = set(np.arange(data.num_nodes)[is_near].tolist())
+        # edges_to_keep = []
+        # for i, (a, b) in enumerate(data.edge_index.T.numpy()):
+        #     k = a in to_keep and b in to_keep
+        #     if k:
+        #         edges_to_keep.append(i)
+        # edges_to_keep = np.array(edges_to_keep)
+        # data.edge_index = data.edge_index[:, edges_to_keep]
+        # data.edge_attr = data.edge_attr[edges_to_keep, :]
+        # relabeler = np.cumsum(is_near)
+        # # for debugging purposes, see the assert below
+        # relabeler[np.logical_not(is_near)] = 0
+        # relabeler -= 1
+        # data.regions_centers = data.regions_centers[is_near]
+        # data.edge_index = relabeler[data.edge_index]
+        # # the min must be 0, not -1
+        # assert data.edge_index.min() == 0
+        # data.num_nodes = len(data.regions_centers)
+        # data.edge_index = torch.tensor(data.edge_index)
+        # data.regions_centers = torch.tensor(data.regions_centers)
+        # data.center_index = relabeler[local_cell_index.item()]
+        # data.is_near = is_near
+        # # subgraph = Subgraph(
+        # #     split=self.split,
+        # #     data=data,
+        # #     cell_index=cell_index,
+        # #     ome_index=ome_index,
+        # #     local_cell_index=local_cell_index,
+        # #     relabeler=relabeler,
+        # # )
+        # # return subgraph
+        # return data
 
     # def get(self, i):
     #     data = torch.load(os.path.join(self.root, "data_{}.pt".format(i)))
@@ -545,20 +559,21 @@ def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int):
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
     plot_imc_graph(data, cell_graph.split, ome_index=ome_index)
 
-ds = CellGraph('validation', 'gaussian')
-print(ds[0])
-import sys
-sys.exit(0)
-##
+
 if m:
     ds = CellGraph("validation", "gaussian")
-    a0, a1, a2, a3 = ds.begins[0], ds.begins[1] - 1, ds.begins[1], ds.begins[1] + 1
-    x0, x1, x2, x3 = ds[a0], ds[a1], ds[a2], ds[a3]
-    plot_single_cell_graph(cell_graph=ds, cell_index=a0)
-    plot_single_cell_graph(cell_graph=ds, cell_index=a1)
-    plot_single_cell_graph(cell_graph=ds, cell_index=a2)
-    plot_single_cell_graph(cell_graph=ds, cell_index=a3)
-    plot_single_cell_graph(cell_graph=ds, cell_index=22190)
+    print(ds[0])
+    plot_single_cell_graph(cell_graph=ds, cell_index=999)
+##
+# if m:
+# ds = CellGraph("validation", "gaussian")
+# a0, a1, a2, a3 = ds.begins[0], ds.begins[1] - 1, ds.begins[1], ds.begins[1] + 1
+# x0, x1, x2, x3 = ds[a0], ds[a1], ds[a2], ds[a3]
+# plot_single_cell_graph(cell_graph=ds, cell_index=a0)
+# plot_single_cell_graph(cell_graph=ds, cell_index=a1)
+# plot_single_cell_graph(cell_graph=ds, cell_index=a2)
+# plot_single_cell_graph(cell_graph=ds, cell_index=a3)
+# plot_single_cell_graph(cell_graph=ds, cell_index=22190)
 
 
 ##
@@ -572,13 +587,21 @@ class CellExpressionGraph(InMemoryDataset):
         assert len(self.cell_graph) == len(self.cell_ds)
 
     def __len__(self):
-        return len(self.cell_ds)
+        return len(self.cell_graph)
 
     def __getitem__(self, i):
         data = self.cell_graph[i]
-        expression, _, is_perturbed = self.cell_ds[i]
-        data.x = expression
-        data.is_perturbed = is_perturbed
+        l_expression = []
+        l_is_perturbed = []
+        indices = np.arange(len(data.is_near))[data.is_near]
+        for ii in indices:
+            expression, _, is_perturbed = self.cell_ds[ii]
+            l_expression.append(expression.reshape(1, -1))
+            l_is_perturbed.append(is_perturbed.reshape(1, -1))
+        expressions = np.concatenate(l_expression, axis=0)
+        are_perturbed = np.concatenate(l_is_perturbed, axis=0)
+        data.x = expressions
+        data.is_perturbed = are_perturbed
         return data
 
 
@@ -586,3 +609,8 @@ if m:
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
+
+##
+if m:
+    from torch_geometric.data import DataLoader as GeometricDataLoader
+    loader = GeometricDataLoader(ds, batch_size=32, shuffle=True)
