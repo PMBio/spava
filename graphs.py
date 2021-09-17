@@ -3,7 +3,7 @@ import math
 import os
 import random
 import time
-
+import dill
 import matplotlib
 import matplotlib.cm
 import matplotlib.colors
@@ -35,8 +35,7 @@ SUBGRAPH_RADIUS = 75
 m = __name__ == "__main__"
 
 
-def plot_imc_graph(
-        data, split: str = None, ome_index=None, custom_ax=None):
+def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None):
     # ##
     # data = load_graph('gaussian', 'validation', 0)
     # custom_ax = None
@@ -75,7 +74,7 @@ def plot_imc_graph(
     # else:
     #     ax = None
     node_colors = ["#ff0000"] * len(positions)
-    if hasattr(data, 'center_index'):
+    if hasattr(data, "center_index"):
         node_colors[data.center_index] = "#00ff00"
 
     networkx.drawing.nx_pylab.draw_networkx(
@@ -237,9 +236,9 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
                 with numpy.printoptions(threshold=numpy.inf):
                     open("a.txt", "w").write(
                         str(bbb[:50, :50])
-                            .replace("\n", "")
-                            .replace(" 0", " .")
-                            .replace("]", "]\n")
+                        .replace("\n", "")
+                        .replace(" 0", " .")
+                        .replace("]", "]\n")
                     )
                 print(neighbors_mask.astype(np.int32))
 
@@ -377,6 +376,42 @@ if m and False:
 from data2 import IndexInfo
 
 
+class Subgraph:
+    def __init__(self, split, data, cell_index, ome_index, local_cell_index, relabeler):
+        self.split = split
+        self.data = data
+        self.cell_index = cell_index
+        self.ome_index = ome_index
+        self.local_cell_index = local_cell_index
+        self.relabeler = relabeler
+
+    def dump(self):
+        f = os.path.join("subgraphs", f"{self.split}_{self.cell_index}.pickle")
+        d = {
+            "split": self.split,
+            "data": self.data,
+            "cell_index": self.cell_index,
+            "ome_index": self.ome_index,
+            "local_cell_index": self.local_cell_index,
+            "relabeler": self.relabeler,
+        }
+        dill.dump(d, open(f, "wb"))
+
+    @classmethod
+    def load(cls, split, cell_index):
+        f = os.path.join("subgraphs", f"{split}_{cell_index}.pickle")
+        d = dill.load(open(f, "rb"))
+        subgraph = Subgraph(
+            split=d["split"],
+            data=d["data"],
+            cell_index=d["cell_index"],
+            ome_index=d["ome_index"],
+            local_cell_index=d["local_cell_index"],
+            relabeler=d["relabeler"],
+        )
+        return subgraph
+
+
 class CellGraph(InMemoryDataset):
     def __init__(self, split: str, graph_method: str):
         super().__init__()
@@ -388,6 +423,27 @@ class CellGraph(InMemoryDataset):
         self.begins = np.array(self.ii.filtered_begins)
         self.ends = np.array(self.ii.filtered_ends)
         self.cells_count = np.sum(self.ii.ok_size_cells)
+
+        # if False:
+        if True:
+            f = file_path("subgraphs")
+            os.makedirs(f, exist_ok=True)
+            # i = 0
+            # while os.path.exists(file_path(f"subgraphs{i}")):
+            #     i += 1
+            # f = file_path(f"subgraphs{i}")
+            from multiprocessing import Pool
+
+            self.pbar = tqdm(total=self.cells_count)
+
+            with Pool(4) as p:
+                p.map(self._compute_and_save, list(range(self.cells_count)))
+            self.pbar.close()
+
+    def _compute_and_save(self, cell_index: int):
+        subgraph = self.compute_subgraph(cell_index=cell_index)
+        subgraph.dump()
+        self.pbar.update(1)
 
     def get_ome_index_from_cell_index(self, cell_index: int):
         i = self.begins.searchsorted(cell_index)
@@ -416,14 +472,14 @@ class CellGraph(InMemoryDataset):
     def __len__(self):
         return self.cells_count
 
-    def __getitem__(self, cell_index):
+    def compute_subgraph(self, cell_index):
         ome_index, local_cell_index = self.get_ome_index_from_cell_index(cell_index)
         data = self.graph_imc.graphs[ome_index].clone()
         # we could also remove this assertion...
         assert len(data.regions_centers) == data.num_nodes
         center = data.regions_centers[local_cell_index]
         is_near = (
-                np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
+            np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
         )
         to_keep = set(np.arange(data.num_nodes)[is_near].tolist())
         edges_to_keep = []
@@ -446,14 +502,25 @@ class CellGraph(InMemoryDataset):
         data.edge_index = torch.tensor(data.edge_index)
         data.regions_centers = torch.tensor(data.regions_centers)
         data.center_index = relabeler[local_cell_index.item()]
-        return data
+        subgraph = Subgraph(
+            split=self.split,
+            data=data,
+            cell_index=cell_index,
+            ome_index=ome_index,
+            local_cell_index=local_cell_index,
+            relabeler=relabeler,
+        )
+        return subgraph
+
+    def __getitem__(self, item):
+        subgraph = Subgraph.load(split=self.split, cell_index=item)
+        return subgraph.data
 
 
 def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int):
     data = cell_graph[cell_index]
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
-    plot_imc_graph(
-        data, cell_graph.split, ome_index=ome_index)
+    plot_imc_graph(data, cell_graph.split, ome_index=ome_index)
 
 
 ##
@@ -488,8 +555,8 @@ class CellExpressionGraph(InMemoryDataset):
         data.is_perturbed = is_perturbed
         return data
 
+
 if m:
-    ds = CellExpressionGraph(split='validation', graph_method='gaussian')
+    ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
-
