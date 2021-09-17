@@ -414,7 +414,8 @@ class Subgraph:
 
 class CellGraph(InMemoryDataset):
     def __init__(self, split: str, graph_method: str):
-        super().__init__()
+        self.root = file_path(f"subgraphs_{split}_{graph_method}")
+        os.makedirs(self.root, exist_ok=True)
         self.split = split
         validate_graph_method(graph_method)
         self.graph_method = graph_method
@@ -422,23 +423,30 @@ class CellGraph(InMemoryDataset):
         self.ii = IndexInfo(split)
         self.begins = np.array(self.ii.filtered_begins)
         self.ends = np.array(self.ii.filtered_ends)
-        self.cells_count = np.sum(self.ii.ok_size_cells)
+        # self.cells_count = np.sum(self.ii.ok_size_cells)
+        self.cells_count = 1000
+        super().__init__(self.root)
+        self.data, self.slices = torch.load(self.processed_paths[0])
 
-        # if False:
-        if True:
-            f = file_path("subgraphs")
-            os.makedirs(f, exist_ok=True)
-            # i = 0
-            # while os.path.exists(file_path(f"subgraphs{i}")):
-            #     i += 1
-            # f = file_path(f"subgraphs{i}")
-            from multiprocessing import Pool
+        # # if False:
+        # if True:
+        #     f = file_path("subgraphs")
+        #     os.makedirs(f, exist_ok=True)
+        #     # i = 0
+        #     # while os.path.exists(file_path(f"subgraphs{i}")):
+        #     #     i += 1
+        #     # f = file_path(f"subgraphs{i}")
+        #     from multiprocessing import Pool
+        #
+        #     self.pbar = tqdm(total=self.cells_count)
+        #
+        #     with Pool(4) as p:
+        #         p.map(self._compute_and_save, list(range(self.cells_count)))
+        #     self.pbar.close()
 
-            self.pbar = tqdm(total=self.cells_count)
-
-            with Pool(4) as p:
-                p.map(self._compute_and_save, list(range(self.cells_count)))
-            self.pbar.close()
+    @property
+    def processed_file_names(self):
+        return ["subgraphs.pt"]
 
     def _compute_and_save(self, cell_index: int):
         subgraph = self.compute_subgraph(cell_index=cell_index)
@@ -469,8 +477,16 @@ class CellGraph(InMemoryDataset):
         local_cell_index = cell_index - self.begins[i]
         return i, local_cell_index
 
-    def __len__(self):
+    def len(self):
         return self.cells_count
+
+    def process(self):
+        data_list = []
+        for cell_index in tqdm(range(self.cells_count)):
+            data = self.compute_subgraph(cell_index)
+            data_list.append(data)
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[0])
 
     def compute_subgraph(self, cell_index):
         ome_index, local_cell_index = self.get_ome_index_from_cell_index(cell_index)
@@ -502,19 +518,26 @@ class CellGraph(InMemoryDataset):
         data.edge_index = torch.tensor(data.edge_index)
         data.regions_centers = torch.tensor(data.regions_centers)
         data.center_index = relabeler[local_cell_index.item()]
-        subgraph = Subgraph(
-            split=self.split,
-            data=data,
-            cell_index=cell_index,
-            ome_index=ome_index,
-            local_cell_index=local_cell_index,
-            relabeler=relabeler,
-        )
-        return subgraph
+        # subgraph = Subgraph(
+        #     split=self.split,
+        #     data=data,
+        #     cell_index=cell_index,
+        #     ome_index=ome_index,
+        #     local_cell_index=local_cell_index,
+        #     relabeler=relabeler,
+        # )
+        # return subgraph
+        return data
 
-    def __getitem__(self, item):
-        subgraph = Subgraph.load(split=self.split, cell_index=item)
-        return subgraph.data
+    # def get(self, i):
+    #     data = torch.load(os.path.join(self.root, "data_{}.pt".format(i)))
+    #     return data
+
+    # def __getitem__(self, item):
+    #     raise NotImplementedError()
+
+    #     subgraph = Subgraph.load(split=self.split, cell_index=item)
+    #     return subgraph.data
 
 
 def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int):
@@ -522,7 +545,10 @@ def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int):
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
     plot_imc_graph(data, cell_graph.split, ome_index=ome_index)
 
-
+ds = CellGraph('validation', 'gaussian')
+print(ds[0])
+import sys
+sys.exit(0)
 ##
 if m:
     ds = CellGraph("validation", "gaussian")
