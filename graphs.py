@@ -133,7 +133,6 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot
     # # -------------
     # plot_hist(data)
     # ##
-    debug = 'uuuuuu'
 
 # plot_single_cell_graph(cell_graph=ds, cell_index=999, plot_expression=True)
 
@@ -638,12 +637,13 @@ class CellExpressionGraph(InMemoryDataset):
             l_is_perturbed.append(is_perturbed.reshape(1, -1))
         expressions = np.concatenate(l_expression, axis=0)
         are_perturbed = np.concatenate(l_is_perturbed, axis=0)
-        data.x = expressions
+        data.x = torch.from_numpy(expressions)
         data.is_perturbed = are_perturbed
         return data
 
 
 if m:
+    CellExpressionGraph(split="train", graph_method="gaussian")
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
