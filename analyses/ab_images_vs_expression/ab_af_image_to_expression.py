@@ -34,12 +34,8 @@ if m:
 
     # decent models:
     # 49 non perturbed, 63 perturbed
-    # 94 non perturbed, <does not train> perturbed
-    # 75 non perturbed, <does not train> perturbed
-    # 87 non perturbed, 99 perturbed: bad embedding
-    # 78 non perturbed
     f_original = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_78"
+        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_116"
         "/checkpoints/last.ckpt"
     )
     model_original = ImageToExpressionVAE.load_from_checkpoint(f_original)
@@ -49,7 +45,7 @@ if m:
     )
 
     f_perturbed = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_99"
+        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_151"
         "/checkpoints/last.ckpt"
     )
     model_perturbed = ImageToExpressionVAE.load_from_checkpoint(f_perturbed)
@@ -97,7 +93,6 @@ scanpy_compute(b)
 
 ##
 sc.pl.umap(b, color='louvain')
-
 ##
 if m:
     list_of_z_perturbed = []
@@ -148,3 +143,8 @@ if m:
                split='validation')
     p.plot_reconstruction()
     p.plot_scores()
+
+    p_raw = p.transform_to(Space.raw_sum)
+    p_raw.plot_reconstruction()
+    p_raw
+    plot_scores()

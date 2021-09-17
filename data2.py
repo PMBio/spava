@@ -1135,8 +1135,8 @@ class PerturbedRGBCells(Dataset):
     def __getitem__(self, i):
         expression, x, mask = self.rgb_cells[i]
         entries_to_corrupt = self.corrupted_entries[i, :]
-        expression[entries_to_corrupt] = 0.
-        x[entries_to_corrupt] = 0.
+        expression[entries_to_corrupt] = 0.0
+        x[entries_to_corrupt] = 0.0
         return expression, x, mask, entries_to_corrupt
 
 

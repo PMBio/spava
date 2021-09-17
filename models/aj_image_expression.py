@@ -92,6 +92,8 @@ class VAE(pl.LightningModule):
         self.sigmoid = nn.Sigmoid()
 
         self.log_c = nn.Parameter(torch.Tensor([self.optuna_parameters["log_c"]] * 39))
+        # TODO: remove before rerunning the next hyperparameter search
+        self.logit_d = nn.Parameter(torch.Tensor([0.] * 39))
 
     def encoder(self, x):
         y = self.maxpool(self.relu(self.bn0(self.conv0(x))))
@@ -374,8 +376,8 @@ if __name__ == "__main__":
         load_if_exists=True,
         study_name=study_name,
     )
-    # TRAIN_PERTURBED = True
-    TRAIN_PERTURBED = False
+    TRAIN_PERTURBED = True
+    # TRAIN_PERTURBED = False
     if not TRAIN_PERTURBED:
         HOURS = 60 * 60
         study.optimize(objective, n_trials=150, timeout=6 * HOURS)
@@ -388,8 +390,9 @@ if __name__ == "__main__":
             print("    {}: {}".format(key, value))
     else:
         ppp.PERTURB = True
-        trial = study.trials[28]  # 36, 20, 38, 34
-        # trial = study.best_trial
+        # trial = study.trials[28]  # 36, 20, 38, 34
+        trial = study.best_trial
+        print(f'trial.number = {trial.number}, trial.user_attrs = {trial.user_attrs}')
         objective(trial)
 
 
