@@ -1,9 +1,8 @@
-import colorsys
 import math
 import os
 import random
 import time
-import dill
+import colorsys
 import matplotlib
 import matplotlib.cm
 import matplotlib.colors
@@ -31,17 +30,23 @@ GRAPH_CONTACT_PIXELS = 4
 GRAPH_GAUSSIAN_R_THRESHOLD = 0.1
 GRAPH_GAUSSIAN_L = 400
 GRAPH_KNN_K = 10
-SUBGRAPH_RADIUS = 75
+SUBGRAPH_RADIUS = 50
+
+COMPUTE_GRAPH_FILES = False
+COMPUTE_SUBGRAPH_DATASET = False
+COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = False
+PLOT = False
+TEST = False
 
 m = __name__ == "__main__"
 
 
 def plot_imc_graph(
-    data,
-    split: str = None,
-    ome_index=None,
-    custom_ax=None,
-    plot_expression: bool = False,
+        data,
+        split: str = None,
+        ome_index=None,
+        custom_ax=None,
+        plot_expression: bool = False,
 ):
     ##
     # ##
@@ -64,18 +69,24 @@ def plot_imc_graph(
     ax.set_facecolor((0.0, 0.0, 0.0))
     # ax.set_facecolor((1.0, 0.47, 0.42))
     greys = matplotlib.cm.get_cmap("Greys_r")
+    node_colors = 'black'
 
     if ome_index is not None:
         assert split is not None
         masks_ds = FilteredMasksRelabeled(split)
-        colors = [
-            [r, r, r]
-            # colorsys.hsv_to_rgb(5 / 360, 58 / 100, (60 + random.random() * 40) / 100)
-            for _ in range(10000)
-            for r in [20 * random.random() / 100]
-        ]
-        # colors[0] = colorsys.hsv_to_rgb(5 / 360, 58 / 100, 63 / 100)
-        colors[0] = (0.3, 0.3, 0.3)
+        if plot_expression:
+            colors = [
+                [r, r, r]
+                for _ in range(10000)
+                for r in [20 * random.random() / 100]
+            ]
+            colors[0] = (0.3, 0.3, 0.3)
+        else:
+            colors = [
+                colorsys.hsv_to_rgb(5 / 360, 58 / 100, (60 + random.random() * 40) / 100)
+                for _ in range(10000)
+            ]
+            colors[0] = colorsys.hsv_to_rgb(5 / 360, 58 / 100, 63 / 100)
 
         masks = masks_ds[ome_index]
         if plot_expression:
@@ -91,14 +102,15 @@ def plot_imc_graph(
             cells_to_color = np.arange(masks.max() + 1)[1:][is_near]
 
         colors = np.array(colors)
-        colors[cells_to_color] = pca
+        if plot_expression:
+            colors[cells_to_color] = pca
+            node_colors = pca
         ax.imshow(colors[np.moveaxis(masks, 0, 1)], aspect="auto")
         # ax = plt.gca()
     # else:
     #     ax = None
-    node_colors = pca
     # node_colors = ["#ffffff"] * len(positions)
-    if hasattr(data, "center_index"):
+    if hasattr(data, "center_index") and plot_expression:
         node_colors[data.center_index] = [1.0, 1.0, 1.0]
         node_size = [0] * len(cells_to_color)
         node_size[data.center_index] = 100
@@ -120,7 +132,7 @@ def plot_imc_graph(
         edge_vmax=np.max(weights),
         ax=ax,
     )
-    if ome_index is not None:
+    if ome_index is not None and plot_expression:
         masks_copy = masks.copy()
         take = np.array([False] * 10000)
         take[cells_to_color] = True
@@ -281,9 +293,9 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
                 with numpy.printoptions(threshold=numpy.inf):
                     open("a.txt", "w").write(
                         str(bbb[:50, :50])
-                        .replace("\n", "")
-                        .replace(" 0", " .")
-                        .replace("]", "]\n")
+                            .replace("\n", "")
+                            .replace(" 0", " .")
+                            .replace("]", "]\n")
                     )
                 print(neighbors_mask.astype(np.int32))
 
@@ -355,7 +367,7 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
     edge_attr = torch.tensor(weights, dtype=torch.float).reshape((-1, 1))
 
     data = Data(
-        edge_index=edge_index,
+        edge_index=edge_index.long(),
         edge_attr=edge_attr,
         regions_centers=regions_centers,
         num_nodes=len(regions_centers),
@@ -397,9 +409,9 @@ def plot_single_graph(graph_method, split, ome_index):
 
 
 ##
-if m and False and False:
+if m and COMPUTE_GRAPH_FILES:  ## and False and False:
     graph_method = "gaussian"
-    for split in tqdm(["validation", "train", "test"], desc="split"):
+    for split in tqdm(["validation", "train"], desc="split"):  #, "test"
         n = len(FilteredMasksRelabeled(split=split))
         for ome_index in tqdm(range(n), desc="making graphs"):
             compute_graphs(graph_method, split, ome_index)
@@ -407,7 +419,7 @@ if m and False and False:
         # break
 
 ##
-if m and False:
+if m and PLOT:
     split = "validation"
     graph_method = "gaussian"
     ds = GraphIMC(split, graph_method)
@@ -419,42 +431,6 @@ if m and False:
 ##
 
 from data2 import IndexInfo
-
-
-class Subgraph:
-    def __init__(self, split, data, cell_index, ome_index, local_cell_index, relabeler):
-        self.split = split
-        self.data = data
-        self.cell_index = cell_index
-        self.ome_index = ome_index
-        self.local_cell_index = local_cell_index
-        self.relabeler = relabeler
-
-    def dump(self):
-        f = os.path.join("subgraphs", f"{self.split}_{self.cell_index}.pickle")
-        d = {
-            "split": self.split,
-            "data": self.data,
-            "cell_index": self.cell_index,
-            "ome_index": self.ome_index,
-            "local_cell_index": self.local_cell_index,
-            "relabeler": self.relabeler,
-        }
-        dill.dump(d, open(f, "wb"))
-
-    @classmethod
-    def load(cls, split, cell_index):
-        f = os.path.join("subgraphs", f"{split}_{cell_index}.pickle")
-        d = dill.load(open(f, "rb"))
-        subgraph = Subgraph(
-            split=d["split"],
-            data=d["data"],
-            cell_index=d["cell_index"],
-            ome_index=d["ome_index"],
-            local_cell_index=d["local_cell_index"],
-            relabeler=d["relabeler"],
-        )
-        return subgraph
 
 
 class CellGraph(InMemoryDataset):
@@ -525,7 +501,7 @@ class CellGraph(InMemoryDataset):
         assert len(data.regions_centers) == data.num_nodes
         center = data.regions_centers[local_cell_index]
         is_near = (
-            np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
+                np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
         )
         nodes_to_keep = torch.arange(data.num_nodes, dtype=torch.long)[is_near]
         sub_edge_index, sub_edge_attr = torch_geometric.utils.subgraph(
@@ -547,7 +523,7 @@ class CellGraph(InMemoryDataset):
 
 
 def plot_single_cell_graph(
-    cell_graph: CellGraph, cell_index: int, plot_expression: bool = False
+        cell_graph: CellGraph, cell_index: int, plot_expression: bool = False
 ):
     data = cell_graph[cell_index]
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
@@ -555,13 +531,13 @@ def plot_single_cell_graph(
         data, cell_graph.split, ome_index=ome_index, plot_expression=plot_expression
     )
 
-if m and False:
+
+if m and COMPUTE_SUBGRAPH_DATASET:
     CellGraph(split='validation', graph_method='gaussian')
     CellGraph(split='train', graph_method='gaussian')
     # CellGraph(split='test', graph_method='gaussian')
 
-
-if m and False:
+if m and PLOT:
     ds = CellGraph("validation", "gaussian")
     print(ds[0])
     plot_single_cell_graph(cell_graph=ds, cell_index=999)
@@ -634,7 +610,8 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         data.is_perturbed = are_perturbed
         return data
 
-if m and False:
+
+if m and PLOT:
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
@@ -678,14 +655,15 @@ class CellExpressionGraphOptimized(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
+
 ##
-if m and False:
+if m and COMPUTE_OPTIMIZED_SUBGRAPH_DATASET:
     CellExpressionGraphOptimized('validation', 'gaussian')
     CellExpressionGraphOptimized('train', 'gaussian')
     # CellExpressionGraphOptimized('test', 'gaussian')
 
 ##
-if m and False:
+if m and TEST:
     ds0 = CellGraph('validation', 'gaussian')
     ds1 = CellExpressionGraphOptimized('validation', 'gaussian')
     for i in tqdm(range(500)):
@@ -693,9 +671,18 @@ if m and False:
     for i in tqdm(range(500)):
         y = ds1[i]
 
-
 ##
-if m and False:
+if m and TEST:
     from torch_geometric.data import DataLoader as GeometricDataLoader
 
-    loader = GeometricDataLoader(ds, batch_size=32, shuffle=True)
+    ds = CellExpressionGraphOptimized('train', 'gaussian')
+    ##
+    loader = GeometricDataLoader(
+        ds,
+        batch_size=32,
+        num_workers=16,
+        pin_memory=True,
+        shuffle=True,
+    )
+    x = loader.__iter__().__next__()
+    print(x)

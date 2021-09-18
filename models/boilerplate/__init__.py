@@ -26,6 +26,7 @@ def training_boilerplate(
     log_every_n_steps: int,
     val_check_interval: int,
     model_name: str,
+    gpus: int = 1,
 ):
     logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name=model_name)
     print(f"logging in {logger.experiment.log_dir}")
@@ -47,7 +48,7 @@ def training_boilerplate(
         check_finite=True,
     )
     trainer = pl.Trainer(
-        gpus=1,
+        gpus=gpus,
         max_epochs=max_epochs,
         callbacks=[
             checkpoint_callback,
