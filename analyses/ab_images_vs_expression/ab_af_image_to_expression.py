@@ -30,25 +30,46 @@ if m:
 
 ##
 if m:
+    # MODEL = 'conv_encoder'
+    MODEL = "resnet_encoder"
+    assert MODEL in ["conv_encoder", "resnet_encoder"]
     from models.aj_image_expression import VAE as ImageToExpressionVAE
+    from models.ak_resnet_expression import ResNetToExpression
 
-    # decent models:
+    # decent models (convvae):
     # 49 non perturbed, 63 perturbed
+    # best (convvae):
+    # 116 non perturbed, 151 perturbed
+    # best (resnet):
+    # 154 non perturbed, 162 perturbed
+    if MODEL == "conv_encoder":
+        model_index_non_perturbed = 116
+        model_index_perturbed = 151
+        model = ImageToExpressionVAE
+    elif MODEL == "resnet_encoder":
+        model_index_non_perturbed = 154
+        model_index_perturbed = 162
+        model = ResNetToExpression
+    else:
+        raise RuntimeError()
+
     f_original = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_116"
+        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_"
+        f"{model_index_non_perturbed}"
         "/checkpoints/last.ckpt"
     )
-    model_original = ImageToExpressionVAE.load_from_checkpoint(f_original)
+    model_original = model.load_from_checkpoint(f_original)
     model_original.cuda()
     loader_original = DataLoader(
         ds_original, batch_size=1024, num_workers=8, pin_memory=True
     )
 
     f_perturbed = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_151"
+        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/image_to_expression/version_"
+        f"{model_index_perturbed}"
         "/checkpoints/last.ckpt"
     )
-    model_perturbed = ImageToExpressionVAE.load_from_checkpoint(f_perturbed)
+    model_perturbed = model.load_from_checkpoint(f_perturbed)
     model_perturbed.cuda()
     loader_perturbed = DataLoader(
         ds_perturbed, batch_size=1024, num_workers=8, pin_memory=True
@@ -83,6 +104,7 @@ sc.tl.pca(a)
 sc.pl.pca(a)
 ##
 from utils import reproducible_random_choice
+
 random_indices = reproducible_random_choice(len(a), 10000)
 
 ##
@@ -92,7 +114,9 @@ b = a[random_indices]
 scanpy_compute(b)
 
 ##
-sc.pl.umap(b, color='louvain')
+sc.pl.umap(b, color="louvain")
+##
+# until_here_because_the_perturbed_is_not_trained
 ##
 if m:
     list_of_z_perturbed = []
@@ -117,34 +141,35 @@ if m:
 ##
 if m:
     l = []
-    for data in tqdm(loader_original, desc='merging expression'):
+    for data in tqdm(loader_original, desc="merging expression"):
         expression, _, _, _ = data
         l.append(expression)
     expressions = torch.cat(l, dim=0).numpy()
 
     l = []
-    for data in tqdm(loader_perturbed, desc='merging perturbed entries'):
+    for data in tqdm(loader_perturbed, desc="merging perturbed entries"):
         _, _, _, is_perturbed = data
         l.append(is_perturbed)
     are_perturbed = torch.cat(l, dim=0).numpy()
 
 ##
 h = np.sum(np.concatenate(np.where(are_perturbed == 1)))
-print('corrupted entries hash:', h)
+print("corrupted entries hash:", h)
 
 
 ##
 if m:
-    p = Prediction(original=expressions,
-               corrupted_entries=are_perturbed,
-               predictions_from_perturbed=reconstructed,
-               space=Space.scaled_mean,
-               name='image to expression',
-               split='validation')
+    p = Prediction(
+        original=expressions,
+        corrupted_entries=are_perturbed,
+        predictions_from_perturbed=reconstructed,
+        space=Space.scaled_mean,
+        name=f"{MODEL} to expression",
+        split="validation",
+    )
     p.plot_reconstruction()
     p.plot_scores()
 
     p_raw = p.transform_to(Space.raw_sum)
     p_raw.plot_reconstruction()
-    p_raw
-    plot_scores()
+    p_raw.plot_scores()

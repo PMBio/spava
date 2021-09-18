@@ -34,7 +34,15 @@ GRAPH_KNN_K = 10
 SUBGRAPH_RADIUS = 75
 
 m = __name__ == "__main__"
-def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot_expression: bool = False):
+
+
+def plot_imc_graph(
+    data,
+    split: str = None,
+    ome_index=None,
+    custom_ax=None,
+    plot_expression: bool = False,
+):
     ##
     # ##
     # data = load_graph('gaussian', 'validation', 0)
@@ -53,7 +61,7 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot
         ax = plt.gca()
     else:
         ax = custom_ax
-    ax.set_facecolor((0., 0., 0.))
+    ax.set_facecolor((0.0, 0.0, 0.0))
     # ax.set_facecolor((1.0, 0.47, 0.42))
     greys = matplotlib.cm.get_cmap("Greys_r")
 
@@ -73,6 +81,7 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot
         if plot_expression:
             x = data.x
             from sklearn.decomposition import PCA
+
             reducer = PCA(3)
             pca = reducer.fit_transform(x)
             a = np.min(pca, axis=0)
@@ -90,10 +99,9 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot
     node_colors = pca
     # node_colors = ["#ffffff"] * len(positions)
     if hasattr(data, "center_index"):
-        index_of_center = (np.cumsum(is_near) - 1)[data.center_index]
-        node_colors[index_of_center] = [1., 1., 1.]
+        node_colors[data.center_index] = [1.0, 1.0, 1.0]
         node_size = [0] * len(cells_to_color)
-        node_size[index_of_center] = 100
+        node_size[data.center_index] = 100
     else:
         node_size = 10
     networkx.drawing.nx_pylab.draw_networkx(
@@ -133,6 +141,7 @@ def plot_imc_graph(data, split: str = None, ome_index=None, custom_ax=None, plot
     # # -------------
     # plot_hist(data)
     # ##
+
 
 # plot_single_cell_graph(cell_graph=ds, cell_index=999, plot_expression=True)
 
@@ -463,22 +472,6 @@ class CellGraph(InMemoryDataset):
         super().__init__(self.root)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
-        # # if False:
-        # if True:
-        #     f = file_path("subgraphs")
-        #     os.makedirs(f, exist_ok=True)
-        #     # i = 0
-        #     # while os.path.exists(file_path(f"subgraphs{i}")):
-        #     #     i += 1
-        #     # f = file_path(f"subgraphs{i}")
-        #     from multiprocessing import Pool
-        #
-        #     self.pbar = tqdm(total=self.cells_count)
-        #
-        #     with Pool(4) as p:
-        #         p.map(self._compute_and_save, list(range(self.cells_count)))
-        #     self.pbar.close()
-
     @property
     def processed_file_names(self):
         return ["subgraphs.pt"]
@@ -541,64 +534,40 @@ class CellGraph(InMemoryDataset):
             edge_attr=data.edge_attr,
             relabel_nodes=True,
         )
-        sub_data = Data(edge_index=sub_edge_index, edge_attr=sub_edge_attr, regions_centers=data.regions_centers[
-            is_near], center_index=local_cell_index, is_near=is_near)
+        center_index = (np.cumsum(is_near) - 1)[local_cell_index]
+        sub_data = Data(
+            edge_index=sub_edge_index,
+            edge_attr=sub_edge_attr,
+            regions_centers=data.regions_centers[is_near],
+            center_index=center_index,
+            is_near=is_near,
+        )
         sub_data.num_nodes = len(sub_data.regions_centers)
         return sub_data
-        # to_keep = set(np.arange(data.num_nodes)[is_near].tolist())
-        # edges_to_keep = []
-        # for i, (a, b) in enumerate(data.edge_index.T.numpy()):
-        #     k = a in to_keep and b in to_keep
-        #     if k:
-        #         edges_to_keep.append(i)
-        # edges_to_keep = np.array(edges_to_keep)
-        # data.edge_index = data.edge_index[:, edges_to_keep]
-        # data.edge_attr = data.edge_attr[edges_to_keep, :]
-        # relabeler = np.cumsum(is_near)
-        # # for debugging purposes, see the assert below
-        # relabeler[np.logical_not(is_near)] = 0
-        # relabeler -= 1
-        # data.regions_centers = data.regions_centers[is_near]
-        # data.edge_index = relabeler[data.edge_index]
-        # # the min must be 0, not -1
-        # assert data.edge_index.min() == 0
-        # data.num_nodes = len(data.regions_centers)
-        # data.edge_index = torch.tensor(data.edge_index)
-        # data.regions_centers = torch.tensor(data.regions_centers)
-        # data.center_index = relabeler[local_cell_index.item()]
-        # data.is_near = is_near
-        # # subgraph = Subgraph(
-        # #     split=self.split,
-        # #     data=data,
-        # #     cell_index=cell_index,
-        # #     ome_index=ome_index,
-        # #     local_cell_index=local_cell_index,
-        # #     relabeler=relabeler,
-        # # )
-        # # return subgraph
-        # return data
-
-    # def get(self, i):
-    #     data = torch.load(os.path.join(self.root, "data_{}.pt".format(i)))
-    #     return data
-
-    # def __getitem__(self, item):
-    #     raise NotImplementedError()
-
-    #     subgraph = Subgraph.load(split=self.split, cell_index=item)
-    #     return subgraph.data
 
 
-def plot_single_cell_graph(cell_graph: CellGraph, cell_index: int, plot_expression: bool = False):
+def plot_single_cell_graph(
+    cell_graph: CellGraph, cell_index: int, plot_expression: bool = False
+):
     data = cell_graph[cell_index]
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
-    plot_imc_graph(data, cell_graph.split, ome_index=ome_index, plot_expression=plot_expression)
+    plot_imc_graph(
+        data, cell_graph.split, ome_index=ome_index, plot_expression=plot_expression
+    )
+
+if m and False:
+    CellGraph(split='validation', graph_method='gaussian')
+    CellGraph(split='train', graph_method='gaussian')
+    # CellGraph(split='test', graph_method='gaussian')
 
 
 if m and False:
     ds = CellGraph("validation", "gaussian")
     print(ds[0])
     plot_single_cell_graph(cell_graph=ds, cell_index=999)
+
+# import sys
+# sys.exit(0)
 ##
 # if m:
 # ds = CellGraph("validation", "gaussian")
@@ -612,7 +581,10 @@ if m and False:
 
 
 ##
-class CellExpressionGraph(InMemoryDataset):
+import torch.utils.data
+
+
+class CellExpressionGraph(torch.utils.data.Dataset):
     def __init__(self, split: str, graph_method: str):
         super().__init__()
         self.split = split
@@ -620,8 +592,24 @@ class CellExpressionGraph(InMemoryDataset):
         self.cell_graph = CellGraph(split=split, graph_method=graph_method)
         self.cell_ds = PerturbedCellDataset(split=split)
         # needed from a plotting function, so I can call it also on this class
-        self.get_ome_index_from_cell_index = self.cell_graph.get_ome_index_from_cell_index
+        self.get_ome_index_from_cell_index = (
+            self.cell_graph.get_ome_index_from_cell_index
+        )
         assert len(self.cell_graph) == len(self.cell_ds)
+        # to speed up __getitem__
+        self.merged_expressions = None
+        self.merged_is_perturbed = None
+
+    def merge(self):
+        l0 = []
+        l1 = []
+        for i in tqdm(range(len(self.cell_ds)), desc='merging data'):
+            x = self.cell_ds[i]
+            expression, _, is_perturbed = x
+            l0.append(expression.reshape(1, -1))
+            l1.append(is_perturbed.reshape(1, -1))
+        self.merged_expressions = torch.from_numpy(np.concatenate(l0, axis=0))
+        self.merged_is_perturbed = torch.from_numpy(np.concatenate(l1, axis=0))
 
     def __len__(self):
         return len(self.cell_graph)
@@ -632,7 +620,12 @@ class CellExpressionGraph(InMemoryDataset):
         l_is_perturbed = []
         indices = np.arange(len(data.is_near))[data.is_near]
         for ii in indices:
-            expression, _, is_perturbed = self.cell_ds[ii]
+            # we have that self.merged_expressions is None exactly when self.merged_is_perturbed is
+            if self.merged_expressions is None:
+                expression, _, is_perturbed = self.cell_ds[ii]
+            else:
+                expression = self.merged_expressions[ii, :]
+                is_perturbed = self.merged_is_perturbed[ii, :]
             l_expression.append(expression.reshape(1, -1))
             l_is_perturbed.append(is_perturbed.reshape(1, -1))
         expressions = np.concatenate(l_expression, axis=0)
@@ -641,9 +634,7 @@ class CellExpressionGraph(InMemoryDataset):
         data.is_perturbed = are_perturbed
         return data
 
-
-if m:
-    CellExpressionGraph(split="train", graph_method="gaussian")
+if m and False:
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
     x = ds[0]
     print(x.x.shape, x.num_nodes)
@@ -651,6 +642,60 @@ if m:
     plot_single_cell_graph(cell_graph=ds, cell_index=100000, plot_expression=True)
 
 ##
-if m:
+import torch.utils.data
+
+
+class CellExpressionGraphOptimized(InMemoryDataset):
+    def __init__(self, split: str, graph_method: str):
+        self.root = file_path(f"subgraphs_expression_{split}_{graph_method}")
+        os.makedirs(self.root, exist_ok=True)
+        self.split = split
+        validate_graph_method(graph_method)
+        self.graph_method = graph_method
+        self.cell_expression_graph = CellExpressionGraph(split, graph_method)
+        super().__init__(self.root)
+        self.data, self.slices = torch.load(self.processed_paths[0])
+
+    @property
+    def processed_file_names(self):
+        return ["subgraphs.pt"]
+
+    def len(self):
+        return self.cell_expression_graph.cell_graph.cells_count
+
+    def process(self):
+        data_list = []
+        self.cell_expression_graph.merge()
+        for cell_index in tqdm(range(len(self.cell_expression_graph))):
+            data = self.cell_expression_graph[cell_index]
+            data.is_center = torch.zeros(len(data.x), dtype=torch.float)
+            data.is_center[data.center_index] = 1.
+            del data.center_index
+            del data.is_near
+            del data.regions_centers
+            data.is_perturbed = torch.from_numpy(data.is_perturbed)
+            data_list.append(data)
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[0])
+
+##
+if m and False:
+    CellExpressionGraphOptimized('validation', 'gaussian')
+    CellExpressionGraphOptimized('train', 'gaussian')
+    # CellExpressionGraphOptimized('test', 'gaussian')
+
+##
+if m and False:
+    ds0 = CellGraph('validation', 'gaussian')
+    ds1 = CellExpressionGraphOptimized('validation', 'gaussian')
+    for i in tqdm(range(500)):
+        x = ds0[i]
+    for i in tqdm(range(500)):
+        y = ds1[i]
+
+
+##
+if m and False:
     from torch_geometric.data import DataLoader as GeometricDataLoader
+
     loader = GeometricDataLoader(ds, batch_size=32, shuffle=True)

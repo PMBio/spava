@@ -177,10 +177,10 @@ class ResNetToExpression(pl.LightningModule):
             # decoded
             a = self.decoder(z)
             if (
-                    torch.isnan(a).any()
-                    or torch.isnan(mu).any()
-                    or torch.isnan(std).any()
-                    or torch.isnan(z).any()
+                torch.isnan(a).any()
+                or torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 self.trainer.should_stop = True
@@ -243,9 +243,9 @@ class ResNetToExpression(pl.LightningModule):
 
 
 def get_loaders(
-        perturb: bool,
-        shuffle_train=False,
-        val_subset=False,
+    perturb: bool,
+    shuffle_train=False,
+    val_subset=False,
 ):
     train_ds = PerturbedRGBCells("train", augment=True, aggressive_rotation=True)
     train_ds_validation = PerturbedRGBCells("train")
@@ -362,11 +362,11 @@ if __name__ == "__main__":
         load_if_exists=True,
         study_name=study_name,
     )
-    # TRAIN_PERTURBED = True
-    TRAIN_PERTURBED = False
+    TRAIN_PERTURBED = True
+    # TRAIN_PERTURBED = False
     if not TRAIN_PERTURBED:
         HOURS = 60 * 60
-        study.optimize(objective, n_trials=100, timeout=6 * HOURS)
+        study.optimize(objective, n_trials=100, timeout=8 * HOURS)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
@@ -377,4 +377,14 @@ if __name__ == "__main__":
     else:
         ppp.PERTURB = True
         trial = study.best_trial
+        print(
+            f"(best) trial.number = {trial.number}, (best) trial._user_attrs = {trial._user_attrs}"
+        )
+        # import pandas as pd
+        # pd.set_option('expand_frame_repr', False)
+        # df = study.trials_dataframe()
+        # print(df.sort_values(by='value'))
         objective(trial)
+
+# best trial: 0 (optuna), 109 (tensorboard)
+# corresponding perturbed: 152 (tensorboard)
