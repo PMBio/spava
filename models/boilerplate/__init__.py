@@ -44,7 +44,7 @@ def training_boilerplate(
         min_delta=0.0001,
         patience=2,
         verbose=True,
-        mode="max",
+        mode="min",
         check_finite=True,
     )
     trainer = pl.Trainer(

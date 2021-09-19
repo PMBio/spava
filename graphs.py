@@ -31,12 +31,15 @@ GRAPH_CONTACT_PIXELS = 4
 GRAPH_GAUSSIAN_R_THRESHOLD = 0.1
 GRAPH_GAUSSIAN_L = 400
 GRAPH_KNN_K = 10
+GRAPH_KNN_MAX_DISTANCE = 300
+GRAPH_KNN_SUBGRAPH_K = 5
 SUBGRAPH_RADIUS = 50
 
 COMPUTE_GRAPH_FILES = False
-COMPUTE_SUBGRAPH_DATASET = False
-COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = True
-COMPUTE_PERTURBED_DATASET = True
+COMPUTE_SUBGRAPH_DATASET = True
+COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = False
+COMPUTE_PERTURBED_DATASET = False
+COMPUTE_PERTURBED_CELLS_DATASET = False
 PLOT = False
 TEST = False
 
@@ -44,11 +47,11 @@ m = __name__ == "__main__"
 
 
 def plot_imc_graph(
-        data,
-        split: str = None,
-        ome_index=None,
-        custom_ax=None,
-        plot_expression: bool = False,
+    data,
+    split: str = None,
+    ome_index=None,
+    custom_ax=None,
+    plot_expression: bool = False,
 ):
     ##
     # ##
@@ -71,21 +74,21 @@ def plot_imc_graph(
     ax.set_facecolor((0.0, 0.0, 0.0))
     # ax.set_facecolor((1.0, 0.47, 0.42))
     greys = matplotlib.cm.get_cmap("Greys_r")
-    node_colors = 'black'
+    node_colors = "black"
 
     if ome_index is not None:
         assert split is not None
         masks_ds = FilteredMasksRelabeled(split)
         if plot_expression:
             colors = [
-                [r, r, r]
-                for _ in range(10000)
-                for r in [20 * random.random() / 100]
+                [r, r, r] for _ in range(10000) for r in [20 * random.random() / 100]
             ]
             colors[0] = (0.3, 0.3, 0.3)
         else:
             colors = [
-                colorsys.hsv_to_rgb(5 / 360, 58 / 100, (60 + random.random() * 40) / 100)
+                colorsys.hsv_to_rgb(
+                    5 / 360, 58 / 100, (60 + random.random() * 40) / 100
+                )
                 for _ in range(10000)
             ]
             colors[0] = colorsys.hsv_to_rgb(5 / 360, 58 / 100, 63 / 100)
@@ -157,9 +160,6 @@ def plot_imc_graph(
     # ##
 
 
-# plot_single_cell_graph(cell_graph=ds, cell_index=999, plot_expression=True)
-
-
 ##
 def plot_hist(data):
     x = data.edge_attr.numpy()
@@ -190,7 +190,7 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
     regions_centers = ds_centers[ome_index]
     edges = []
     weights = []
-
+    extra_data = []
     if graph_method == "gaussian":
         tree = cKDTree(regions_centers)
         for i in range(len(regions_centers)):
@@ -219,17 +219,23 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
             regions_centers
         )
         distances, indices = neighbors.kneighbors(regions_centers)
+        assert np.all(np.diff(distances, axis=1) >= 0)
         # check that every element is a knn of itself, and this is the first neighbor
         assert all(indices[:, 0] == np.array(range(len(regions_centers))))
         edges = []
         weights = []
+        TODO FIX
+        extra_data.append(indices[:, :GRAPH_KNN_K])
         for i in range(indices.shape[0]):
             for j in range(1, indices.shape[1]):
                 edge = [i, indices[i, j]]
-                weight = 1
+                d = distances[i, j]
+                # weight = 1
                 # weight = 1 / (distances[i, j] ** 2 + 1)
-                edges.append(edge)
-                weights.append(weight)
+                weight = d
+                if d < GRAPH_KNN_MAX_DISTANCE:
+                    edges.append(edge)
+                    weights.append(weight)
     elif graph_method == "contact":
         # overview of the algorithm for building a graph which connects cells that are closer than a certain
         # number of pixels
@@ -295,9 +301,9 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
                 with numpy.printoptions(threshold=numpy.inf):
                     open("a.txt", "w").write(
                         str(bbb[:50, :50])
-                            .replace("\n", "")
-                            .replace(" 0", " .")
-                            .replace("]", "]\n")
+                        .replace("\n", "")
+                        .replace(" 0", " .")
+                        .replace("]", "]\n")
                     )
                 print(neighbors_mask.astype(np.int32))
 
@@ -367,6 +373,7 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
         # assert False
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
     edge_attr = torch.tensor(weights, dtype=torch.float).reshape((-1, 1))
+    TODO: ADD EXTRA DATA HERE
 
     data = Data(
         edge_index=edge_index.long(),
@@ -411,9 +418,20 @@ def plot_single_graph(graph_method, split, ome_index):
 
 
 ##
+TEST_GRAPH_CREATION = False
+# TEST_GRAPH_CREATION = True
+if m and TEST_GRAPH_CREATION:
+    graph_method = "knn"
+    split = "validation"
+    ome_index = 1
+    compute_graphs(graph_method, split, ome_index)
+    plot_single_graph(graph_method, split, ome_index)
+
+##
 if m and COMPUTE_GRAPH_FILES:  ## and False and False:
-    graph_method = "gaussian"
-    for split in tqdm(["validation", "train"], desc="split"):  #, "test"
+    # graph_method = "gaussian"
+    graph_method = "knn"
+    for split in tqdm(["validation", "train"], desc="split"):  # , "test"
         n = len(FilteredMasksRelabeled(split=split))
         for ome_index in tqdm(range(n), desc="making graphs"):
             compute_graphs(graph_method, split, ome_index)
@@ -502,9 +520,25 @@ class CellGraph(InMemoryDataset):
         # we could also remove this assertion...
         assert len(data.regions_centers) == data.num_nodes
         center = data.regions_centers[local_cell_index]
-        is_near = (
+        if self.graph_method == "gaussian" or self.graph_method == "contact":
+            is_near = (
                 np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
-        )
+            )
+        elif self.graph_method == "knn":
+            g = to_networkx(data, edge_attrs=["edge_attr"], node_attrs=["regions_centers"])
+            neighbors = list(g.neighbors(local_cell_index))
+            l = []
+            for node in neighbors:
+                w = g.get_edge_data(local_cell_index, node)['edge_attr']
+                l.append((node, w))
+            l = sorted(l, key=lambda x: x[1])
+            nearest = [l[i][0] for i in range(GRAPH_KNN_SUBGRAPH_K - 1)]
+            nearest.append(local_cell_index)
+            is_near = np.zeros(len(data.regions_centers), dtype=np.bool)
+            is_near[np.array(nearest, dtype=np.long)] = True
+        else:
+            raise ValueError()
+
         nodes_to_keep = torch.arange(data.num_nodes, dtype=torch.long)[is_near]
         sub_edge_index, sub_edge_attr = torch_geometric.utils.subgraph(
             nodes_to_keep,
@@ -525,7 +559,7 @@ class CellGraph(InMemoryDataset):
 
 
 def plot_single_cell_graph(
-        cell_graph: CellGraph, cell_index: int, plot_expression: bool = False
+    cell_graph: CellGraph, cell_index: int, plot_expression: bool = False
 ):
     data = cell_graph[cell_index]
     ome_index, _ = cell_graph.get_ome_index_from_cell_index(cell_index)
@@ -535,14 +569,19 @@ def plot_single_cell_graph(
 
 
 if m and COMPUTE_SUBGRAPH_DATASET:
-    CellGraph(split='validation', graph_method='gaussian')
-    CellGraph(split='train', graph_method='gaussian')
+    ds = CellGraph(split="validation", graph_method="knn")
+    plot_single_cell_graph(cell_graph=ds, cell_index=999)
+    # CellGraph(split="validation", graph_method="gaussian")
+    # CellGraph(split="train", graph_method="gaussian")
     # CellGraph(split='test', graph_method='gaussian')
 
 if m and PLOT:
-    ds = CellGraph("validation", "gaussian")
+    # ds = CellGraph("validation", "gaussian")
+    ds = CellGraph("validation", "knn")
     print(ds[0])
     plot_single_cell_graph(cell_graph=ds, cell_index=999)
+
+alskdjasjdl
 
 # import sys
 # sys.exit(0)
@@ -563,14 +602,21 @@ import torch.utils.data
 
 
 class CellExpressionGraph(torch.utils.data.Dataset):
-    def __init__(self, split: str, graph_method: str, perturb: bool = False):
+    def __init__(
+        self,
+        split: str,
+        graph_method: str,
+        perturb: bool = False,
+        perturb_entire_cells: bool = False,
+    ):
         super().__init__()
         self.split = split
         self.graph_method = graph_method
         self.cell_graph = CellGraph(split=split, graph_method=graph_method)
         self.cell_ds = PerturbedCellDataset(split=split)
-        self.perturbed = perturb
-        if perturb:
+        if perturb_entire_cells:
+            self.cell_ds.perturb_entire_cells()
+        elif perturb:
             self.cell_ds.perturb()
         # needed from a plotting function, so I can call it also on this class
         self.get_ome_index_from_cell_index = (
@@ -593,7 +639,9 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         data = self.cell_graph[i]
         l_expression = []
         l_is_perturbed = []
-        ome_index, local_cell_index = self.cell_graph.get_ome_index_from_cell_index(cell_index=i)
+        ome_index, local_cell_index = self.cell_graph.get_ome_index_from_cell_index(
+            cell_index=i
+        )
         begin = self.cell_graph.ii.filtered_begins[ome_index]
         assert begin + local_cell_index == i
         indices = np.arange(len(data.is_near))[data.is_near] + begin
@@ -612,6 +660,7 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         data.is_perturbed = are_perturbed
         return data
 
+
 #
 # ds0 = CellExpressionGraph(split='validation', graph_method='gaussian', perturb=True)
 # ds1 = CellExpressionGraph(split='validation', graph_method='gaussian', perturb=True)
@@ -619,8 +668,8 @@ class CellExpressionGraph(torch.utils.data.Dataset):
 #
 # for i in tqdm(range(len(ds0))):
 #     data0 = ds0[i]
-    # data1 = ds1[i]
-    # assert np.array_equal(data0.is_perturbed, data1.is_perturbed)
+# data1 = ds1[i]
+# assert np.array_equal(data0.is_perturbed, data1.is_perturbed)
 #
 # import torch_geometric.data
 # loader0 = torch_geometric.data.DataLoader(ds0, batch_size=32, num_workers=8, pin_memory=True)
@@ -643,14 +692,30 @@ import torch.utils.data
 
 
 class CellExpressionGraphOptimized(InMemoryDataset):
-    def __init__(self, split: str, graph_method: str, perturb: bool = False):
-        p = '_perturbed' if perturb else ''
+    def __init__(
+        self,
+        split: str,
+        graph_method: str,
+        perturb: bool = False,
+        perturb_entire_cells: bool = False,
+    ):
+        if perturb_entire_cells:
+            p = "_perturbed_cells"
+        elif perturb:
+            p = "_perturbed"
+        else:
+            p = ""
         self.root = file_path(f"subgraphs_expression_{split}_{graph_method}{p}")
         os.makedirs(self.root, exist_ok=True)
         self.split = split
         validate_graph_method(graph_method)
         self.graph_method = graph_method
-        self.cell_expression_graph = CellExpressionGraph(split, graph_method, perturb=perturb)
+        self.cell_expression_graph = CellExpressionGraph(
+            split,
+            graph_method,
+            perturb=perturb,
+            perturb_entire_cells=perturb_entire_cells,
+        )
         super().__init__(self.root)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
@@ -667,7 +732,7 @@ class CellExpressionGraphOptimized(InMemoryDataset):
         for cell_index in tqdm(range(len(self.cell_expression_graph))):
             data = self.cell_expression_graph[cell_index]
             data.is_center = torch.zeros(len(data.x), dtype=torch.float)
-            data.is_center[data.center_index] = 1.
+            data.is_center[data.center_index] = 1.0
             del data.center_index
             del data.is_near
             del data.regions_centers
@@ -675,6 +740,7 @@ class CellExpressionGraphOptimized(InMemoryDataset):
             data_list.append(data)
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
+
 
 # #
 # import gc
@@ -694,14 +760,14 @@ class CellExpressionGraphOptimized(InMemoryDataset):
 
 ##
 if m and COMPUTE_OPTIMIZED_SUBGRAPH_DATASET:
-    CellExpressionGraphOptimized('validation', 'gaussian')
+    CellExpressionGraphOptimized("validation", "gaussian")
     # CellExpressionGraphOptimized('train', 'gaussian')
     # CellExpressionGraphOptimized('test', 'gaussian')
 
 ##
 if m and TEST:
-    ds0 = CellGraph('validation', 'gaussian')
-    ds1 = CellExpressionGraphOptimized('validation', 'gaussian')
+    ds0 = CellGraph("validation", "gaussian")
+    ds1 = CellExpressionGraphOptimized("validation", "gaussian")
     for i in tqdm(range(500)):
         x = ds0[i]
     for i in tqdm(range(500)):
@@ -711,7 +777,7 @@ if m and TEST:
 if m and TEST:
     from torch_geometric.data import DataLoader as GeometricDataLoader
 
-    ds = CellExpressionGraphOptimized('train', 'gaussian')
+    ds = CellExpressionGraphOptimized("train", "gaussian")
     ##
     loader = GeometricDataLoader(
         ds,
@@ -725,7 +791,7 @@ if m and TEST:
 
 ##
 if m and COMPUTE_PERTURBED_DATASET:
-    CellExpressionGraphOptimized('validation', 'gaussian', perturb=True)
+    CellExpressionGraphOptimized("validation", "gaussian", perturb=True)
 # class CellExpressionGraphOptimizedPerturbed(torch_geometric.data.Dataset):
 #     def __init__(self, split: str, graph_method: str):
 #         super().__init__()
@@ -739,3 +805,12 @@ if m and COMPUTE_PERTURBED_DATASET:
 #
 #     def __getitem__(self, i):
 #         data = self.ds[i]
+
+##
+"""
+FULL PERTURBATION
+"""
+if m and COMPUTE_PERTURBED_CELLS_DATASET:
+    ds = CellExpressionGraphOptimized(
+        split="validation", graph_method="gaussian", perturb_entire_cells=True
+    )

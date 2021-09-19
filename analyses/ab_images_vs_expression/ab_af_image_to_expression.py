@@ -45,14 +45,21 @@ if m:
         data_loader_class = DataLoader
     elif MODEL == "ai_gnn_vae":
         model_index_non_perturbed = 122
-        # model_index_perturbed = 124
-        model_index_perturbed = 128
         model = GnnVae
         tensorboard_label = "gnn_vae"
         ds_original = CellExpressionGraphOptimized(split=SPLIT, graph_method="gaussian")
-        ds_perturbed = CellExpressionGraphOptimized(
-            split=SPLIT, graph_method="gaussian", perturb=True
-        )
+        # PERTURB_ENTIRE_CELLS = False
+        PERTURB_ENTIRE_CELLS = True
+        if PERTURB_ENTIRE_CELLS:
+            ds_perturbed = CellExpressionGraphOptimized(
+                split=SPLIT, graph_method="gaussian", perturb_entire_cells=True
+            )
+            model_index_perturbed = 122
+        else:
+            ds_perturbed = CellExpressionGraphOptimized(
+                split=SPLIT, graph_method="gaussian", perturb=True
+            )
+            model_index_perturbed = 128
         data_loader_class = GeometricDataLoader
     else:
         raise RuntimeError()

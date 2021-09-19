@@ -22,6 +22,7 @@ import optuna
 from utils import memory, reproducible_random_choice
 
 COMPLETE_RUN = False
+PERTURB_ENTIRE_CELLS = False
 
 m = __name__ == "__main__"
 ##
@@ -34,6 +35,10 @@ if m:
     cells_ds.perturb()
     assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
 
+    perturb_kwargs = {'perturb': True}
+    if PERTURB_ENTIRE_CELLS:
+        perturb_kwargs['perturb_entire_cells'] = True
+
 ##
 if m:
     ii = IndexInfo(SPLIT)
@@ -41,7 +46,7 @@ if m:
     random_indices = reproducible_random_choice(n, 10000)
 
 ##
-# retrain the best model but by perturbing the dataset
+# re-train the best model but by perturbing the dataset
 # if m:
 if m and False:
     # train the model on dilated masks using the hyperparameters from the best model for original expression
@@ -72,7 +77,7 @@ if m:
 ##
 if m and COMPLETE_RUN:
     b0, b1 = precompute(
-        data_loaders=get_loaders(perturb=True),
+        data_loaders=get_loaders(**perturb_kwargs),
         expression_model_checkpoint=MODEL_CHECKPOINT,
         random_indices=random_indices,
         split=SPLIT,
@@ -84,7 +89,7 @@ if m and COMPLETE_RUN:
 
 ##
 if m:
-    loader = get_loaders(perturb=True)[["train", "validation"].index(SPLIT)]
+    loader = get_loaders(**perturb_kwargs)[["train", "validation"].index(SPLIT)]
     loader_non_perturbed = get_loaders(perturb=False)[
         ["train", "validation"].index(SPLIT)
     ]
@@ -425,6 +430,12 @@ class Prediction:
             print(cutoff)
             print(original.max())
             raise e
+        except np.linalg.LinAlgError as e:
+            if e.args == ('singular matrix',):
+                print('warning: singular matrix when calling kde.gaussian_kde()')
+                return
+            else:
+                raise e
         xi, yi = np.mgrid[0: cutoff: nbins * 1j, 0: cutoff: nbins * 1j]
 
         start = time.time()

@@ -470,6 +470,7 @@ class AfterTraining(pl.Callback):
 
 def get_loaders(
     perturb: bool,
+    perturb_entire_cells: bool = False,
     perturb_masks: bool = False,
     perturb_pixels: bool = False,
     perturb_pixels_seed=42,
@@ -494,7 +495,11 @@ def get_loaders(
         perturb_masks=perturb_masks,
     )
 
-    if perturb:
+    if perturb_entire_cells:
+        train_ds.perturb_entire_cells()
+        train_ds_validation.perturb_entire_cells()
+        val_ds.perturb_entire_cells()
+    elif perturb:
         train_ds.perturb()
         train_ds_validation.perturb()
         val_ds.perturb()

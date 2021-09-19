@@ -1202,23 +1202,39 @@ class PerturbedCellDataset(Dataset):
             perturb_pixels_seed=perturb_pixels_seed,
             perturb_masks=perturb_masks,
         )
-        self.seed = None
+        self.seed = 0
         # first element of the ds -> first elemnet of the tuple (=expression matrix) -> shape[0]
-        n_channels = self.cell_dataset[0][0].shape[0]
+        n_channels = self.get_n_channels()
         self.corrupted_entries = torch.zeros(
             (len(self.cell_dataset), n_channels), dtype=torch.bool
         )
 
-    def perturb(self, seed=0):
-        self.seed = seed
+    def get_n_channels(self):
+        return self.cell_dataset[0][0].shape[0]
+
+    def perturb(self, seed=None):
+        if seed is not None:
+            self.seed = seed
         from torch.distributions import Bernoulli
 
         dist = Bernoulli(probs=0.1)
         state = torch.get_rng_state()
-        torch.manual_seed(seed)
+        torch.manual_seed(self.seed)
         shape = self.corrupted_entries.shape
         self.corrupted_entries = dist.sample(shape).bool()
         torch.set_rng_state(state)
+
+    def perturb_entire_cells(self, seed=None):
+        if seed is not None:
+            self.seed = seed
+        n_cells = len(self.cell_dataset)
+        n_channels = self.get_n_channels()
+        state = np.random.get_state()
+        np.random.seed(self.seed)
+        ii = np.random.choice(n_cells, int(n_cells * 0.1), replace=False)
+        np.random.set_state(state)
+        self.corrupted_entries = torch.zeros((n_cells, n_channels), dtype=torch.bool)
+        self.corrupted_entries[ii, :] = torch.ones(n_channels, dtype=torch.bool)
 
     def __len__(self):
         return len(self.cell_dataset)
