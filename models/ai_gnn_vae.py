@@ -6,13 +6,14 @@ class Ppp:
 
 
 ppp = Ppp()
+# ppp.DEBUG = True
+ppp.DEBUG = False
 if "aaa" in locals():
     ppp.DEBUG_TORCH = "yessss"
+    ppp.DEBUG = True
 ppp.MAX_EPOCHS = 6
 ppp.BATCH_SIZE = 256
 ppp.PERTURB = None
-# ppp.DEBUG = True
-ppp.DEBUG = False
 if ppp.DEBUG and not "DEBUG_TORCH" in ppp.__dict__:
     ppp.NUM_WORKERS = 16
     # ppp.NUM_WORKERS = 0
@@ -66,31 +67,46 @@ def get_detect_anomaly_cm():
 
 
 class GnnEncoder(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, optuna_parameters=None):
         super().__init__()
         self.in_channels = in_channels
+        if optuna_parameters is not None:
+            self.p_dropout = output['p_dropout']
+        else:
+            self.p_dropout = 0.1
         gine0_nn = nn.Sequential(nn.Linear(self.in_channels + 1, self.in_channels + 1),
+                                 nn.BatchNorm1d(self.in_channels + 1),
                                  nn.ReLU(),
+                                 nn.Dropout(p=self.p_dropout),
                                  nn.Linear(self.in_channels + 1, self.in_channels),
-                                 nn.ReLU())
+                                 )
         gine1_nn = nn.Sequential(nn.Linear(self.in_channels + 1, self.in_channels + 1),
+                                 nn.BatchNorm1d(self.in_channels + 1),
                                  nn.ReLU(),
+                                 nn.Dropout(p=self.p_dropout),
                                  nn.Linear(self.in_channels + 1, self.in_channels),
-                                 nn.ReLU())
+                                 )
         self.gcn0 = GINEConv(gine0_nn)
         self.gcn1 = GINEConv(gine1_nn)
         self.linear0 = nn.Linear(1, self.in_channels + 1)
         self.linear1 = nn.Linear(self.in_channels + 1, self.in_channels + 1)
+        self.batch_norm0 = nn.BatchNorm1d(self.in_channels)
+        self.dropout0 = nn.Dropout(p=self.p_dropout)
         self.relu = nn.ReLU()
 
     def forward(self, x, edge_index, edge_attr, is_center):
+        original_x = x
         e = self.linear1(self.relu(self.linear0(edge_attr)))
         x_with_center_info = torch.cat((x, is_center.view(-1, 1)), dim=1)
-        x = self.gcn0(x_with_center_info, edge_index, e)
+        x = self.gcn0(x_with_center_info, edge_index, e) + original_x
+        x = self.batch_norm0(x)
         x = self.relu(x)
+        x = self.dropout0(x)
         x_with_center_info = torch.cat((x, is_center.view(-1, 1)), dim=1)
-        x = self.gcn1(x_with_center_info, edge_index, e)
-        x = is_center @ x
+        x = self.gcn1(x_with_center_info, edge_index, e) + original_x
+        indices_is_center, = torch.where(is_center == 1)
+        x = x[indices_is_center, :]
+        # x = is_center @ x
         # n = torch.argmax(is_center, dim=0)
         # x = x[n, :]
         return x
@@ -100,7 +116,7 @@ class GnnEncoder(nn.Module):
 if m and False:
     ##
     ds = CellExpressionGraphOptimized("validation", "gaussian")
-    loader = GeometricDataLoader(ds, batch_size=32, shuffle=True, num_workers=ppp.NUM_WORKERS)
+    loader = GeometricDataLoader(ds, batch_size=32, shuffle=True, num_workers=0)
     ##
     model = GnnEncoder(in_channels=39)
     data = loader.__iter__().__next__()
@@ -123,6 +139,7 @@ class GnnVae(pl.LightningModule):
         self.out_channels = self.n_channels
         self.gnn_encoder = GnnEncoder(in_channels=self.n_channels)
         self.linear0 = nn.Linear(self.n_channels, 20)
+        self.dropout0 = nn.Dropout(p=optuna_parameters['p_dropout'])
         self.linear1_0 = nn.Linear(20, self.latent_dim)
         self.linear1_1 = nn.Linear(20, self.latent_dim)
 
@@ -138,6 +155,7 @@ class GnnVae(pl.LightningModule):
 
     def encoder(self, x, edge_index, edge_attr, is_center):
         y = F.relu(self.gnn_encoder(x, edge_index, edge_attr, is_center))
+        y = self.dropout0(y)
         y = F.relu(self.linear0(y))
         mu = self.linear1_0(y)
         log_var = self.linear1_1(y)
@@ -247,8 +265,10 @@ class GnnVae(pl.LightningModule):
         edge_attr = batch.edge_attr
         is_center = batch.is_center
         # the scalar product will not introduce numbers not in {0., 1.}
-        corrupted_entries = (is_center @ batch.is_perturbed.float()).bool()
-        expression = is_center @ x
+        # corrupted_entries = (is_center @ batch.is_perturbed.float()).bool()
+        corrupted_entries = batch.is_perturbed[torch.where(is_center == 1.)[0], :]
+        expression = x[torch.where(is_center == 1.)[0], :]
+        # expression = is_center @ x
         return x, edge_index, edge_attr, is_center, corrupted_entries, expression
 
     def training_step(self, batch, batch_idx):
@@ -256,7 +276,8 @@ class GnnVae(pl.LightningModule):
         a, mu, std, z = self.forward(x, edge_index, edge_attr, is_center)
         # n = torch.argmax(is_center, dim=0)
         # expression = x[n, :]
-        expression = is_center @ x
+        expression = x[torch.where(is_center == 1.)[0], :]
+        # expression = is_center @ x
         elbo, kl, recon_loss = self.loss_function(
             expression, a, mu, std, z, corrupted_entries
         )
@@ -427,11 +448,13 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e-1, log=True)
+    p_dropout = trial.suggest_float("p_dropout", 0., 0.5)
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,
+        p_dropout=p_dropout,
     )
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)

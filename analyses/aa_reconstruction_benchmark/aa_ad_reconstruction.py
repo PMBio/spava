@@ -399,6 +399,9 @@ class Prediction:
 
         l = np.minimum(imputed.shape[0], original.shape[0])
 
+        if l == 0:
+            return
+
         assert len(imputed) == len(original)
         imputed = imputed[:l]
         original = original[:l]

@@ -35,6 +35,7 @@ SUBGRAPH_RADIUS = 50
 COMPUTE_GRAPH_FILES = False
 COMPUTE_SUBGRAPH_DATASET = False
 COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = False
+COMPUTE_PERTURBED_DATASET = True
 PLOT = False
 TEST = False
 
@@ -561,12 +562,15 @@ import torch.utils.data
 
 
 class CellExpressionGraph(torch.utils.data.Dataset):
-    def __init__(self, split: str, graph_method: str):
+    def __init__(self, split: str, graph_method: str, perturb: bool = False):
         super().__init__()
         self.split = split
         self.graph_method = graph_method
         self.cell_graph = CellGraph(split=split, graph_method=graph_method)
         self.cell_ds = PerturbedCellDataset(split=split)
+        self.perturbed = perturb
+        if perturb:
+            self.cell_ds.perturb()
         # needed from a plotting function, so I can call it also on this class
         self.get_ome_index_from_cell_index = (
             self.cell_graph.get_ome_index_from_cell_index
@@ -610,6 +614,24 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         data.is_perturbed = are_perturbed
         return data
 
+#
+# ds0 = CellExpressionGraph(split='validation', graph_method='gaussian', perturb=True)
+# ds1 = CellExpressionGraph(split='validation', graph_method='gaussian', perturb=True)
+# ds1.merge()
+#
+# for i in tqdm(range(len(ds0))):
+#     data0 = ds0[i]
+    # data1 = ds1[i]
+    # assert np.array_equal(data0.is_perturbed, data1.is_perturbed)
+#
+# import torch_geometric.data
+# loader0 = torch_geometric.data.DataLoader(ds0, batch_size=32, num_workers=8, pin_memory=True)
+# loader1 = torch_geometric.data.DataLoader(ds1, batch_size=32, num_workers=8, pin_memory=True)
+# for data0, data1 in tqdm(zip(loader0, loader1), total=len(loader0)):
+#     x0 = np.concatenate(data0.is_perturbed, axis=0)
+#     x1 = np.concatenate(data1.is_perturbed, axis=0)
+#     assert np.all(x0 == x1)
+##
 
 if m and PLOT:
     ds = CellExpressionGraph(split="validation", graph_method="gaussian")
@@ -623,13 +645,14 @@ import torch.utils.data
 
 
 class CellExpressionGraphOptimized(InMemoryDataset):
-    def __init__(self, split: str, graph_method: str):
-        self.root = file_path(f"subgraphs_expression_{split}_{graph_method}")
+    def __init__(self, split: str, graph_method: str, perturb: bool = False):
+        p = '_perturbed' if perturb else ''
+        self.root = file_path(f"subgraphs_expression_{split}_{graph_method}{p}")
         os.makedirs(self.root, exist_ok=True)
         self.split = split
         validate_graph_method(graph_method)
         self.graph_method = graph_method
-        self.cell_expression_graph = CellExpressionGraph(split, graph_method)
+        self.cell_expression_graph = CellExpressionGraph(split, graph_method, perturb=perturb)
         super().__init__(self.root)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
@@ -655,6 +678,21 @@ class CellExpressionGraphOptimized(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
+# #
+# import gc
+#
+# gc.collect()
+# #
+# ds2 = CellExpressionGraphOptimized('validation', 'gaussian', perturb=True)
+# ##
+# loader2 = torch_geometric.data.DataLoader(ds2, batch_size=32, num_workers=0, pin_memory=True)
+# for data0, data2 in tqdm(zip(loader0, loader2), total=len(loader0)):
+#     is_perturbed0 = data0.is_perturbed
+#     is_perturbed2 = data2.is_perturbed[torch.where(data2.is_center == 1.)[0], :]
+#     x0 = np.concatenate(is_perturbed0, axis=0)
+#     x00 = x0[torch.where(data2.is_center == 1.)[0].numpy(), :]
+#     x2 = is_perturbed2.numpy()
+#     assert np.all(x00 == x2)
 
 ##
 if m and COMPUTE_OPTIMIZED_SUBGRAPH_DATASET:
@@ -686,3 +724,20 @@ if m and TEST:
     )
     x = loader.__iter__().__next__()
     print(x)
+
+##
+if m and COMPUTE_PERTURBED_DATASET:
+    CellExpressionGraphOptimized('validation', 'gaussian', perturb=True)
+# class CellExpressionGraphOptimizedPerturbed(torch_geometric.data.Dataset):
+#     def __init__(self, split: str, graph_method: str):
+#         super().__init__()
+#         self.ds = CellExpressionGraphOptimized(split, graph_method)
+#         self.perturbed_cells_ds = PerturbedCellDataset(split=split)
+#         self.perturbed_cells_ds.perturb()
+#         self.is_perturbed = self.is_perturbed
+#
+#     def __len__(self):
+#         return len(self.ds)
+#
+#     def __getitem__(self, i):
+#         data = self.ds[i]
