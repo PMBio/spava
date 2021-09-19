@@ -25,6 +25,7 @@ from data2 import (
     CenterFilteredDataset,
     PerturbedCellDataset,
 )
+from analyses.essentials import merge_perturbed_cell_dataset
 
 GRAPH_CONTACT_PIXELS = 4
 GRAPH_GAUSSIAN_R_THRESHOLD = 0.1
@@ -34,7 +35,7 @@ SUBGRAPH_RADIUS = 50
 
 COMPUTE_GRAPH_FILES = False
 COMPUTE_SUBGRAPH_DATASET = False
-COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = False
+COMPUTE_OPTIMIZED_SUBGRAPH_DATASET = True
 COMPUTE_PERTURBED_DATASET = True
 PLOT = False
 TEST = False
@@ -581,15 +582,9 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         self.merged_is_perturbed = None
 
     def merge(self):
-        l0 = []
-        l1 = []
-        for i in tqdm(range(len(self.cell_ds)), desc='merging data'):
-            x = self.cell_ds[i]
-            expression, _, is_perturbed = x
-            l0.append(expression.reshape(1, -1))
-            l1.append(is_perturbed.reshape(1, -1))
-        self.merged_expressions = torch.from_numpy(np.concatenate(l0, axis=0))
-        self.merged_is_perturbed = torch.from_numpy(np.concatenate(l1, axis=0))
+        expressions, are_perturbed = merge_perturbed_cell_dataset(self.cell_ds)
+        self.merged_expressions = torch.from_numpy(expressions)
+        self.merged_is_perturbed = torch.from_numpy(are_perturbed)
 
     def __len__(self):
         return len(self.cell_graph)
@@ -598,7 +593,10 @@ class CellExpressionGraph(torch.utils.data.Dataset):
         data = self.cell_graph[i]
         l_expression = []
         l_is_perturbed = []
-        indices = np.arange(len(data.is_near))[data.is_near]
+        ome_index, local_cell_index = self.cell_graph.get_ome_index_from_cell_index(cell_index=i)
+        begin = self.cell_graph.ii.filtered_begins[ome_index]
+        assert begin + local_cell_index == i
+        indices = np.arange(len(data.is_near))[data.is_near] + begin
         for ii in indices:
             # we have that self.merged_expressions is None exactly when self.merged_is_perturbed is
             if self.merged_expressions is None:
@@ -697,7 +695,7 @@ class CellExpressionGraphOptimized(InMemoryDataset):
 ##
 if m and COMPUTE_OPTIMIZED_SUBGRAPH_DATASET:
     CellExpressionGraphOptimized('validation', 'gaussian')
-    CellExpressionGraphOptimized('train', 'gaussian')
+    # CellExpressionGraphOptimized('train', 'gaussian')
     # CellExpressionGraphOptimized('test', 'gaussian')
 
 ##

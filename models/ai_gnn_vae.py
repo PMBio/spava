@@ -52,8 +52,40 @@ m = __name__ == '__main__'
 # heavy to load, when debugging better to have this done only once so I can call objective (which calls get_loaders,
 # which needs these datasets), multiple times
 if m:
-    train_ds = CellExpressionGraphOptimized('train', 'gaussian')
-    val_ds = CellExpressionGraphOptimized("validation", 'gaussian')
+    _train_ds = None
+    _val_ds = None
+    _train_ds_perturbed = None
+    _val_ds_perturbed = None
+
+
+def get_ds(split: str, perturbed: bool):
+    def _get_ds():
+        return CellExpressionGraphOptimized(split, 'gaussian', perturbed)
+
+    if split == 'train':
+        if perturbed:
+            global _train_ds_perturbed
+            if _train_ds_perturbed is None:
+                _train_ds_perturbed = _get_ds()
+            return _train_ds_perturbed
+        else:
+            global _train_ds
+            if _train_ds is None:
+                _train_ds = _get_ds()
+            return _train_ds
+    elif split == 'validation':
+        if perturbed:
+            global _val_ds_perturbed
+            if _val_ds_perturbed is None:
+                _val_ds_perturbed = _get_ds()
+            return _val_ds_perturbed
+        else:
+            global _val_ds
+            if _val_ds is None:
+                _val_ds = _get_ds()
+            return _val_ds
+    else:
+        raise NotImplementedError()
 
 
 ##
@@ -370,13 +402,10 @@ def get_loaders(
         shuffle_train=False,
         val_subset=False,
 ):
-    global train_ds
-    global val_ds
-
-    if perturb:
-        raise NotImplementedError()
-        train_ds.perturb()
-        val_ds.perturb()
+    train_ds = get_ds('train', perturb)
+    val_ds = get_ds('validation', perturb)
+    assert train_ds is not None
+    assert val_ds is not None
 
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
@@ -410,8 +439,8 @@ def get_loaders(
     # the val set is a bit too big for training a lot of image models, we are fine with evaluating the generalization
     # on a subset of the data
     if val_subset:
-    #     indices = torch.from_numpy(np.random.choice(len(val_ds), n, replace=False))
-    #     subset = Subset(val_ds, indices)
+        #     indices = torch.from_numpy(np.random.choice(len(val_ds), n, replace=False))
+        #     subset = Subset(val_ds, indices)
         subset = GeometricSubset(val_ds, n)
     else:
         subset = val_ds
@@ -489,8 +518,8 @@ if __name__ == "__main__":
         load_if_exists=True,
         study_name=study_name,
     )
-    # TRAIN_PERTURBED = True
-    TRAIN_PERTURBED = False
+    TRAIN_PERTURBED = True
+    # TRAIN_PERTURBED = False
     if not TRAIN_PERTURBED:
         HOURS = 60 * 60
         study.optimize(objective, n_trials=100, timeout=8 * HOURS)

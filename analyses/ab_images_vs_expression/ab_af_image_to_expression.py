@@ -1,27 +1,18 @@
 ##
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
-import time
 import torch
 from torch.utils.data import DataLoader
 from torch_geometric.data import DataLoader as GeometricDataLoader
-from sklearn.metrics import adjusted_rand_score
 from tqdm import tqdm
-import matplotlib.cm
 
-from data2 import PerturbedRGBCells, PerturbedCellDataset, IndexInfo
-from graphs import CellExpressionGraphOptimized
-import matplotlib.pyplot as plt
-from models.ah_expression_vaes_lightning import VAE as ExpressionVAE, get_loaders
-import scanpy as sc
-import anndata as ad
-import seaborn as sns
-import pandas as pd
-import optuna
 from analyses.essentials import *
-from utils import memory
+from data2 import PerturbedRGBCells
+from graphs import CellExpressionGraphOptimized
 
 m = __name__ == "__main__"
+
+PLOT = True
+BUG = False
 
 #
 if m:
@@ -33,15 +24,6 @@ if m:
     from models.aj_image_expression import VAE as ImageToExpressionVAE
     from models.ak_resnet_expression import ResNetToExpression
     from models.ai_gnn_vae import GnnVae
-
-    # best models
-    # conv vae:
-    #     49 non perturbed, 63 perturbed
-    #     116 non perturbed, 151 perturbed
-    # resnet vae:
-    #     154 non perturbed, 162 perturbed
-    # gnn vae:
-    #     94 non perturbed,
 
     if MODEL == "conv_encoder":
         model_index_non_perturbed = 116
@@ -62,12 +44,15 @@ if m:
         ds_perturbed.perturb()
         data_loader_class = DataLoader
     elif MODEL == "ai_gnn_vae":
-        model_index_non_perturbed = 118
-        model_index_perturbed = 118
+        model_index_non_perturbed = 122
+        # model_index_perturbed = 124
+        model_index_perturbed = 128
         model = GnnVae
         tensorboard_label = "gnn_vae"
         ds_original = CellExpressionGraphOptimized(split=SPLIT, graph_method="gaussian")
-        ds_perturbed = CellExpressionGraphOptimized(split=SPLIT, graph_method="gaussian", perturb=True)
+        ds_perturbed = CellExpressionGraphOptimized(
+            split=SPLIT, graph_method="gaussian", perturb=True
+        )
         data_loader_class = GeometricDataLoader
     else:
         raise RuntimeError()
@@ -93,15 +78,20 @@ if m:
     loader_perturbed = data_loader_class(
         ds_perturbed, batch_size=1024, num_workers=8, pin_memory=True
     )
+
+
 #
+
 
 def get_list_of_z(loader, model):
     list_of_z = []
     with torch.no_grad():
         for data in tqdm(loader_original, desc="forwarding"):
-            if MODEL == 'ai_gnn_vae':
+            if MODEL == "ai_gnn_vae":
                 data.to(model_original.device)
-                output = model_original(data.x, data.edge_index, data.edge_attr, data.is_center)
+                output = model_original(
+                    data.x, data.edge_index, data.edge_attr, data.is_center
+                )
                 z = [zz.cpu() for zz in output]
             else:
                 data = [d.to(model_original.device) for d in data]
@@ -112,17 +102,17 @@ def get_list_of_z(loader, model):
     return list_of_z
 
 
-if m and False:
+if m and PLOT:
     list_of_z = get_list_of_z(loader=loader_original, model=model_original)
 
-#
+    #
     l = []
     for zz in list_of_z:
         a, mu, std, z = zz
         l.append(mu)
         # reconstructed = model_original.get_dist(a).mean
     mus = torch.cat(l, dim=0).numpy()
-#
+    #
     from analyses.essentials import scanpy_compute
     import scanpy as sc
     import anndata as ad
@@ -144,8 +134,6 @@ if m and False:
     #
     sc.pl.umap(b, color="louvain")
 ##
-# until_here_because_the_perturbed_is_not_trained
-##
 if m:
     list_of_z_perturbed = get_list_of_z(loader=loader_perturbed, model=model_perturbed)
 
@@ -163,8 +151,8 @@ if m:
 if m:
     l = []
     for data in tqdm(loader_original, desc="merging expression"):
-        if MODEL == 'ai_gnn_vae':
-            expression = data.x[torch.where(data.is_center == 1.)[0], :]
+        if MODEL == "ai_gnn_vae":
+            expression = data.x[torch.where(data.is_center == 1.0)[0], :]
         else:
             expression, _, _, _ = data
         l.append(expression)
@@ -172,8 +160,8 @@ if m:
 
     l = []
     for data in tqdm(loader_perturbed, desc="merging perturbed entries"):
-        if MODEL == 'ai_gnn_vae':
-            is_perturbed = data.is_perturbed[torch.where(data.is_center == 1.)[0], :]
+        if MODEL == "ai_gnn_vae":
+            is_perturbed = data.is_perturbed[torch.where(data.is_center == 1.0)[0], :]
         else:
             _, _, _, is_perturbed = data
         l.append(is_perturbed)
@@ -183,9 +171,8 @@ if m:
 h = np.sum(np.concatenate(np.where(are_perturbed == 1)))
 print("corrupted entries hash:", h)
 
-
 ##
-if m:
+if m and PLOT:
     p = Prediction(
         original=expressions,
         corrupted_entries=are_perturbed,
@@ -202,10 +189,171 @@ if m:
     p_raw.plot_scores()
 
 ##
-if m:
-    ce = ds_perturbed.cell_expression_graph.cell_ds.corrupted_entries
+if m and BUG:
+    cell_ds_original = ds_original.cell_expression_graph.cell_ds
+    cell_ds_perturbed = ds_perturbed.cell_expression_graph.cell_ds
+    ce = cell_ds_perturbed.corrupted_entries
     h = torch.sum(torch.cat(torch.where(ce == 1)))
     print(
         "corrupted entries hash:",
         h,
     )
+    assert len(cell_ds_perturbed) == len(cell_ds_original)
+    assert len(cell_ds_perturbed) == len(ds_original)
+    assert len(cell_ds_perturbed) == len(ds_perturbed)
+    wrong = []
+    very_wrong = []
+    for i in tqdm(range(len(cell_ds_perturbed))):
+
+        def get_full_tensors(i):
+            expression, _, _ = cell_ds_original[i]
+            _, _, is_perturbed = cell_ds_perturbed[i]
+            expression = torch.from_numpy(expression)
+            expression_graph = ds_original[i].x
+            is_perturbed_graph = ds_perturbed[i].is_perturbed
+            is_center0 = ds_original[i].is_center
+            is_center1 = ds_perturbed[i].is_center
+            assert torch.equal(is_center0, is_center1)
+            return (
+                expression,
+                expression_graph,
+                is_perturbed,
+                is_perturbed_graph,
+                is_center0,
+            )
+
+        def get_tensors(i):
+            (
+                expression,
+                expression_graph,
+                is_perturbed,
+                is_perturbed_graph,
+                is_center0,
+            ) = get_full_tensors(i)
+            # print(expression.shape, is_perturbed.shape)
+            # print(expression_graph.shape, is_perturbed_graph.shape)
+            expression_center = expression_graph[
+                torch.where(is_center0 == 1.0), :
+            ].flatten()
+            is_perturbed_center = is_perturbed_graph[
+                torch.where(is_center0 == 1.0), :
+            ].flatten()
+            # print(expression_center.shape)
+            # print(is_perturbed_center.shape)
+            return expression, expression_center, is_perturbed, is_perturbed_center
+
+        def get_bb(i):
+            (
+                expression,
+                expression_center,
+                is_perturbed,
+                is_perturbed_center,
+            ) = get_tensors(i)
+            b0 = torch.allclose(expression, expression_center)
+            b1 = torch.equal(is_perturbed, is_perturbed_center)
+            return b0, b1
+
+        b0, b1 = get_bb(i)
+        if (b0 + b1) % 2 != 0:
+            very_wrong.append(i)
+        if not (b0 and b1):
+            wrong.append(i)
+    ##
+    n = len(cell_ds_perturbed) / 5
+    w = len(wrong)
+    vw = len(very_wrong)
+    print(vw / n, w / n)
+    ##
+    # print(f'vw = {very_wrong}')
+    # print(f'w = {wrong}')
+    if w + vw > 0:
+        print('bug')
+        for i in very_wrong:
+            b0, b1 = get_bb(i)
+            print(b0, b1)
+        i = wrong[0]
+        ##
+        b0, b1 = get_bb(i)
+        print(b0, b1)
+        expression, expression_graph, is_perturbed, is_perturbed_graph, is_center0 = get_full_tensors(i)
+        expression, expression_center, is_perturbed, is_perturbed_center = get_tensors(i)
+        print(is_perturbed)
+        print(is_perturbed_center)
+        ##
+        print(expression)
+        print(expression_center)
+        torch.set_printoptions(profile="full")
+        print(expression_graph)
+        torch.set_printoptions(profile="default")
+        print(torch.where(is_center0 == 1.0))
+        print(expression_graph[torch.where(is_center0 == 1.0), :])
+
+    ##
+        from data2 import IndexInfo
+        ii = IndexInfo('validation')
+        print(ii.filtered_begins[:10])
+        print(very_wrong)
+        print(wrong[:10])
+
+    ##
+        from graphs import CellExpressionGraph
+        cell_expression_ds = CellExpressionGraph('validation', 'gaussian')
+        cell_expression_ds.merge()
+        get_ome = cell_expression_ds.cell_graph.get_ome_index_from_cell_index
+    ##
+        last_ok = wrong[0] - 1
+        first_wrong = wrong[0]
+        first_very_wrong = very_wrong[0]
+
+    ##
+        def analyse(cell_index):
+            ##
+            # cell_index = first_very_wrong  # remember to comment this
+            print('cell_index =', cell_index)
+            ome_index, local_cell_index = get_ome(cell_index)
+            print(f'ome_index = {ome_index}')
+            data = cell_expression_ds[cell_index]
+            from data2 import ExpressionFilteredDataset, quantiles_for_normalization
+            expression_filtered_dataset = ExpressionFilteredDataset(split='validation')
+            expression_for_ome = expression_filtered_dataset[ome_index]
+            expression_for_ome /= quantiles_for_normalization
+            computed_local_cell_index = cell_index - ii.filtered_begins[ome_index]
+            assert local_cell_index == computed_local_cell_index
+            real_expression0 = expression_for_ome[computed_local_cell_index]
+            real_expression1, _, _ = cell_ds_original[cell_index]
+            assert np.allclose(real_expression0, real_expression1)
+            if False:
+                print('expression from ome_index:')
+                print(real_expression0)
+                print('expression from cell_ds_original')
+                print(real_expression1)
+                print('all expressions from ome_index:')
+                print(expression_for_ome.shape)
+                print(np.where((expression_for_ome == real_expression0).all(axis=1)))
+                print(f'local_cell_index = {local_cell_index}')
+                print(np.where(np.isclose(expression_for_ome, real_expression1).all(axis=1)))
+                print(f'len(expression_for_ome) = {len(expression_for_ome)}')
+            expression = data.x[data.center_index].numpy()
+            assert np.allclose(expression, real_expression0)
+            expression
+            np.where(np.isclose(expression_for_ome, expression).all(axis=1))
+            np.where(np.isclose(expression_filtered_dataset[ome_index - 1], expression).all(axis=1))
+            np.where(np.isclose(expression_filtered_dataset[ome_index + 1], expression).all(axis=1))
+            all_expressions = cell_expression_ds.merged_expressions.numpy()
+            np.where(np.isclose(all_expressions, expression).all(axis=1))
+            print(f'cell_index = {cell_index}')
+            print(f'ome_index = {ome_index}')
+            print(f'get_ome(1417) = {get_ome(1417)}')
+            print(f'ii.filtered_begins[1] = {ii.filtered_begins[1]}')
+            print(f'local_cell_index = {local_cell_index}')
+    ##
+        analyse(last_ok)
+        analyse(first_wrong)
+        analyse(first_very_wrong)
+        ##
+        # quick test
+        cell_expression_ds_unmerged = CellExpressionGraph('validation', 'gaussian')
+        ##
+        data = cell_expression_ds_unmerged[first_wrong]
+        data.x[data.center_index]
+        cell_ds_original[first_wrong][0]
