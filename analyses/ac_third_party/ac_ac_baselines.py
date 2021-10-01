@@ -1,11 +1,13 @@
 ##
 import os
 import pickle
+import dill
 from pprint import pprint
 
 import optuna
 import pytorch_lightning as pl
 import torch
+
 # import importlib
 # import analyses.aa_reconstruction_benchmark.aa_ad_reconstruction
 # importlib.reload(analyses.aa_reconstruction_benchmark.aa_ad_reconstruction)
@@ -23,9 +25,9 @@ from data2 import quantiles_for_normalization, file_path
 
 m = __name__ == "__main__"
 
-STUDY_CONSTANT_PREDICTOR = False
-STUDY_MULTIPLE_LINEAR_REGRESSION = False
-STUDY_RANDOM_FOREST_REGRESSION = False
+STUDY_CONSTANT_PREDICTOR = True
+STUDY_MULTIPLE_LINEAR_REGRESSION = True
+STUDY_RANDOM_FOREST_REGRESSION = True
 STUDY_NEURAL_NETWORK = True
 
 ##
@@ -70,12 +72,10 @@ if m:
 if m:
     n_channels = x_train_perturbed.shape[1]
 
-
     def all_but_one(i):
         l = list(range(i)) + list(range(i + 1, n_channels))
         ii = np.array(l)
         return ii
-
 
     def per_column_prediction(regressor):
         y_pred_columns = []
@@ -94,6 +94,7 @@ if m:
         y_pred = np.concatenate(y_pred_columns, axis=1)
         return y_pred
 
+
 ##
 """
 CONSTANT PREDICTOR
@@ -101,19 +102,20 @@ CONSTANT PREDICTOR
 if m and STUDY_CONSTANT_PREDICTOR:
     e = x_train_perturbed.copy()
     e[ce_train] = np.nan
-    m = np.nanmean(e, axis=0)
+    mm = np.nanmean(e, axis=0)
 
-    validation_predicted = np.tile(m, (len(x_val_perturbed), 1))
-    p = Prediction(
+    validation_predicted = np.tile(mm, (len(x_val_perturbed), 1))
+    kwargs_constant = dict(
         original=x_val_original,
         corrupted_entries=ce_val,
         predictions_from_perturbed=validation_predicted,
-        space=Space.scaled_mean,
+        space=Space.scaled_mean.value,
         name="constant prediction",
         split="validation",
     )
-    p.plot_reconstruction()
-    p.transform_to(Space.raw_sum).plot_reconstruction()
+    p_constant = Prediction(**kwargs_constant)
+    p_constant.plot_reconstruction()
+    # p_constant.transform_to(Space.raw_sum).plot_reconstruction()
 
 ##
 """
@@ -125,16 +127,17 @@ from sklearn.linear_model import LinearRegression
 if m and STUDY_MULTIPLE_LINEAR_REGRESSION:
     y_pred = per_column_prediction(LinearRegression())
 
-    p = Prediction(
+    kwargs_linear = dict(
         original=x_val_original,
         corrupted_entries=ce_val,
         predictions_from_perturbed=y_pred,
-        space=Space.scaled_mean,
+        space=Space.scaled_mean.value,
         name="per-channel linear model",
         split="validation",
     )
-    p.plot_reconstruction()
-    p.transform_to(Space.raw_sum).plot_reconstruction()
+    p_linear = Prediction(**kwargs_linear)
+    p_linear.plot_reconstruction()
+    # p_linear.transform_to(Space.raw_sum).plot_reconstruction()
 
 ##
 """
@@ -144,21 +147,29 @@ from sklearn.ensemble import RandomForestRegressor
 
 if m and STUDY_RANDOM_FOREST_REGRESSION:
     # , max_samples=50000
-    regressor = RandomForestRegressor(
-        n_estimators=30, max_depth=3, verbose=1, n_jobs=16
-    )
-    y_pred = per_column_prediction(regressor)
+    f = file_path("random_forest_predictions.pickle")
+    TRAIN_RANDOM_FOREST = False
+    # TRAIN_RANDOM_FOREST = True
+    if TRAIN_RANDOM_FOREST:
+        regressor = RandomForestRegressor(
+            n_estimators=30, max_depth=3, verbose=1, n_jobs=16
+        )
+        y_pred = per_column_prediction(regressor)
+        pickle.dump(y_pred, open(f, "wb"))
+    else:
+        y_pred = pickle.load(open(f, "rb"))
 
-    p = Prediction(
+    kwargs_random_forest = dict(
         original=x_val_original,
         corrupted_entries=ce_val,
         predictions_from_perturbed=y_pred,
-        space=Space.scaled_mean,
+        space=Space.scaled_mean.value,
         name="per-channel random forest",
         split="validation",
     )
-    p.plot_reconstruction()
-    p.transform_to(Space.raw_sum).plot_reconstruction()
+    p_random_forest = Prediction(**kwargs_random_forest)
+    p_random_forest.plot_reconstruction()
+    # p_random_forest.transform_to(Space.raw_sum).plot_reconstruction()
 
 ##
 """
@@ -273,8 +284,8 @@ class NN(pl.LightningModule):
 
 
 def get_loaders(
-        shuffle_train=False,
-        val_subset=False,
+    shuffle_train=False,
+    val_subset=False,
 ):
     # train_ds = PerturbedCellDataset("train")
     # val_ds = PerturbedCellDataset("validation")
@@ -446,10 +457,11 @@ if m and STUDY_NEURAL_NETWORK:
             f"(best) trial.number = {trial.number}, (best) trial._user_attrs = {trial._user_attrs}"
         )
         import pandas as pd
-        pd.set_option('expand_frame_repr', False)
+
+        pd.set_option("expand_frame_repr", False)
         df = study.trials_dataframe()
-        print(df.sort_values(by='value'))
-        pd.set_option('expand_frame_repr', True)
+        print(df.sort_values(by="value"))
+        pd.set_option("expand_frame_repr", True)
 
 
 ##
@@ -484,13 +496,24 @@ class NNRegressor:
 if m and STUDY_NEURAL_NETWORK:
     y_pred = per_column_prediction(NNRegressor())
 
-    p = Prediction(
+    kwargs_nn = dict(
         original=x_val_original,
         corrupted_entries=ce_val,
         predictions_from_perturbed=y_pred,
-        space=Space.scaled_mean,
+        space=Space.scaled_mean.value,
         name="per-channel neural network",
         split="validation",
     )
-    p.plot_reconstruction()
-    p.transform_to(Space.raw_sum).plot_reconstruction()
+    p_nn = Prediction(**kwargs_nn)
+    p_nn.plot_reconstruction()
+    # p_nn.transform_to(Space.raw_sum).plot_reconstruction()
+
+##
+if m:
+    d = {
+        "mean predictor (constant)": kwargs_constant,
+        "linear model": kwargs_linear,
+        "random forest": kwargs_random_forest,
+        "simple neural network": kwargs_nn,
+    }
+    dill.dump(d, open(file_path("baseline_scores.pickle"), "wb"))

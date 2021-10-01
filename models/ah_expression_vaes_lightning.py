@@ -639,14 +639,17 @@ if __name__ == "__main__":
         ppp.PERTURB_PIXELS_SEED = None
     else:
         raise NotImplementedError()
+    # storage = 'mysql://l989o@optuna'
+    storage = "sqlite:///" + file_path("optuna_ah.sqlite")
+    # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",
         pruner=pruner,
-        storage="sqlite:///" + file_path("optuna_ah.sqlite"),
+        storage=storage,
         load_if_exists=True,
         study_name=study_name,
     )
-    OPTIMIZE = True
+    OPTIMIZE = False
     # OPTIMIZE = False
     if OPTIMIZE:
         study.optimize(objective, n_trials=100, timeout=3600)
@@ -658,7 +661,17 @@ if __name__ == "__main__":
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
     else:
-        objective(study.best_trial)
+        TRAIN = False
+        if TRAIN:
+            objective(study.best_trial)
+        else:
+            df = study.trials_dataframe()
+            df = df.sort_values(by='value')
+            import pandas as pd
 
-    # study = optuna.create_study(study_name=study_name, storage=storage_name, load_if_exists=True)
-    # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
+            pd.set_option('display.max_rows', 500)
+            pd.set_option('display.max_columns', 500)
+            pd.set_option('display.width', 1000)
+            print(df)
+            # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
+

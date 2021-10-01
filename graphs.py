@@ -224,7 +224,7 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
         assert all(indices[:, 0] == np.array(range(len(regions_centers))))
         edges = []
         weights = []
-        TODO FIX
+        # TODO FIX
         extra_data.append(indices[:, :GRAPH_KNN_K])
         for i in range(indices.shape[0]):
             for j in range(1, indices.shape[1]):
@@ -373,7 +373,7 @@ def compute_graphs(graph_method: str, split: str, ome_index: int):
         # assert False
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
     edge_attr = torch.tensor(weights, dtype=torch.float).reshape((-1, 1))
-    TODO: ADD EXTRA DATA HERE
+    # TODO: ADD EXTRA DATA HERE
 
     data = Data(
         edge_index=edge_index.long(),
@@ -581,7 +581,7 @@ if m and PLOT:
     print(ds[0])
     plot_single_cell_graph(cell_graph=ds, cell_index=999)
 
-alskdjasjdl
+# TODO: alskdjasjdl
 
 # import sys
 # sys.exit(0)

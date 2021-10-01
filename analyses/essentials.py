@@ -1,7 +1,9 @@
+import os
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from data2 import PerturbedCellDataset
+from data2 import PerturbedCellDataset, file_path
 from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
     nearest_neighbors,
     compute_knn_purity,
@@ -27,3 +29,11 @@ def merge_perturbed_cell_dataset(ds: PerturbedCellDataset):
     expressions = np.concatenate(l0, axis=0)
     are_perturbed = np.concatenate(l1, axis=0)
     return expressions, are_perturbed
+
+def save_plot(name):
+    f = file_path("plots")
+    os.makedirs(f, exist_ok=True)
+    plt.savefig(os.path.join(f, name))
+
+LIGHT_GREEN = np.array([70, 155, 82]) / 255
+DARK_GREEN = np.array([53, 121, 86]) / 255

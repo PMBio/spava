@@ -45,7 +45,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 from pprint import pprint
 
-from analyses.ab_images_vs_expression.ab_ae_image_viz import get_image
+from analyses.image_viz import get_image
 from data2 import PerturbedRGBCells, quantiles_for_normalization, file_path
 from models.ag_resnet_vae import resnet_encoder, resnet_decoder
 

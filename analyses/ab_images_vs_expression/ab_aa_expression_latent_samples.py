@@ -15,7 +15,13 @@ import anndata as ad
 import seaborn as sns
 import pandas as pd
 import optuna
+from utils import reproducible_random_choice
+
 m = __name__ == '__main__'
+
+STUDY_DILATED_MASK = False
+STUDY_PERTURBED_PIXELS = False
+STUDY_STABILITY = False
 
 ##
 if m:
@@ -30,7 +36,7 @@ if m:
     assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
 
 ##
-if m and False:
+if m and STUDY_DILATED_MASK and False:
     # train the model on dilated masks using the hyperparameters from the best model for original expression
     from models.ah_expression_vaes_lightning import objective, ppp
     from data2 import file_path
@@ -47,7 +53,7 @@ if m and False:
 if m:
     ii = IndexInfo(SPLIT)
     n = ii.filtered_ends[-1]
-    random_indices = np.random.choice(n, 10000, replace=False)
+    random_indices = reproducible_random_choice(n, 10000)
 ##
 
 def compute_knn(b: ad.AnnData):
@@ -102,16 +108,17 @@ def precompute(data_loaders, expression_model_checkpoint, random_indices, split)
 ##
 if m:
     # best expression model
+    # 57
     b0, b1 = precompute(
         data_loaders=get_loaders(perturb=PERTURB),
         expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
-        "/expression_vae/version_57/checkpoints/last.ckpt",
+        "/expression_vae/version_145/checkpoints/last.ckpt",
         random_indices=random_indices,
         split=SPLIT
     )
 
 ##
-if m:
+if m and STUDY_DILATED_MASK:
     # best expression model trainined on dilated masks
     b0m, b1m = precompute(
         get_loaders(perturb=PERTURB, perturb_masks=True),
@@ -142,8 +149,9 @@ def louvain_plot(an: ad.AnnData, title: str):
 if m:
     louvain_plot(b0, title="expression latent space")
     louvain_plot(b1, title="expression space")
-    louvain_plot(b0m, title="expression latent space (dilated masks)")
-    louvain_plot(b1m, title="expression space (dilated masks)")
+    if STUDY_DILATED_MASK:
+        louvain_plot(b0m, title="expression latent space (dilated masks)")
+        louvain_plot(b1m, title="expression space (dilated masks)")
 
 
 ##
@@ -177,12 +185,16 @@ def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
 
 ##
 if m:
-    compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
-    compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')
     compare_clusters(b1, b0, description='"expression" vs "latent"')
-    compare_clusters(
-        b1m, b0m, description='"expression (dilated masks)" vs "latent (dilated masks)"'
-    )
+    from data2 import file_path
+    import pickle
+    pickle.dump(b0, open(file_path('latent_anndata_from_ah_model.pickle'), 'wb'))
+    if STUDY_DILATED_MASK:
+        compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
+        compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')
+        compare_clusters(
+            b1m, b0m, description='"expression (dilated masks)" vs "latent (dilated masks)"'
+        )
 
 
 ##
@@ -239,21 +251,22 @@ if m:
     )
     nearest_neighbors(
         nn_from=b1,
-        plot_onto=b1m,
-        title='nn from "expression" plotted plotted onto "expression (dilated masks)"',
-    )
-    nearest_neighbors(
-        nn_from=b1,
         plot_onto=b0,
         title='nn from "expression" plotted plotted onto "latent space"',
     )
-    nearest_neighbors(
-        nn_from=b1,
-        plot_onto=b0m,
-        title='nn from "expression" plotted plotted onto "latent space (dilated masks)"',
-    )
+    if STUDY_DILATED_MASK:
+        nearest_neighbors(
+            nn_from=b1,
+            plot_onto=b1m,
+            title='nn from "expression" plotted plotted onto "expression (dilated masks)"',
+        )
+        nearest_neighbors(
+            nn_from=b1,
+            plot_onto=b0m,
+            title='nn from "expression" plotted plotted onto "latent space (dilated masks)"',
+        )
 ##
-if m and False:
+if m and STUDY_PERTURBED_PIXELS and False:
     from data2 import CellDataset
 
     r = CellDataset("train").FRACTION_OF_PIXELS_TO_MASK
@@ -275,7 +288,7 @@ if m and False:
         )
         objective(study.best_trial)
 ##
-if m:
+if m and STUDY_PERTURBED_PIXELS:
     perturbed_expressions = []
     perturbed_mus = []
     for i in tqdm(range(12), "perturbed model"):
@@ -298,16 +311,16 @@ if m:
         perturbed_expressions.append(random_expressions)
         perturbed_mus.append(random_mu)
 ##
-if m:
+if m and STUDY_PERTURBED_PIXELS:
     a_expr = [ad.AnnData(x.numpy()) for x in perturbed_expressions]
     a_mus = [ad.AnnData(x.detach().numpy()) for x in perturbed_mus]
 ##
-if m:
+if m and STUDY_PERTURBED_PIXELS:
     for i in tqdm(range(12), desc='computing nearest neighbors'):
         compute_knn(a_expr[i])
         compute_knn(a_mus[i])
 ##
-if m:
+if m and STUDY_PERTURBED_PIXELS:
     purities_against_expression = []
     purities_against_latent = []
     for i in tqdm(range(12), desc='computing knn purity'):
@@ -326,7 +339,7 @@ if m:
 ##
 # assessing the stability of the model (let's retrain a few more times the expression model with the same
 # hyperparameters)
-if m and False:
+if m and STUDY_STABILITY and False:
     for _ in range(3):
         from models.ah_expression_vaes_lightning import objective, ppp
         from data2 import file_path
@@ -341,7 +354,7 @@ if m and False:
         )
         objective(study.best_trial)
 ##
-if m:
+if m and STUDY_STABILITY:
     b0s = []
     b1s = []
     for i in tqdm(range(3), 'precomputing'):
@@ -355,7 +368,7 @@ if m:
         b0s.append(bb0)
         b1s.append(bb1)
 ##
-if m:
+if m and STUDY_STABILITY:
     for i in range(3):
         louvain_plot(b1s[i], title=f'expression, clone {i}')
 
@@ -363,7 +376,7 @@ if m:
         louvain_plot(b0s[i], title=f'latent, clone {i}')
 
 ##
-if m:
+if m and STUDY_STABILITY:
     for i in range(3):
         compare_clusters(b1, b1s[i], description=f'"expression" vs "expression, clone {i}"')
 
@@ -373,7 +386,7 @@ if m:
     for i in range(3):
         compare_clusters(b1, b0s[i], description=f'"expression" vs "latent, clone {i}"')
 ##
-if m:
+if m and STUDY_STABILITY:
     for i in range(3):
         nearest_neighbors(
             nn_from=b1,
@@ -381,7 +394,7 @@ if m:
             title=f'nn from "expression" plotted plotted onto "latent space, clone {i}"',
         )
 ##
-if m:
+if m and STUDY_STABILITY:
     for i in range(3):
         nearest_neighbors(
             nn_from=b0,

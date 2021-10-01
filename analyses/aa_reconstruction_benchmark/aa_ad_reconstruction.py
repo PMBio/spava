@@ -3,25 +3,20 @@ from __future__ import annotations
 
 import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
-import time
+import optuna
 import torch
-from sklearn.metrics import adjusted_rand_score
+import dill
 from tqdm import tqdm
-import matplotlib.cm
+from typing import Union
 
 from data2 import PerturbedRGBCells, PerturbedCellDataset, IndexInfo
-import matplotlib.pyplot as plt
 from models.ah_expression_vaes_lightning import VAE as ExpressionVAE, get_loaders
-import scanpy as sc
-import anndata as ad
-import seaborn as sns
-import pandas as pd
-import optuna
-from utils import memory, reproducible_random_choice
+from utils import reproducible_random_choice
 
 COMPLETE_RUN = False
+# COMPLETE_RUN = False
 PERTURB_ENTIRE_CELLS = False
 
 m = __name__ == "__main__"
@@ -35,9 +30,9 @@ if m:
     cells_ds.perturb()
     assert np.all(ds.corrupted_entries.numpy() == cells_ds.corrupted_entries.numpy())
 
-    perturb_kwargs = {'perturb': True}
+    perturb_kwargs = {"perturb": True}
     if PERTURB_ENTIRE_CELLS:
-        perturb_kwargs['perturb_entire_cells'] = True
+        perturb_kwargs["perturb_entire_cells"] = True
 
 ##
 if m:
@@ -72,8 +67,11 @@ from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
 )
 
 if m:
-    MODEL_CHECKPOINT = "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_133" \
-                       "/checkpoints/last.ckpt"
+    # 133
+    MODEL_CHECKPOINT = (
+        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_145"
+        "/checkpoints/last.ckpt"
+    )
 ##
 if m and COMPLETE_RUN:
     b0, b1 = precompute(
@@ -119,9 +117,9 @@ if m:
     all_is_perturbed = []
     all_expression_non_perturbed = []
     for data, data_non_perturbed in tqdm(
-            zip(loader, loader_non_perturbed),
-            desc="embedding expression",
-            total=len(loader),
+        zip(loader, loader_non_perturbed),
+        desc="embedding expression",
+        total=len(loader),
     ):
         expression, _, is_perturbed = data
         expression_non_perturbed, _, _ = data_non_perturbed
@@ -159,6 +157,7 @@ from utils import memory
 from tqdm import tqdm
 import numpy as np
 
+
 @memory.cache
 def f_xqoifaowi():
     d = {}
@@ -171,11 +170,11 @@ def f_xqoifaowi():
         areas = np.concatenate(l, axis=0)
         d[split] = areas
     return d
+
+
 areas = f_xqoifaowi()
 ##
-Space = IntEnum(
-    "Space", "raw_sum raw_mean asinh_sum asinh_mean scaled_mean", start=0
-)
+Space = IntEnum("Space", "raw_sum raw_mean asinh_sum asinh_mean scaled_mean", start=0)
 
 from_to = [[None for _ in range(len(Space))] for _ in range(len(Space))]
 
@@ -226,7 +225,9 @@ test_path = find_path(from_node=Space.scaled_mean.value, to_node=Space.asinh_sum
 assert test_path == [4, 3, 1, 0, 2], test_path
 
 
-def transform(x: np.ndarray, from_space: Space, to_space: Space, split: str):
+def transform(
+    x: np.ndarray, from_space: Space, to_space: Space, split: str
+) -> np.ndarray:
     a = areas[split]
     assert len(a) == len(x)
     path = find_path(from_node=from_space.value, to_node=to_space.value)
@@ -234,9 +235,10 @@ def transform(x: np.ndarray, from_space: Space, to_space: Space, split: str):
         start, end = path[i], path[i + 1]
         s, e = Space(start), Space(end)
         f = f_get(s, e)
-        print(f'applying transformation from {s.name} to {e.name}')
+        print(f"applying transformation from {s.name} to {e.name}")
         x = f(x, a)
     return x
+
 
 # transform(x=np.random.rand(218618, 39), from_space=Space.scaled_sum, to_space=Space.scaled_mean, split='test')
 
@@ -262,17 +264,19 @@ from scipy.stats import t as t_dist
 
 class Prediction:
     def __init__(
-            self,
-            original: np.ndarray,
-            corrupted_entries: np.ndarray,
-            predictions_from_perturbed: np.ndarray,
-            space: Space,
-            name: str,
-            split: str,
+        self,
+        original: np.ndarray,
+        corrupted_entries: np.ndarray,
+        predictions_from_perturbed: np.ndarray,
+        space: Union[Space, int],
+        name: str,
+        split: str,
     ):
         self.original = original
         self.corrupted_entries = corrupted_entries
         self.predictions_from_perturbed = predictions_from_perturbed
+        if type(space) == int:
+            space = Space(space)
         self.space = space
         self.name = name
         self.split = split
@@ -300,9 +304,15 @@ class Prediction:
             predictions_from_perturbed=predictions_from_perturbed_transformed,
             space=space,
             name=self.name,
-            split=self.split
+            split=self.split,
         )
         return p
+
+    def score_function(self, original, reconstructed):
+        return np.square(original - reconstructed)
+
+    def format_score(self, score):
+        return f"{score:0.3f}"
 
     def compute_scores(self):
         ce = self.corrupted_entries
@@ -314,8 +324,8 @@ class Prediction:
         vv0 = self.predictions_from_perturbed[ne]
         vv1 = self.original[ne]
 
-        self.scores_perturbed = np.abs(uu0 - uu1)
-        self.scores_non_perturbed = np.abs(vv0 - vv1)
+        self.scores_perturbed = self.score_function(uu0, uu1)
+        self.scores_non_perturbed = self.score_function(vv0, vv1)
 
     def check_scores_defined(self, test=False):
         b = self.scores_perturbed is not None and self.scores_non_perturbed is not None
@@ -335,13 +345,13 @@ class Prediction:
         plt.subplot(1, 2, 1)
         plt.hist(s)
         m_s = np.mean(s)
-        plt.title(f"scores for imputed entries\nmean: {m_s:0.2f}")
+        plt.title(f"scores for imputed entries\nmean: {self.format_score(m_s)}")
         plt.yscale("log")
 
         plt.subplot(1, 2, 2)
         plt.hist(t)
         m_t = np.mean(t)
-        plt.title(f"control: normal entries\nmean: {m_t:0.2f}")
+        plt.title(f"control: normal entries\nmean: {self.format_score(m_t)}")
         plt.yscale("log")
 
         fig.suptitle(f"{self.name}: abs(original vs predicted)")
@@ -367,7 +377,7 @@ class Prediction:
         delta = s - t
         sem_delta = delta.std() / math.sqrt(len(delta))
         df = sem_delta ** 4 / (
-                (len(s) - 1) ** -1 * sem_s ** 4 + (len(t) - 1) ** -1 * sem_t ** 4
+            (len(s) - 1) ** -1 * sem_s ** 4 + (len(t) - 1) ** -1 * sem_t ** 4
         )
         # print(f"df = {df}")
 
@@ -431,12 +441,12 @@ class Prediction:
             print(original.max())
             raise e
         except np.linalg.LinAlgError as e:
-            if e.args == ('singular matrix',):
-                print('warning: singular matrix when calling kde.gaussian_kde()')
+            if e.args == ("singular matrix",):
+                print("warning: singular matrix when calling kde.gaussian_kde()")
                 return
             else:
                 raise e
-        xi, yi = np.mgrid[0: cutoff: nbins * 1j, 0: cutoff: nbins * 1j]
+        xi, yi = np.mgrid[0 : cutoff : nbins * 1j, 0 : cutoff : nbins * 1j]
 
         start = time.time()
         zi = k(np.vstack([xi.flatten(), yi.flatten()]))
@@ -508,14 +518,15 @@ class Prediction:
                 imputed=imputed,
                 ax=ax,
             )
-            score = np.mean(np.abs(original - imputed))
-            ax.set(title=f"ch {i}, score: {score:0.2f}")
+            score = self.score_function(original, imputed)
+            ax.set(title=f"ch {i}, score: {self.format_score(np.mean(score))}")
             if i == 0:
                 ax.set(xlabel="original", ylabel="imputed")
             # if i > 2:
             #     break
         fig.suptitle(
-            f"{self.name}, {self.space.name}, global score: {np.mean(self.scores_perturbed):0.2f}"
+            f"{self.name}, {self.space.name}, global score: "
+            f"{self.format_score(np.mean(self.scores_perturbed))}"
         )
         plt.tight_layout()
         plt.show()
@@ -530,16 +541,16 @@ class Prediction:
         scores = []
         for i in range(n_channels):
             score = np.mean(
-                np.abs(
-                    original_non_perturbed_by_channel[i]
-                    - reconstructed_zero_by_channel[i]
-                )
-            ).item()
+                self.score_function(
+                    original_non_perturbed_by_channel[i],
+                    reconstructed_zero_by_channel[i],
+                ).item()
+            )
             scores.append(score)
         plt.figure()
         plt.bar(np.arange(n_channels), np.array(scores))
         plt.title(
-            f"{self.name}, reconstruction scores, global score: {np.mean(self.scores_perturbed):0.2f}"
+            f"{self.name}, reconstruction scores, global score: {self.format_score(np.mean(self.scores_perturbed))}"
         )
         plt.xlabel("channel")
         plt.ylabel("score")
@@ -568,20 +579,31 @@ def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):
 
 ##
 if m:
-    ah_predictions = Prediction(
+    kwargs = dict(
         original=expressions_non_perturbed.cpu().numpy(),
         corrupted_entries=are_perturbed.cpu().numpy(),
         predictions_from_perturbed=reconstructed.detach().cpu().numpy(),
-        space=Space.scaled_mean,
+        space=Space.scaled_mean.value,
         name="ah_expression",
-        split='validation'
+        split="validation",
+    )
+    ah_predictions = Prediction(
+        **kwargs
     )
 
     ah_predictions.plot_reconstruction()
-    ah_predictions.plot_scores()
+    # ah_predictions.plot_scores()
 #
-if m:
+if m and False:
     p = ah_predictions.transform_to(Space.raw_sum)
     p.name = "ah_expression raw"
     p.plot_reconstruction()
-    p.plot_scores()
+    # p.plot_scores()
+
+##
+from data2 import file_path
+import pickle
+
+if m:
+    d = {"vanilla VAE": kwargs}
+    pickle.dump(d, open(file_path("ah_scores.pickle"), "wb"))
