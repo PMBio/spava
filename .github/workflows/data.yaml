@@ -9,5 +9,6 @@ jobs:
         run: |
           source ~/.bashrc
           conda activate ci_env
-          python tests/test_data.py
+          python -m tests.test_data
 #          python /data/l989o/deployed/a/tests/test_data.py
+#
