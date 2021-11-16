@@ -1,18 +1,8 @@
-name: Creating the conda env
+name: Testing the testing system
 on:
-  [workflow_dispatch, push] #:
-#    inputs:
-#      name:
-#        description: 'Person to greet'
-#        required: true
-#        default: 'Mona the Octocat'
-#      home:
-#        description: 'location'
-#        required: false
-#        default: 'The Octoverse'
-
+  [workflow_dispatch, push]
 jobs:
-  remove-old-conda-env:
+  test-the-tests:
     runs-on: self-hosted
     steps:
       - run: |
