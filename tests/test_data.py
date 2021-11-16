@@ -1,5 +1,6 @@
 import os
 
+os.chdir('/data/l989o/deployed/a')
 os.environ["CI_TEST"] = "aaa"
 
 
