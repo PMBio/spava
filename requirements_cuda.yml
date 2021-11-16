@@ -1,4 +1,4 @@
-name: spatial_uzh
+name: ci_env
 
 channels:
   - anaconda

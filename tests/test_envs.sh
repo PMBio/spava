@@ -1,7 +1,9 @@
 set -e
 source ~/.bashrc
 conda remove -n ci_env --all -y
-mamba create -c conda-forge -c bioconda -n ci_env python=3.9 -y
+echo ">>>>>>>>>> creating empty env <<<<<<<<<<"
+mamba create -n ci_env python=3.9 -y
+echo ">>>>>>>>>> activating env <<<<<<<<<<"
 conda activate ci_env
 echo ">>>>>>>>>> installing all but torch <<<<<<<<<<"
 mamba env update -n ci_env -f requirements_cuda.yml
