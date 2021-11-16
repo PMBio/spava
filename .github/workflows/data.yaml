@@ -5,9 +5,9 @@ jobs:
   test-data:
     runs-on: self-hosted
     steps:
-      - working-directory: /data/l989o/deployed/a
-        run: |
+      - run: |
           source ~/.bashrc
+          cd /data/l989o/deployed/a
           conda activate ci_env
           python -m tests.test_data
 #          python /data/l989o/deployed/a/tests/test_data.py
