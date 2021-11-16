@@ -7,7 +7,7 @@
 
 | data preprocessing | type |
 |-------------|---|
-|[![Building the datasets](https://github.com/PMBio/a/actions/workflows/data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data.yaml)| on push |
+|[![Importing the data](https://github.com/PMBio/a/actions/workflows/data_import.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data_import.yaml)| on push |
 |[![Preprocessing the data](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml)| on demand |
 
 ! [alt text](a.png)
