@@ -9,6 +9,7 @@ def test_envs():
         shell=True,
         stderr=sys.stderr,
         stdout=sys.stdout,
+        check=True
     )
 
 
