@@ -7,6 +7,6 @@
 
 | data preprocessing |
 |-------------|
-|[![.github/workflows/data.yaml](https://github.com/PMBio/a/actions/workflows/data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data.yaml)|
+|[![Building the datasets](https://github.com/PMBio/a/actions/workflows/data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data.yaml)|
 
 ! [alt text](a.png)
