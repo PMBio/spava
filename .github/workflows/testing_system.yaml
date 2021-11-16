@@ -1,4 +1,4 @@
-name: Testing the testing system
+name: Creating the conda env
 on:
   [workflow_dispatch, push] #:
 #    inputs:
