@@ -9,10 +9,14 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import skimage.measure
-from data2 import PerturbedRGBCells, PerturbedCellDataset, file_path
+from data2 import PerturbedRGBCells, PerturbedCellDataset, file_path, CHANNEL_NAMES
 from utils import memory
+import scanpy as sc
+import anndata as ad
+from utils import reproducible_random_choice
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-m = __name__ == '__main__'
+m = __name__ == "__main__"
 
 ds = PerturbedRGBCells(split="validation")
 
@@ -29,7 +33,7 @@ models = {
     # "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/old_checkpoints"
     #               "/epoch=3-step=1610.ckpt",
     "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_35"
-                  "/checkpoints/last.ckpt",
+    "/checkpoints/last.ckpt",
 }
 
 rgb_ds = ds.rgb_cells
@@ -58,7 +62,7 @@ torch.cuda.empty_cache()
 
 f = file_path("image_features.npy")
 if True:
-# if False:
+    # if False:
     l = []
     for zz in list_of_z:
         alpha, beta, mu, std, z = zz
@@ -67,14 +71,13 @@ if True:
     np.save(f, mus)
 mus = np.load(f)
 ##
-import scanpy as sc
-import anndata as ad
+
 
 a = ad.AnnData(mus)
 sc.tl.pca(a)
 sc.pl.pca(a)
 ##
-from utils import reproducible_random_choice
+
 random_indices = reproducible_random_choice(len(a), 10000)
 ##
 b = a[random_indices]
@@ -85,6 +88,8 @@ sc.tl.umap(b)
 sc.tl.louvain(b)
 print("done")
 ##
+CH = 35
+
 plt.figure()
 l = b.obs["louvain"].tolist()
 colors = list(map(int, l))
@@ -92,14 +97,15 @@ plt.scatter(
     b.obsm["X_umap"][:, 0],
     b.obsm["X_umap"][:, 1],
     s=1,
-    c=colors,
-    cmap=matplotlib.cm.tab20,
+    c=b.X[:, CH]
+    # c=colors,
+    # cmap=matplotlib.cm.tab20,
 )
 # plt.xlim([10, 20])
 # plt.ylim([0, 10])
+plt.title(f"UMAP of image latent space colored by channel {CH} ({CHANNEL_NAMES[CH]})")
 plt.show()
 ##
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 fig, ax = plt.subplots(figsize=(24, 14))
 u = b.obsm["X_umap"]
@@ -117,14 +123,21 @@ plt.show()
 if True:
     # n_channels = ds[42][0].shape[0]
     # channels = list(range(n_channels))
-    channels = [10, 34, 35, 38]
+    channels = [35]
+    # channels = [10, 34, 35, 38]
     #     ax.autoscale()
-    for c in tqdm(channels, desc='channels', position=0, leave=False):
+    for c in tqdm(channels, desc="channels", position=0, leave=False):
         fig, ax = plt.subplots(figsize=(24, 14))
-        ax.set(title=f'ch {c}')
+        ax.set(title=f"ch {c}")
         u = b.obsm["X_umap"]
         for j, i in enumerate(
-                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            tqdm(
+                random_indices[:2000],
+                desc="scatterplot with images",
+                position=1,
+                leave=False,
+            )
+        ):
             _, ome, _, _ = ds[i]
             ome = ome[c, :, :].numpy()
             # mask = torch.squeeze(mask, 0).numpy()
@@ -147,6 +160,7 @@ aa = ad.AnnData(expressions)
 sc.tl.pca(aa)
 sc.pl.pca(aa)
 ##
+random_indices = reproducible_random_choice(len(expressions), 10000)
 bb = aa[random_indices]
 ##
 print("computing umap... ", end="")
@@ -165,9 +179,10 @@ plt.scatter(
     c=colors,
     cmap=matplotlib.cm.tab20,
 )
-plt.title('showing expression clusters on umap of latent points')
+plt.title("showing expression clusters on umap of latent points")
 plt.show()
 ##
+CH = 35
 plt.figure()
 l = bb.obs["louvain"].tolist()
 colors = list(map(int, l))
@@ -175,13 +190,15 @@ plt.scatter(
     bb.obsm["X_umap"][:, 0],
     bb.obsm["X_umap"][:, 1],
     s=1,
-    c=colors,
-    cmap=matplotlib.cm.tab20,
+    # c=colors,
+    # cmap=matplotlib.cm.tab20,
+    c=bb.X[:, CH],
 )
-plt.title('showing expression clusters on umap of expression points')
+# plt.title("showing expression clusters on umap of expression points")
+plt.title(f"UMAP of expression data colored by channel {CH} ({CHANNEL_NAMES[CH]})")
 plt.show()
 ##
-uu = bb.obsm['X_umap']
+uu = bb.obsm["X_umap"]
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 fig, ax = plt.subplots(figsize=(24, 14))
@@ -200,14 +217,22 @@ plt.show()
 if True:
     # n_channels = ds[42][0].shape[0]
     # channels = list(range(n_channels))
-    channels = [10, 34, 35, 38]
+    channels = [10, 34, 35, 38] + [20]
     #     ax.autoscale()
-    for c in tqdm(channels, desc='channels', position=0, leave=False):
+    for c in tqdm(channels, desc="channels", position=0, leave=False):
         fig, ax = plt.subplots(figsize=(24, 14))
-        ax.set(title=f'ch {c}')
-        u = b.obsm["X_umap"]
+        ax.set(title=f"ch {c}")
+        # for the slides I commented this
+        # u = b.obsm["X_umap"]
+        u = bb.obsm["X_umap"]
         for j, i in enumerate(
-                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            tqdm(
+                random_indices[:2000],
+                desc="scatterplot with images",
+                position=1,
+                leave=False,
+            )
+        ):
             _, ome, _, _ = ds[i]
             ome = ome[c, :, :].numpy()
             # mask = torch.squeeze(mask, 0).numpy()
@@ -222,12 +247,12 @@ from sklearn.neighbors import NearestNeighbors
 import numpy as np
 
 random_expressions = expressions[random_indices]
-nbrs = NearestNeighbors(n_neighbors=20, algorithm='ball_tree').fit(random_expressions)
+nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(random_expressions)
 distances, indices = nbrs.kneighbors(random_expressions)
 indices
 ##
 # plot barplots of expression for nearest neighbors, of subsampled cells
-plt.style.use('dark_background')
+plt.style.use("dark_background")
 some_cells = range(5)
 rows = len(some_cells)
 cols = len(indices[42])
@@ -238,7 +263,7 @@ for cell in tqdm(some_cells):
         ax = axes[k]
         e = random_expressions[i]
         ax.bar(np.arange(len(e)), e)
-        ax.set(title=f'cell {i}, nn of {cell}')
+        ax.set(title=f"cell {i}, nn of {cell}")
         k += 1
 plt.tight_layout()
 plt.show()
@@ -255,17 +280,12 @@ for bbb in [b, bb]:
             bbb.obsm["X_umap"][:, 0],
             bbb.obsm["X_umap"][:, 1],
             s=1,
-            color=(0.3, 0.3, 0.3)
+            color=(0.3, 0.3, 0.3),
         )
-        ax.scatter(
-            bbb.obsm["X_umap"][nn, 0],
-            bbb.obsm["X_umap"][nn, 1],
-            s=1,
-            color='w'
-        )
+        ax.scatter(bbb.obsm["X_umap"][nn, 0], bbb.obsm["X_umap"][nn, 1], s=1, color="w")
     plt.tight_layout()
     plt.show()
-plt.style.use('default')
+plt.style.use("default")
 ## study deviation of nearest neighbors from the selected cells
 n_channels = ds[42][0].shape[0]
 ab_for_cell = dict()
@@ -279,7 +299,7 @@ for cell in some_cells:
 ##
 for cell, (a, b) in ab_for_cell.items():
     plt.figure()
-    plt.title(f'histogram of mse from cell {cell}')
+    plt.title(f"histogram of mse from cell {cell}")
     plt.hist(b)
     plt.show()
 
@@ -298,6 +318,7 @@ class Ecdf:
         else:
             #            print(f'{self.x[i - 1]} <= {t} <= {self.x[i]}')
             return self.y[i - 1]
+
 
 ##
 a_ecdfs_for_cell = dict()
@@ -335,7 +356,6 @@ def aaa(idx0, idx1=None):
             def to_simplex(x, left, right):
                 return (x - left) / (right - left)
 
-
             aaaa = np.square(other_expression - expression)
             bbbb = np.mean(aaaa)
             aaaa = aaaa[channel]
@@ -346,7 +366,7 @@ def aaa(idx0, idx1=None):
             # a_score = to_simplex(aaaa, np.min(a_for_cell), np.max(a_for_cell))
             # b_score = to_simplex(bbbb, np.min(b_for_cell), np.max(b_for_cell))
 
-            ax.set(title=f'{a_score:0.3f}, {b_score:0.3f}')
+            ax.set(title=f"{a_score:0.3f}, {b_score:0.3f}")
             k += 1
             # plot contour of mask
             numpy_mask = mask.squeeze(0).numpy()
@@ -355,7 +375,7 @@ def aaa(idx0, idx1=None):
             for contour in contours:
                 orange = list(map(lambda x: x / 255, (255, 165, 0)))
                 ax.plot(contour[:, 1], contour[:, 0], linewidth=2, color=orange)
-    fig.suptitle(f'idx0 = {idx0}, idx1 = {idx1}, channels = {selected_channels}')
+    fig.suptitle(f"idx0 = {idx0}, idx1 = {idx1}, channels = {selected_channels}")
     plt.tight_layout()
     plt.show()
 
@@ -392,22 +412,30 @@ plt.scatter(
 # plt.ylim([0, 10])
 plt.show()
 ##
-plt.style.use('dark_background')
+plt.style.use("dark_background")
+
+
 def bbb(idx):
     # n_channels = ds[42][0].shape[0]
     # channels = list(range(n_channels))
     channels = [35, 38]
     #     ax.autoscale()
-    for c in tqdm(channels, desc='channels', position=0, leave=False):
+    for c in tqdm(channels, desc="channels", position=0, leave=False):
         fig, ax = plt.subplots(figsize=(24, 14))
-        ax.set(title=f'ch {c}')
+        ax.set(title=f"ch {c}")
         u = b.obsm["X_umap"]
         for j, i in enumerate(
-                tqdm(random_indices[:2000], desc="scatterplot with images", position=1, leave=False)):
+            tqdm(
+                random_indices[:2000],
+                desc="scatterplot with images",
+                position=1,
+                leave=False,
+            )
+        ):
             _, ome, _, _ = ds[i]
             ome = ome[c, :, :].numpy()
             # mask = torch.squeeze(mask, 0).numpy()
-            im = OffsetImage(ome, zoom=0.7, cmap='gray')
+            im = OffsetImage(ome, zoom=0.7, cmap="gray")
             ab = AnnotationBbox(im, u[j], xycoords="data", frameon=False)
             ax.add_artist(ab)
         ax.set(xlim=(min(u[:, 0]), max(u[:, 0])), ylim=(min(u[:, 1]), max(u[:, 1])))
@@ -417,12 +445,13 @@ def bbb(idx):
             _, ome, _, _ = ds[random_indices[cell_index]]
             ome = ome[c, :, :].numpy()
             # mask = torch.squeeze(mask, 0).numpy()
-            im = OffsetImage(ome, zoom=0.7, cmap='viridis')
+            im = OffsetImage(ome, zoom=0.7, cmap="viridis")
             ab = AnnotationBbox(im, u[cell_index], xycoords="data", frameon=False)
             ax.add_artist(ab)
 
         plt.tight_layout()
         plt.show()
 
+
 bbb(0)
-plt.style.use('default')
+plt.style.use("default")

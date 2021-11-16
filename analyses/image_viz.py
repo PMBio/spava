@@ -1,3 +1,8 @@
+from data2 import CHANNEL_NAMES
+print(CHANNEL_NAMES[0], CHANNEL_NAMES[5], CHANNEL_NAMES[6])
+
+##
+
 import PIL
 import numpy as np
 import torch

@@ -139,7 +139,10 @@ if m and PLOT:
     scanpy_compute(b)
 
     #
-    sc.pl.umap(b, color="louvain")
+    sc.pl.umap(b, color="louvain", title=f'{MODEL} latent space')
+    import pickle
+
+    pickle.dump({'latent': b}, open(file_path(f"latent_anndata_from_{MODEL}.pickle"), "wb"))
 ##
 if m:
     list_of_z_perturbed = get_list_of_z(loader=loader_perturbed, model=model_perturbed)
@@ -175,12 +178,13 @@ if m:
     are_perturbed = torch.cat(l, dim=0).numpy()
 
 ##
-h = np.sum(np.concatenate(np.where(are_perturbed == 1)))
-print("corrupted entries hash:", h)
+if m:
+    h = np.sum(np.concatenate(np.where(are_perturbed == 1)))
+    print("corrupted entries hash:", h)
 
 ##
 if m and PLOT:
-    p = Prediction(
+    kwargs = dict(
         original=expressions,
         corrupted_entries=are_perturbed,
         predictions_from_perturbed=reconstructed,
@@ -188,12 +192,23 @@ if m and PLOT:
         name=f"{MODEL} to expression",
         split="validation",
     )
+    p = Prediction(**kwargs)
     p.plot_reconstruction()
-    p.plot_scores()
+    # p.plot_scores()
 
     p_raw = p.transform_to(Space.raw_sum)
-    p_raw.plot_reconstruction()
-    p_raw.plot_scores()
+    # p_raw.plot_reconstruction()
+    # p_raw.plot_scores()
+
+##
+if m:
+    p.plot_summary()
+
+##
+if m:
+    import dill
+    d = {f"{MODEL} expression": kwargs}
+    dill.dump(d, open(file_path(f"{MODEL}_scores.pickle"), "wb"))
 
 ##
 if m and BUG:

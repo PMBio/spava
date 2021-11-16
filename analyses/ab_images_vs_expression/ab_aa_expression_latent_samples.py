@@ -176,10 +176,12 @@ def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
     m1 = sorted(zip(range(len(m0)), m0), key=lambda x: x[1])
     m2, m3 = zip(*m1)
     mm0 = mm[:, m2]
-    plt.figure(figsize=(9, 9))
+    dpi = 100
+    plt.figure(figsize=(400 / dpi, 400 / dpi), dpi=dpi)
     plt.imshow(mm0)
     plt.colorbar()
-    plt.title(f"{description}: adjusted rand score: {adjusted_rand_score(c0, c1):.02f}")
+    plt.title(f"{description}\nadjusted rand score: {adjusted_rand_score(c0, c1):.02f}", y=1.02)
+    plt.tight_layout()
     plt.show()
 
 
@@ -188,7 +190,7 @@ if m:
     compare_clusters(b1, b0, description='"expression" vs "latent"')
     from data2 import file_path
     import pickle
-    pickle.dump(b0, open(file_path('latent_anndata_from_ah_model.pickle'), 'wb'))
+    pickle.dump({'input': b1, 'latent': b0}, open(file_path('latent_anndata_from_ah_model.pickle'), 'wb'))
     if STUDY_DILATED_MASK:
         compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
         compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')

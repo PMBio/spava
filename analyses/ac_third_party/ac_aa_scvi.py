@@ -17,7 +17,10 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import os
 import matplotlib.pyplot as plt
 from utils import memory, reproducible_random_choice
-from analyses.essentials import louvain_plot
+# from analyses.essentials import louvain_plot
+from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
+    louvain_plot,
+)
 
 # COMPLETE_RUN = True
 COMPLETE_RUN = False
@@ -210,8 +213,8 @@ if m:
     z_val = model.get_latent_representation(a_val)
     b_val = ad.AnnData(z_val)
     random_indices_val = reproducible_random_choice(len(a_val), 10000)
-    aa_val = a_val[random_indices_val]
-    bb_val = b_val[random_indices_val]
+    aa_val = a_val[random_indices_val].copy()
+    bb_val = b_val[random_indices_val].copy()
 
 ##
 if m and COMPLETE_RUN:
@@ -401,7 +404,7 @@ if m:
         original=x_val,
         corrupted_entries=ce_val,
         predictions_from_perturbed=x_val_perturbed_pred,
-        space=Space.scaled_mean.value,
+        space=Space.raw_sum.value,
         name="scVI",
         split="validation",
     )
@@ -412,7 +415,7 @@ if m:
 
 ##
 if m and False:
-    p = scvi_predictions.transform_to(Space.raw_sum)
+    p = scvi_predictions.transform_to(Space.scaled_mean)
     p.name = "scVI scaled"
     p.plot_reconstruction()
     # p.plot_scores()
@@ -427,4 +430,4 @@ if m:
 
 ##
 if m:
-    pickle.dump(a_val, open(file_path("latent_anndata_from_scvi.pickle"), "wb"))
+    pickle.dump({'input': aa_val, 'latent': bb_val}, open(file_path("latent_anndata_from_scvi.pickle"), "wb"))

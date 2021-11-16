@@ -46,8 +46,9 @@ are_perturbed = np.concatenate(l1, axis=0)
 #      3: 'boundary', 4: 'boundary', 5: 'boundary',
 #      10: 'both', 35: 'both'}
 
-CH = 20
+CH = 0
 x = expressions[:, CH]
+print(x.max())
 y = np.concatenate(l1)
 
 # import pickle
@@ -57,24 +58,31 @@ y = np.concatenate(l1)
 # it is not a problem for our conclusion, but be aware that when transforming back from asinh_mean to raw_sum for
 # something like the expression give by a RGBCell dataset, then in the case in which the original cell was larger
 # than the tile, the expression will be different from the one that would have been computed from the raw data
-x = x.reshape(-1, 1)
-x = transform(x, from_space=Space.scaled_mean, to_space=Space.raw_sum, split=SPLIT)
-x = np.squeeze(x, 1)
+# x = x.reshape(-1, 1)
+
+# x = transform(x, from_space=Space.scaled_mean, to_space=Space.raw_sum, split=SPLIT)
+# x = x[:, CH]
+
+# x = transform(x, from_space=Space.asinh_mean, to_space=Space.raw_sum, split=SPLIT)
+# x = np.squeeze(x, 1)
+
+print(x.max())
 
 qs = [0.01, 0.5, 0.99]
+# qs = [0.98, 0.99, 0.995, 0.999]
 plt.figure()
-plt.hist(x, bins=100, color=DARK_GREEN)
 for q in qs:
     xq = np.quantile(x, q)
     plt.axvline(x=xq, c="r")
+plt.hist(x[x < xq * 1.3], bins=200, color=DARK_GREEN)
 plt.title(f"channel {CH} ({CHANNEL_NAMES[CH]}), quantiles: {qs}")
 plt.xlabel("expression")
 plt.ylabel("count")
 ylim = plt.gca().get_ylim()
 plt.ylim(ylim[0], ylim[1] * 1.1)
+# plt.xscale('log')
 plt.show()
 
-##
 sorted_xyz = np.array(sorted(zip(x.tolist(), y.tolist()), key=lambda x: x[0]))
 sorted_x = sorted_xyz[:, 0]
 sorted_y = sorted_xyz[:, 1].astype(int)
@@ -82,7 +90,7 @@ sorted_y = sorted_xyz[:, 1].astype(int)
 for q in tqdm(qs, desc="plotting similar images"):
     xq = np.quantile(sorted_x, q)
     n = np.searchsorted(sorted_x, xq)
-    s = 81
+    s = 25
     # we don't believe in numerical issues
     k = int(round(math.sqrt(s)))
     ss = slice(max(0, n - s // 2), min(n + s // 2 + 1, len(sorted_x)))
@@ -98,11 +106,12 @@ for q in tqdm(qs, desc="plotting similar images"):
         ax.set_axis_off()
         if i >= len(similar):
             continue
-        x, y = similar[i]
-        expression, ome, mask = rgb_ds[y]
+        xx, yy = similar[i]
+        expression, ome, mask = rgb_ds[yy]
         # this works only if not transforming Space.raw_sum
-        # assert np.isclose(x, expression[c])
+        # assert np.isclose(xx, expression[c])
         ax.imshow(ome[CH, :, :], vmin=vmin, vmax=vmax)
+        ax.set(title=f'cell {yy}')
         numpy_mask = np.squeeze(mask.numpy(), 0)
         contours = skimage.measure.find_contours(numpy_mask, 0.4)
         for contour in contours:
@@ -110,6 +119,82 @@ for q in tqdm(qs, desc="plotting similar images"):
             ax.plot(contour[:, 1], contour[:, 0], linewidth=1, color="r")
     plt.tight_layout()
     plt.show()
+##
+n_channels = expressions.shape[1]
+ch_x = []
+ch_y = []
+y = np.concatenate(l1)
+for c in range(n_channels):
+    x = expressions[:, c]
+    sorted_xy = np.array(sorted(zip(x.tolist(), y.tolist()), key=lambda x: x[0]))
+    sorted_x = sorted_xy[:, 0]
+    sorted_y = sorted_xy[:, 1].astype(int)
+    ch_x.append(sorted_x)
+    ch_y.append(sorted_y)
+
+##
+embl_green_dark = np.array([3, 123, 83]) / 255
+c = 0
+# q = 0.5
+q = 0.99
+xq = np.quantile(ch_x[c], q)
+n = np.searchsorted(ch_x[c], xq)
+s = 25
+# we don't believe in numerical issues
+k = int(round(math.sqrt(s)))
+ss = slice(max(0, n - s // 2), min(n + s // 2 + 1, len(ch_x[c])))
+similar_cells = list(zip(ch_x[c][ss], ch_y[c][ss]))
+
+d = 2
+
+# rows = 39
+# cols = 1
+# dx = 10
+# dy = 3
+
+rows = 5
+cols = 8
+dx = 2
+dy = 1.6
+
+axes = plt.subplots(rows, cols, figsize=(cols * dx, rows * dy))[1].flatten()
+for des_c in tqdm(range(n_channels)):
+    ax = axes[des_c]
+    ax.hist(ch_x[des_c], bins=200, color=embl_green_dark)
+    PLOT_COOL_CELLS = False
+    # PLOT_COOL_CELLS = True
+    if not PLOT_COOL_CELLS:
+        for _, yy in similar_cells:
+            yy = np.where(ch_y[des_c] == yy)[0][0]
+            # xx = expressions[yy, des_c]
+            xx = ch_x[des_c][yy]
+            ax.axvline(x=xx, c='r', linewidth=0.5)
+            # print(xx)
+            # print(yy)
+    else:
+        cool_cells0 = [93416, 93600]
+        cool_cells1 = [53965, 80882]
+        for yy in cool_cells0:
+            yy = np.where(ch_y[des_c] == yy)[0][0]
+            # xx = expressions[yy, des_c]
+            xx = ch_x[des_c][yy]
+            # print(xx)
+            ax.axvline(x=xx, ymin=0, ymax=0.5, c='r', linewidth=1)
+        # print('o')
+        for yy in cool_cells1:
+            yy = np.where(ch_y[des_c] == yy)[0][0]
+            # xx = expressions[yy, des_c]
+            xx = ch_x[des_c][yy]
+            ax.axvline(x=xx, ymin=0.5, ymax=1, c='k', linewidth=1)
+axes[-1].set_axis_off()
+plt.tight_layout()
+plt.show()
+
+ch_x[0]
+ch_x[1]
+ch_x[2]
+ch_x[3]
+y.shape
 ##
 """
 VISIUM

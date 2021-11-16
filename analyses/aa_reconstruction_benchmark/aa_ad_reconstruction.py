@@ -334,7 +334,7 @@ class Prediction:
         else:
             assert b
 
-    def plot_scores(self):
+    def plot_scores_global(self):
         self.check_scores_defined()
 
         s = self.scores_perturbed
@@ -385,9 +385,7 @@ class Prediction:
         print(f"welch's t test: p_value = {p_value}")
 
     @staticmethod
-    def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
-        from scipy.stats import kde
-        import time
+    def crop(imputed, original):
 
         # all_index = i[ix], j[ix]
         # x, y = imputed[all_index], original[all_index]
@@ -396,8 +394,10 @@ class Prediction:
         # y = y[zeros[all_index] == 0]
         #
         q = 0.9
+        cutoff = np.quantile(original, q) * 1.5
+        # cutoff = max(original.max(), imputed.max())
+
         # cutoff = max(np.quantile(original, q), np.quantile(imputed, q))
-        cutoff = np.quantile(original, q) * 1.2
         # debug stuff
         # print(f"cutoff = {cutoff}")
         # print(f"len(original) = {len(original)}")
@@ -415,11 +415,36 @@ class Prediction:
         l = np.minimum(imputed.shape[0], original.shape[0])
 
         if l == 0:
-            return
+            raise ValueError("No points found")
 
         assert len(imputed) == len(original)
         imputed = imputed[:l]
         original = original[:l]
+        return imputed, original, cutoff
+
+    @staticmethod
+    def plot_lines(imputed, original, cutoff, color, ax):
+        a, _, _, _ = np.linalg.lstsq(original[:, np.newaxis], imputed, rcond=None)
+        l = np.linspace(0, cutoff)
+        ax.plot(l, a * l, color=color)
+
+        # A = np.vstack([original, np.ones(len(original))]).T
+        # aa, _, _, _ = np.linalg.lstsq(A, imputed, rcond=None)
+        # ax.plot(l, aa[0] * l + aa[1], color="red")
+
+        ax.plot(l, l, color=color, linestyle=":")
+
+    @staticmethod
+    def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
+        try:
+            imputed, original, cutoff = Prediction.crop(imputed, original)
+        except ValueError as e:
+            # print(e.args)
+            if str(e) == "No points found":
+                print(str(e))
+                return
+        from scipy.stats import kde
+        import time
 
         # data = np.vstack([x, y])
         data = np.vstack([imputed, original])
@@ -453,16 +478,87 @@ class Prediction:
         # print(f"evaluating the kernel on the mesh: {time.time() - start}")
 
         ax.pcolormesh(yi, xi, zi.reshape(xi.shape), cmap="Reds", shading="gouraud")
+        Prediction.plot_lines(imputed, original, cutoff, 'black', ax)
 
-        a, _, _, _ = np.linalg.lstsq(original[:, np.newaxis], imputed, rcond=None)
-        l = np.linspace(0, cutoff)
-        ax.plot(l, a * l, color="black")
+    @staticmethod
+    def plot_imputation2(imputed, original, ax):
+        try:
+            imputed, original, cutoff = Prediction.crop(imputed, original)
+        except ValueError as e:
+            # print(e.args)
+            if str(e) == 'No points found':
+                print(str(e))
+                return
+        ax.set_xlim([0, cutoff])
+        ax.set_ylim([0, cutoff])
 
-        # A = np.vstack([original, np.ones(len(original))]).T
-        # aa, _, _, _ = np.linalg.lstsq(A, imputed, rcond=None)
-        # ax.plot(l, aa[0] * l + aa[1], color="red")
+        import datashader as ds
+        import pandas as pd
+        import colorcet
 
-        ax.plot(l, l, color="black", linestyle=":")
+        # plt.figure()
+        df = pd.DataFrame(dict(x=original, y=imputed))
+        w = 200
+        h = 200
+        k = 2
+        dpi = 100
+
+        x_range = (df.x.min(), df.x.max() + 0.1)
+        y_range = (df.y.min(), df.y.max() + 0.1)
+        # plt.figure(figsize=(w / dpi * k, h / dpi * k), dpi=dpi)
+        cvs = ds.Canvas(x_range=x_range, y_range=y_range, plot_width=w, plot_height=h)
+        agg = cvs.points(df, "x", "y")
+        import matplotlib.cm
+        img = ds.transfer_functions.shade(
+            agg, cmap=matplotlib.cm.viridis
+        )  # , cmap=["white", "black"])
+        import PIL
+
+        ax.imshow(
+            img.to_pil()
+            .transpose(PIL.Image.ROTATE_180)
+            .transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            .transpose(PIL.Image.FLIP_TOP_BOTTOM),
+            extent=[x_range[0], x_range[1], y_range[0], y_range[1]]
+        )
+        embl_green = np.array([6, 159, 77]) / 255
+        color = embl_green
+        color = 'w'
+        Prediction.plot_lines(imputed, original, cutoff, color, ax)
+
+        # def get_n(a, b):
+        #     a, b = min(a, b), max(a, b)
+        #     n = np.ceil(-np.log10(b - a)).astype(int)
+        #     print(a, b, n)
+        #     return max(1, n)
+        #
+        # def get_f(n):
+        #     # if n == 0:
+        #     #     return 'd'
+        #     # else:
+        #     return f"0.{n}f"
+        #
+        # n = get_n(x_range[0], x_range[1])
+        # f = get_f(n)
+        # print(f)
+        # x_ticklabels_values = np.linspace(x_range[0], x_range[1], 5)
+        # x_ticklabels = list(map(lambda x: f'{x:{f}}', x_ticklabels_values))
+        # x_ticks = [w * (x - x_range[0]) / (x_range[1] - x_range[0]) for x in x_ticklabels_values]
+        #
+        # n = get_n(y_range[0], y_range[1])
+        # f = get_f(n)
+        # print(f)
+        # y_ticklabels_values = np.linspace(y_range[0], y_range[1], 5)
+        # y_ticklabels = list(map(lambda y: f'{y:{f}}', y_ticklabels_values))
+        # y_ticks = [h * (1 - (y - y_range[0]) / (y_range[1] - y_range[0])) for y in y_ticklabels_values]
+        #
+        # ax.set_xticks(x_ticks)
+        # ax.set_xticklabels(x_ticklabels)
+        # # ax.set_xlabel('protein expression')
+        # ax.set_yticks(y_ticks)
+        # ax.set_yticklabels(y_ticklabels)
+        # # ax.set_ylabel('ECDF value')
+        # # plt.style.use('default')
 
     def _get_corrupted_entries_values_by_channel(self):
         if not self.check_scores_defined(test=True):
@@ -544,7 +640,7 @@ class Prediction:
                 self.score_function(
                     original_non_perturbed_by_channel[i],
                     reconstructed_zero_by_channel[i],
-                ).item()
+                )
             )
             scores.append(score)
         plt.figure()
@@ -555,6 +651,89 @@ class Prediction:
         plt.xlabel("channel")
         plt.ylabel("score")
         plt.show()
+
+    def plot_summary(self):
+        if self.space != Space.scaled_mean:
+            p = self.transform_to(Space.scaled_mean)
+        else:
+            p = self
+        n_channels = p.original.shape[-1]
+        (
+            original_non_perturbed_by_channel,
+            reconstructed_zero_by_channel,
+        ) = p._get_corrupted_entries_values_by_channel()
+
+        ss = []
+        for i in range(n_channels):
+            original = original_non_perturbed_by_channel[i]
+            imputed = reconstructed_zero_by_channel[i]
+            s = np.mean(p.score_function(original, imputed))
+            ss.append(s)
+        v = np.array(ss)
+        f = lambda i: f"{np.argsort(v)[i]}: {v[np.argsort(v)[i]]}"
+        # print(f(0))
+        i = round(len(v) / 2)
+        # print(f(i))
+        # print(f(-1))
+        indices = [np.argsort(v)[0], np.argsort(v)[i], np.argsort(v)[-1]]
+        labels = ["best", "median", "worst"]
+
+        from matplotlib.lines import Line2D
+
+        dd = 3
+        plt.style.use('dark_background')
+        fig, axes = plt.subplots(1, 4, figsize=(4 * dd, 1 * dd))
+        axes = axes.flatten()
+
+        custom_lines = [
+            Line2D([0], [0], color="black", linestyle=":", lw=1, c='w'),
+            Line2D([0], [0], color="black", lw=1, c='w'),
+            # Line2D([0], [0], color="red", lw=1),
+        ]
+
+        axes[0].legend(
+            custom_lines,
+            [
+                "identity",
+                "linear model",
+                # "affine model"
+            ],
+            loc="center",
+        )
+        axes[0].set_axis_off()
+
+        for i in tqdm(range(3), desc="channels"):
+            ax = axes[i + 1]
+            idx = indices[i]
+            label = labels[i]
+            original = original_non_perturbed_by_channel[idx]
+            imputed = reconstructed_zero_by_channel[idx]
+            # if False:
+            if True:
+                Prediction.plot_imputation2(
+                    original=original,
+                    imputed=imputed,
+                    ax=ax,
+                )
+            else:
+                Prediction.plot_imputation(
+                    original=original,
+                    imputed=imputed,
+                    ax=ax,
+                )
+            score = p.score_function(original, imputed)
+            ax.set(title=f"{label}, score: {p.format_score(np.mean(score))}")
+            if i == 0:
+                ax.set(xlabel="original", ylabel="imputed")
+            # if i > 2:
+            #     break
+        fig.suptitle(
+            f"{p.name}, {p.space.name}, global score: "
+            f"{p.format_score(np.mean(p.scores_perturbed))}"
+        )
+        plt.tight_layout()
+        plt.show()
+        plt.style.use('default')
 
 
 def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):
@@ -587,12 +766,13 @@ if m:
         name="ah_expression",
         split="validation",
     )
-    ah_predictions = Prediction(
-        **kwargs
-    )
+    ah_predictions = Prediction(**kwargs)
 
     ah_predictions.plot_reconstruction()
     # ah_predictions.plot_scores()
+    ah_predictions.plot_summary()
+
+
 #
 if m and False:
     p = ah_predictions.transform_to(Space.raw_sum)
