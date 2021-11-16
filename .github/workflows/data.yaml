@@ -1,0 +1,10 @@
+name: Building the datasets
+on:
+  [workflow_dispatch]
+jobs:
+  test-envs:
+    runs-on: self-hosted
+    steps:
+      - run: >
+        conda activate ci_env
+        python /data/l989o/deployed/a/tests/test_data.py

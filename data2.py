@@ -41,6 +41,8 @@ except NameError:
     def file_path(f):
         return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
 
+CI_TEST = 'CI_TEST' in os.environ
+print(f'CI_TEST = {CI_TEST}')
 
 if __name__ == "__main__":
     # PLOT = True
