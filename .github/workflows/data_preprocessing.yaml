@@ -2,7 +2,7 @@ name: Preprocessing the data
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 23 */5 * *'
+    - cron: '0 23 * * *'
 jobs:
   test-data:
     runs-on: self-hosted
