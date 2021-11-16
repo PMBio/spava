@@ -7,31 +7,30 @@ channels:
   - bioconda
   - nvidia
   - rapidsai
+  - pytorch
 dependencies:
   - python >= 3.8
   - click
   - h5py
-  - pytest
-  - snakemake
-  - umap-learn
   - vigra
   - scikit-image
   - tqdm
-#  - cuml
-  - datashader
   - pandas
   - seaborn
   - colorcet
   - dill
-  - jsonpatch
-  - visdom
+  - scanpy
+  - anndata
   - jupyter
   - jupyterlab
-  - pybind11
-  - dash
-  - flask-caching
-  - dash-daq
-  - sqlalchemy
-  - pip
-  - pip:
-      - cppimport
+  # torch stuff
+  - pytorch == 1.7.0
+  - torchvision == 0.8.1
+  - torchaudio == 0.7.0
+  - cudatoolkit ~= 10.2
+  # pip stuff
+#  - pip
+#  - pip:
+#      - cppimport
+
+#mamba install pytorch==1.7.0 torchvision==0.8.1 torchaudio==0.7.0 cudatoolkit=10.2 -c pytorch -y
