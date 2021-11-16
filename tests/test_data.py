@@ -2,4 +2,6 @@ import os
 
 os.environ["CI_TEST"] = 'aaa'
 
-# import data2
+
+def test_import_data():
+    import data2

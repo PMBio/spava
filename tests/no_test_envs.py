@@ -3,9 +3,9 @@ import subprocess
 import sys
 
 
-def test_envs():
+def no_test_envs():
     subprocess.run(
-        "bash /data/l989o/deployed/a/tests/test_envs.sh",
+        "bash /data/l989o/deployed/a/tests/no_test_envs.sh",
         shell=True,
         stderr=sys.stderr,
         stdout=sys.stdout,
@@ -14,4 +14,4 @@ def test_envs():
 
 
 if __name__ == "__main__":
-    test_envs()
+    no_test_envs()
