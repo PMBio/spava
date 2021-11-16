@@ -8,6 +8,6 @@
 | data preprocessing | type |
 |-------------|---|
 |[![Importing the data](https://github.com/PMBio/a/actions/workflows/data_import.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data_import.yaml)| on push |
-|[![Preprocessing the data](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml)| every 5 days |
+|[![Preprocessing the data](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/data_preprocessing.yaml)| every night |
 
 ! [alt text](a.png)
