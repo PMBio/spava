@@ -19,6 +19,8 @@ dependencies:
   - seaborn
   - colorcet
   - dill
+  - opencv
+  - pytest
   - scanpy
   - anndata
   - jupyter

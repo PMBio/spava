@@ -45,11 +45,14 @@ CI_TEST = 'CI_TEST' in os.environ
 print(f'CI_TEST = {CI_TEST}')
 
 if __name__ == "__main__":
-    # PLOT = True
-    PLOT = False
-    COMPUTE = False
-    # DEBUG = True
-    DEBUG = False
+    if CI_TEST:
+        PLOT = False
+        COMPUTE = True
+        DEBUG = False
+    else:
+        PLOT = False
+        COMPUTE = False
+        DEBUG = False
 else:
     PLOT = False
     COMPUTE = False
@@ -540,6 +543,8 @@ if COMPUTE:
     if DEBUG:
         lists_of_centers = {"train": [], "validation": [], "test": []}
         lists_of_expressions = {"train": [], "validation": [], "test": []}
+
+    DEBUG_WITH_PLOTS = False
 
     with h5py.File(f_out, "w") as f5_out:
         with h5py.File(f_in, "r") as f5_in:

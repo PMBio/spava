@@ -1,0 +1,13 @@
+name: Preprocessing the data
+on:
+  [workflow_dispatch]
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - run: |
+          source ~/.bashrc
+          cd /data/l989o/deployed/a
+          conda activate ci_env
+          python -m tests.test_data_preprocessing
+#

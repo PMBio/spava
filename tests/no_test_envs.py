@@ -1,4 +1,5 @@
-# pytest -s
+# yes: python -m pytest -s
+# no! pytest -s (problems with imports, if you are curious look here https://stackoverflow.com/questions/49028611/pytest-cannot-find-module)
 import subprocess
 import sys
 
