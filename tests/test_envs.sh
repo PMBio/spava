@@ -1,3 +1,4 @@
+set -e
 source ~/.bashrc
 conda remove -n ci_env --all -y
 mamba create -c conda-forge -c bioconda -n ci_env python=3.9 -y
