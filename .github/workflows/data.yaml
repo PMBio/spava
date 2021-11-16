@@ -7,4 +7,4 @@ jobs:
     steps:
       - run: |
         conda activate ci_env
-        python /data/l989o/deployed/a/tests/test_data.py
+        python /data/l989o/deployed/a/tests/no_test_data.py
