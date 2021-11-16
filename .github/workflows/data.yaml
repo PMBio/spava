@@ -2,7 +2,7 @@ name: Building the datasets
 on:
   [workflow_dispatch]
 jobs:
-  test-envs:
+  test-data:
     runs-on: self-hosted
     steps:
       - run: >
