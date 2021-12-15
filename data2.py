@@ -543,7 +543,7 @@ if COMPUTE:
     if DEBUG:
         lists_of_centers = {"train": [], "validation": [], "test": []}
         lists_of_expressions = {"train": [], "validation": [], "test": []}
-
+    
     DEBUG_WITH_PLOTS = False
 
     with h5py.File(f_out, "w") as f5_out:
