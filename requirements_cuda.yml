@@ -33,9 +33,11 @@ dependencies:
   - cudatoolkit >= 10.2
   - pytest
   - pyg
+  - jupytext
   - pip
   - pip:
       - matplotlib-scalebar
+      - jupytertheme
 #      - git+https://github.com/ilia-kats/spatialmuon.git@202112_regions
 
 #mamba install pytorch==1.7.0 torchvision==0.8.1 torchaudio==0.7.0 cudatoolkit=10.2 -c pytorch -y

@@ -30,24 +30,11 @@ from torch.utils.data import DataLoader  # SequentialSampler
 import sys
 
 import pathlib
-from utils import setup_ci
+from utils import setup_ci, file_path
 
 c_, p_, d_ = setup_ci(__name__)
 
 plt.style.use("dark_background")
-
-try:
-    current_file_path = pathlib.Path(__file__).parent.absolute()
-
-    def file_path(f):
-        return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
-
-except NameError:
-    print("setting data path manually")
-
-    def file_path(f):
-        return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
-
 
 def get_split(split):
     assert split in ["train", "validation", "test"]

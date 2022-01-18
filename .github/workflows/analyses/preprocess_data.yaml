@@ -1,16 +1,14 @@
-name: Run tests
+name: Preprocess data
 on:
-  push
+  [workflow_dispatch]:
   schedule:
     - cron: '0 23 * * *'
 jobs:
   test-data:
     runs-on: self-hosted
     steps:
-#      - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
           cd /data/l989o/deployed/a
           conda activate ci_env
-          python -m pytest tests
-#
+          python notebook_exporter.py imc_data.py

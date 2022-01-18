@@ -4,6 +4,7 @@ from data2 import file_path
 import numpy as np
 import matplotlib
 import sys
+import pathlib
 
 f = file_path("joblib_cache_dir")
 os.makedirs(f, exist_ok=True)
@@ -20,7 +21,6 @@ def reproducible_random_choice(n: int, k: int):
 
 def setup_ci(name):
     CI_TEST = "CI_TEST" in os.environ
-    # print(f"CI_TEST = {CI_TEST}")
 
     if name == "__main__":
         PLOT = True
@@ -39,4 +39,17 @@ def setup_ci(name):
 
     if PLOT:
         COMPUTE = True
+    print(f'COMPUTE = {COMPUTE}, PLOT = {PLOT}, DEBUG = {DEBUG}')
     return COMPUTE, PLOT, DEBUG
+
+try:
+    current_file_path = pathlib.Path(__file__).parent.absolute()
+
+    def file_path(f):
+        return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+
+except NameError:
+    print("setting data path manually")
+
+    def file_path(f):
+        return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
