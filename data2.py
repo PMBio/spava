@@ -322,7 +322,7 @@ class FilteredMasksDataset(Dataset):
     def __getitem__(self, i):
         masks = self.masks_ds[i]
         m = masks.max()
-        v = np.arange(1, m + 1, dtype=np.int)
+        v = np.arange(1, m + 1, dtype=int)
         begin = self.index_info.unfiltered_begins[i]
         end = self.index_info.unfiltered_ends[i]
         ok = self.index_info.ok_size_cells[begin:end]
@@ -346,7 +346,7 @@ class FilteredMasksRelabeled(Dataset):
         u = np.unique(self.filtered_masks[i])
         new_to_old = np.sort(u)
         m = np.max(self.masks_ds[i])
-        old_to_new = np.zeros(m + 1, dtype=np.int)
+        old_to_new = np.zeros(m + 1, dtype=int)
         for uu in u:
             (i,) = np.where(new_to_old == uu)
             old_to_new[uu] = i
@@ -373,7 +373,7 @@ if PLOT:
     plt.figure(figsize=(10, 5))
     plt.imshow(x0)
     redify = np.array([[0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0]])
-    plt.imshow(redify[differences.astype(np.int)])
+    plt.imshow(redify[differences.astype(int)])
     plt.show()
 
 
@@ -438,7 +438,7 @@ if PLOT:
     cax1 = divider1.append_axes("right", size="5%", pad=0.05)
     fig.colorbar(sm1, cax=cax1, orientation="vertical")
 
-    filtered = ((m1 == 0) & (m1 != m0)).astype(np.int)
+    filtered = ((m1 == 0) & (m1 != m0)).astype(int)
     redify = np.array([[0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0]])
     axes[1].imshow(redify[filtered])
 

@@ -60,7 +60,7 @@ if m:
     l0, l1 = f_qpoxnqwida(ds)
     raw = np.concatenate(l0, axis=0)
     raw = np.round(raw)
-    raw = raw.astype(np.int)
+    raw = raw.astype(int)
     donor = np.array(l1)
     a = ad.AnnData(raw)
 
@@ -311,7 +311,7 @@ if m:
     raw = np.concatenate(l0, axis=0)
     raw[ce_train] = 0
     raw = np.round(raw)
-    raw = raw.astype(np.int)
+    raw = raw.astype(int)
     a_perturbed = ad.AnnData(raw)
 
 ##

@@ -36,7 +36,7 @@ if m:
     l0, l1 = f_xmqowidjoai(ds)
     x_raw_train = np.concatenate(l0, axis=0)
     x_raw_train = np.round(x_raw_train)
-    x_raw_train = x_raw_train.astype(np.int)
+    x_raw_train = x_raw_train.astype(int)
     # donor = np.array(l1)
 
     ds = SumFilteredDataset("validation")
@@ -53,7 +53,7 @@ if m:
     l0, l1 = f_dcnmoijafqwi(ds)
     x_raw_validation = np.concatenate(l0, axis=0)
     x_raw_validation = np.round(x_raw_validation)
-    x_raw_validation = x_raw_validation.astype(np.int)
+    x_raw_validation = x_raw_validation.astype(int)
     # donor = np.array(l1)
 
 ##

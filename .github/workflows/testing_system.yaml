@@ -1,9 +1,0 @@
-name: Testing the testing system
-on:
-  [workflow_dispatch, push]
-jobs:
-  test-the-tests:
-    runs-on: self-hosted
-    steps:
-      - run: |
-          echo "hola"

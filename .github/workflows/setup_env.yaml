@@ -1,4 +1,4 @@
-name: Creating the conda env
+name: Setup env
 on:
   [workflow_dispatch]
 jobs:
@@ -7,4 +7,5 @@ jobs:
     steps:
 #      - run: python -c "import os; print(os.getcwd())";
 #      - run: python tests/test_envs.py
-      - run: python /data/l989o/deployed/a/tests/no_test_envs.py
+#      - run: python /data/l989o/deployed/a/tests/no_test_envs.py
+      - run: bash tests/setup_env.sh

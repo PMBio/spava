@@ -1,6 +1,8 @@
-name: Importing the data
+name: Preprocessing the data
 on:
-  [workflow_dispatch, push]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 23 * * *'
 jobs:
   test-data:
     runs-on: self-hosted
@@ -9,6 +11,5 @@ jobs:
           source ~/.bashrc
           cd /data/l989o/deployed/a
           conda activate ci_env
-          python -m tests.test_data_import
-#          python /data/l989o/deployed/a/tests/test_data.py
+          python -m pytest tests
 #
