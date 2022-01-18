@@ -478,7 +478,7 @@ class Prediction:
         # print(f"evaluating the kernel on the mesh: {time.time() - start}")
 
         ax.pcolormesh(yi, xi, zi.reshape(xi.shape), cmap="Reds", shading="gouraud")
-        Prediction.plot_lines(imputed, original, cutoff, 'black', ax)
+        Prediction.plot_lines(imputed, original, cutoff, "black", ax)
 
     @staticmethod
     def plot_imputation2(imputed, original, ax):
@@ -486,7 +486,7 @@ class Prediction:
             imputed, original, cutoff = Prediction.crop(imputed, original)
         except ValueError as e:
             # print(e.args)
-            if str(e) == 'No points found':
+            if str(e) == "No points found":
                 print(str(e))
                 return
         ax.set_xlim([0, cutoff])
@@ -509,6 +509,7 @@ class Prediction:
         cvs = ds.Canvas(x_range=x_range, y_range=y_range, plot_width=w, plot_height=h)
         agg = cvs.points(df, "x", "y")
         import matplotlib.cm
+
         img = ds.transfer_functions.shade(
             agg, cmap=matplotlib.cm.viridis
         )  # , cmap=["white", "black"])
@@ -519,11 +520,11 @@ class Prediction:
             .transpose(PIL.Image.ROTATE_180)
             .transpose(PIL.Image.FLIP_LEFT_RIGHT)
             .transpose(PIL.Image.FLIP_TOP_BOTTOM),
-            extent=[x_range[0], x_range[1], y_range[0], y_range[1]]
+            extent=[x_range[0], x_range[1], y_range[0], y_range[1]],
         )
         embl_green = np.array([6, 159, 77]) / 255
         color = embl_green
-        color = 'w'
+        color = "w"
         Prediction.plot_lines(imputed, original, cutoff, color, ax)
 
         # def get_n(a, b):
@@ -681,13 +682,13 @@ class Prediction:
         from matplotlib.lines import Line2D
 
         dd = 3
-        plt.style.use('dark_background')
+        plt.style.use("dark_background")
         fig, axes = plt.subplots(1, 4, figsize=(4 * dd, 1 * dd))
         axes = axes.flatten()
 
         custom_lines = [
-            Line2D([0], [0], color="black", linestyle=":", lw=1, c='w'),
-            Line2D([0], [0], color="black", lw=1, c='w'),
+            Line2D([0], [0], color="black", linestyle=":", lw=1, c="w"),
+            Line2D([0], [0], color="black", lw=1, c="w"),
             # Line2D([0], [0], color="red", lw=1),
         ]
 
@@ -733,7 +734,7 @@ class Prediction:
         )
         plt.tight_layout()
         plt.show()
-        plt.style.use('default')
+        plt.style.use("default")
 
 
 def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):

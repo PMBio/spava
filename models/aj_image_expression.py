@@ -93,7 +93,7 @@ class VAE(pl.LightningModule):
 
         self.log_c = nn.Parameter(torch.Tensor([self.optuna_parameters["log_c"]] * 39))
         # TODO: remove before rerunning the next hyperparameter search
-        self.logit_d = nn.Parameter(torch.Tensor([0.] * 39))
+        self.logit_d = nn.Parameter(torch.Tensor([0.0] * 39))
 
     def encoder(self, x):
         y = self.maxpool(self.relu(self.bn0(self.conv0(x))))
@@ -392,21 +392,22 @@ if __name__ == "__main__":
         ppp.PERTURB = True
         # trial = study.trials[28]  # 36, 20, 38, 34
         trial = study.best_trial
-        print(f'trial.number = {trial.number}, trial.user_attrs = {trial.user_attrs}')
+        print(f"trial.number = {trial.number}, trial.user_attrs = {trial.user_attrs}")
         objective(trial)
 
 
 if False:
-##
+    ##
     from data2 import file_path
     import optuna
+
     study_name = "aj_convnet_expression"
     storage = "sqlite:///" + file_path("optuna_aj.sqlite")
     study = optuna.load_study(
-            storage=storage,
-            study_name=study_name,
-        )
+        storage=storage,
+        study_name=study_name,
+    )
     print(study.best_trial.user_attrs)
-    print(study.trials_dataframe().sort_values(by='value'))
+    print(study.trials_dataframe().sort_values(by="value"))
 
 ##

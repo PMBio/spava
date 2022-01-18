@@ -17,7 +17,7 @@ import pandas as pd
 import optuna
 from utils import reproducible_random_choice
 
-m = __name__ == '__main__'
+m = __name__ == "__main__"
 
 STUDY_DILATED_MASK = False
 STUDY_PERTURBED_PIXELS = False
@@ -56,11 +56,13 @@ if m:
     random_indices = reproducible_random_choice(n, 10000)
 ##
 
+
 def compute_knn(b: ad.AnnData):
     nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(b.X)
     distances, indices = nbrs.kneighbors(b.X)
     b.obsm["nearest_neighbors"] = indices
     print("done")
+
 
 def precompute(data_loaders, expression_model_checkpoint, random_indices, split):
     loader = data_loaders[["train", "validation"].index(split)]
@@ -114,7 +116,7 @@ if m:
         expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
         "/expression_vae/version_145/checkpoints/last.ckpt",
         random_indices=random_indices,
-        split=SPLIT
+        split=SPLIT,
     )
 
 ##
@@ -125,7 +127,7 @@ if m and STUDY_DILATED_MASK:
         expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
         "/expression_vae/version_108/checkpoints/last.ckpt",
         random_indices=random_indices,
-        split=SPLIT
+        split=SPLIT,
     )
 
 
@@ -180,7 +182,10 @@ def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
     plt.figure(figsize=(400 / dpi, 400 / dpi), dpi=dpi)
     plt.imshow(mm0)
     plt.colorbar()
-    plt.title(f"{description}\nadjusted rand score: {adjusted_rand_score(c0, c1):.02f}", y=1.02)
+    plt.title(
+        f"{description}\nadjusted rand score: {adjusted_rand_score(c0, c1):.02f}",
+        y=1.02,
+    )
     plt.tight_layout()
     plt.show()
 
@@ -190,12 +195,20 @@ if m:
     compare_clusters(b1, b0, description='"expression" vs "latent"')
     from data2 import file_path
     import pickle
-    pickle.dump({'input': b1, 'latent': b0}, open(file_path('latent_anndata_from_ah_model.pickle'), 'wb'))
+
+    pickle.dump(
+        {"input": b1, "latent": b0},
+        open(file_path("latent_anndata_from_ah_model.pickle"), "wb"),
+    )
     if STUDY_DILATED_MASK:
-        compare_clusters(b1, b1m, description='"expression" vs "expression (dilated masks)"')
+        compare_clusters(
+            b1, b1m, description='"expression" vs "expression (dilated masks)"'
+        )
         compare_clusters(b0, b0m, description='"latent" vs "latent (dilated masks)"')
         compare_clusters(
-            b1m, b0m, description='"expression (dilated masks)" vs "latent (dilated masks)"'
+            b1m,
+            b0m,
+            description='"expression (dilated masks)" vs "latent (dilated masks)"',
         )
 
 
@@ -295,7 +308,10 @@ if m and STUDY_PERTURBED_PIXELS:
     perturbed_mus = []
     for i in tqdm(range(12), "perturbed model"):
         loader = get_loaders(
-            perturb=PERTURB, perturb_pixels=True, perturb_pixels_seed=i, perturb_masks=False
+            perturb=PERTURB,
+            perturb_pixels=True,
+            perturb_pixels_seed=i,
+            perturb_masks=False,
         )[["train", "validation"].index(SPLIT)]
         expression_model_checkpoint = (
             f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae"
@@ -318,14 +334,14 @@ if m and STUDY_PERTURBED_PIXELS:
     a_mus = [ad.AnnData(x.detach().numpy()) for x in perturbed_mus]
 ##
 if m and STUDY_PERTURBED_PIXELS:
-    for i in tqdm(range(12), desc='computing nearest neighbors'):
+    for i in tqdm(range(12), desc="computing nearest neighbors"):
         compute_knn(a_expr[i])
         compute_knn(a_mus[i])
 ##
 if m and STUDY_PERTURBED_PIXELS:
     purities_against_expression = []
     purities_against_latent = []
-    for i in tqdm(range(12), desc='computing knn purity'):
+    for i in tqdm(range(12), desc="computing knn purity"):
         p = compute_knn_purity(a_expr[i], b1)
         purities_against_expression.append(p)
         p = compute_knn_purity(a_mus[i], b0m)
@@ -359,28 +375,30 @@ if m and STUDY_STABILITY and False:
 if m and STUDY_STABILITY:
     b0s = []
     b1s = []
-    for i in tqdm(range(3), 'precomputing'):
+    for i in tqdm(range(3), "precomputing"):
         bb0, bb1 = precompute(
             data_loaders=get_loaders(perturb=PERTURB),
             expression_model_checkpoint="/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints"
-                                        f"/expression_vae/version_{i + 124}/checkpoints/last.ckpt",
+            f"/expression_vae/version_{i + 124}/checkpoints/last.ckpt",
             random_indices=random_indices,
-            split=SPLIT
+            split=SPLIT,
         )
         b0s.append(bb0)
         b1s.append(bb1)
 ##
 if m and STUDY_STABILITY:
     for i in range(3):
-        louvain_plot(b1s[i], title=f'expression, clone {i}')
+        louvain_plot(b1s[i], title=f"expression, clone {i}")
 
     for i in range(3):
-        louvain_plot(b0s[i], title=f'latent, clone {i}')
+        louvain_plot(b0s[i], title=f"latent, clone {i}")
 
 ##
 if m and STUDY_STABILITY:
     for i in range(3):
-        compare_clusters(b1, b1s[i], description=f'"expression" vs "expression, clone {i}"')
+        compare_clusters(
+            b1, b1s[i], description=f'"expression" vs "expression, clone {i}"'
+        )
 
     for i in range(3):
         compare_clusters(b0, b0s[i], description=f'"latent" vs "latent, clone {i}"')

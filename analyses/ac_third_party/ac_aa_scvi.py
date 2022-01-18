@@ -17,6 +17,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import os
 import matplotlib.pyplot as plt
 from utils import memory, reproducible_random_choice
+
 # from analyses.essentials import louvain_plot
 from analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
     louvain_plot,
@@ -430,4 +431,7 @@ if m:
 
 ##
 if m:
-    pickle.dump({'input': aa_val, 'latent': bb_val}, open(file_path("latent_anndata_from_scvi.pickle"), "wb"))
+    pickle.dump(
+        {"input": aa_val, "latent": bb_val},
+        open(file_path("latent_anndata_from_scvi.pickle"), "wb"),
+    )

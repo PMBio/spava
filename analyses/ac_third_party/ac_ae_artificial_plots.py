@@ -16,7 +16,7 @@ f_original = (
 model = VAE.load_from_checkpoint(f_original)
 model.cuda()
 
-ds = FakeRGBCells('validation')
+ds = FakeRGBCells("validation")
 
 latent = []
 for i in tqdm(range(len(ds))):
@@ -41,14 +41,14 @@ sc.tl.umap(a)
 sc.pl.umap(a)
 ##
 
-plt.style.use('dark_background')
+plt.style.use("dark_background")
 len(ds.filter)
 s = pd.Series(ds.filter)
 s.index = a.obs.index
-a.obs['filter'] = s
-sc.pl.umap(a, color=['filter'])
-plt.style.use('default')
-a.obs['filter']
+a.obs["filter"] = s
+sc.pl.umap(a, color=["filter"])
+plt.style.use("default")
+a.obs["filter"]
 ds.filter
 
 

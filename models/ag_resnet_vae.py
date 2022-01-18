@@ -18,7 +18,9 @@ class Interpolate(nn.Module):
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
+    )
 
 
 def conv1x1(in_planes, out_planes, stride=1):
@@ -31,7 +33,9 @@ def resize_conv3x3(in_planes, out_planes, scale=1):
     if scale == 1:
         return conv3x3(in_planes, out_planes)
     else:
-        return nn.Sequential(Interpolate(scale_factor=scale), conv3x3(in_planes, out_planes))
+        return nn.Sequential(
+            Interpolate(scale_factor=scale), conv3x3(in_planes, out_planes)
+        )
 
 
 def resize_conv1x1(in_planes, out_planes, scale=1):
@@ -39,7 +43,9 @@ def resize_conv1x1(in_planes, out_planes, scale=1):
     if scale == 1:
         return conv1x1(in_planes, out_planes)
     else:
-        return nn.Sequential(Interpolate(scale_factor=scale), conv1x1(in_planes, out_planes))
+        return nn.Sequential(
+            Interpolate(scale_factor=scale), conv1x1(in_planes, out_planes)
+        )
 
 
 class EncoderBlock(nn.Module):
@@ -135,9 +141,23 @@ class ResNetEncoder(nn.Module):
         self.n_channels = n_channels
 
         if self.first_conv:
-            self.conv1 = nn.Conv2d(self.n_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(
+                self.n_channels,
+                self.inplanes,
+                kernel_size=7,
+                stride=2,
+                padding=3,
+                bias=False,
+            )
         else:
-            self.conv1 = nn.Conv2d(self.n_channels, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(
+                self.n_channels,
+                self.inplanes,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+            )
 
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
@@ -153,8 +173,12 @@ class ResNetEncoder(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         # using the mask for conditioning the answer
-        self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=1, bias=False)
-        self.mask_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1, bias=False)
+        self.mask_conv1 = nn.Conv2d(
+            1, 4, kernel_size=3, stride=1, padding=1, bias=False
+        )
+        self.mask_conv2 = nn.Conv2d(
+            4, 8, kernel_size=3, stride=1, padding=1, bias=False
+        )
         dummy_image = torch.zeros(1, self.n_channels, 32, 32)
         with torch.no_grad():
             x = self.conv1(dummy_image)
@@ -220,7 +244,9 @@ class ResNetDecoder(nn.Module):
     Resnet in reverse order
     """
 
-    def __init__(self, block, layers, latent_dim, input_height, first_conv, maxpool1, n_channels):
+    def __init__(
+        self, block, layers, latent_dim, input_height, first_conv, maxpool1, n_channels
+    ):
         super().__init__()
 
         self.expansion = block.expansion
@@ -255,8 +281,22 @@ class ResNetDecoder(nn.Module):
         # interpolate after linear layer using scale factor
         self.upscale1 = Interpolate(size=input_height // self.upscale_factor)
 
-        self.conv1a = nn.Conv2d(64 * block.expansion, self.n_channels, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv1b = nn.Conv2d(64 * block.expansion, self.n_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1a = nn.Conv2d(
+            64 * block.expansion,
+            self.n_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
+        self.conv1b = nn.Conv2d(
+            64 * block.expansion,
+            self.n_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
         # using the mask for conditioning the answer
         self.mask_conv1 = nn.Conv2d(1, 4, kernel_size=3, padding=1)
@@ -318,8 +358,18 @@ class ResNetDecoder(nn.Module):
 
 
 def resnet_encoder(first_conv, maxpool1, n_channels, enc_out_dim):
-    return ResNetEncoder(EncoderBlock, [2, 2, 2], first_conv, maxpool1, n_channels, enc_out_dim)
+    return ResNetEncoder(
+        EncoderBlock, [2, 2, 2], first_conv, maxpool1, n_channels, enc_out_dim
+    )
 
 
 def resnet_decoder(latent_dim, input_height, first_conv, maxpool1, n_channels):
-    return ResNetDecoder(DecoderBlock, [2, 2, 2], latent_dim, input_height, first_conv, maxpool1, n_channels)
+    return ResNetDecoder(
+        DecoderBlock,
+        [2, 2, 2],
+        latent_dim,
+        input_height,
+        first_conv,
+        maxpool1,
+        n_channels,
+    )

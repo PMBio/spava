@@ -8,10 +8,10 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
-ds = PerturbedRGBCells(split='validation')
+ds = PerturbedRGBCells(split="validation")
 ds.perturb()
 
-cells_ds = PerturbedCellDataset(split='validation')
+cells_ds = PerturbedCellDataset(split="validation")
 cells_ds.perturb()
 
 if False:
@@ -37,19 +37,19 @@ if False:
 ##
 
 models = {
-    'resnet_vae': '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/checkpoints'
-                  '/epoch=3-step=1610.ckpt',
-    'resnet_vae_perturbed': '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_12'
-                            '/checkpoints/last.ckpt',
-    'resnet_vae_perturbed_long': '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_14/checkpoints/last.ckpt',
-    'resnet_vae_last_channel': '/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_20'
-                               '/checkpoints/last.ckpt'
+    "resnet_vae": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_7/checkpoints"
+    "/epoch=3-step=1610.ckpt",
+    "resnet_vae_perturbed": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_12"
+    "/checkpoints/last.ckpt",
+    "resnet_vae_perturbed_long": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_14/checkpoints/last.ckpt",
+    "resnet_vae_last_channel": "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/resnet_vae/version_20"
+    "/checkpoints/last.ckpt",
 }
 
 rgb_ds = ds.rgb_cells
 from models.ag_conv_vae_lightning import VAE as ResNetVAE
 
-the_model = 'resnet_vae'
+the_model = "resnet_vae"
 # the_model = 'resnet_vae_last_channel'
 resnet_vae = ResNetVAE.load_from_checkpoint(models[the_model])
 loader = DataLoader(rgb_ds, batch_size=16, num_workers=8, pin_memory=True)
@@ -204,55 +204,55 @@ if True:
     start = time.time()
     list_of_z = []
     with torch.no_grad():
-        for data in tqdm(loader, desc='embedding the whole validation set'):
+        for data in tqdm(loader, desc="embedding the whole validation set"):
             data = [d.to(resnet_vae.device) for d in data]
             z = [zz.cpu() for zz in resnet_vae(*data)]
             list_of_z.append(z)
-    print(f'forwarning the data to the resnets: {time.time() - start}')
+    print(f"forwarning the data to the resnets: {time.time() - start}")
 
     torch.cuda.empty_cache()
 
     if False:
         all_masks = []
-        for data in tqdm(loader, desc='putting the masks in the hdf5 file'):
+        for data in tqdm(loader, desc="putting the masks in the hdf5 file"):
             _, masks = data
             all_masks.append(masks)
 ##
 from data2 import file_path, RGBCells, PerturbedRGBCells, PerturbedCellDataset
 
-f = file_path('image_features_resnet_vae_gamma_poisson.h5py')
+f = file_path("image_features_resnet_vae_gamma_poisson.h5py")
 import h5py
 
 if False:
     len(list_of_z)
     len(list_of_z[0])
     alpha, beta, mu, std, z = list(zip(*list_of_z))
-    with h5py.File(f, 'w') as f5:
-        f5['alpha'] = torch.cat(alpha, dim=0).numpy()
-        f5['beta'] = torch.cat(beta, dim=0).numpy()
-        f5['mu'] = torch.cat(mu, dim=0).numpy()
-        f5['std'] = torch.cat(std, dim=0).numpy()
+    with h5py.File(f, "w") as f5:
+        f5["alpha"] = torch.cat(alpha, dim=0).numpy()
+        f5["beta"] = torch.cat(beta, dim=0).numpy()
+        f5["mu"] = torch.cat(mu, dim=0).numpy()
+        f5["std"] = torch.cat(std, dim=0).numpy()
 
 if False:
     all_masks = []
-    for data in tqdm(loader, desc='putting the masks in the hdf5 file'):
+    for data in tqdm(loader, desc="putting the masks in the hdf5 file"):
         _, masks = data
         all_masks.append(masks)
     print(z.shape)
-    with h5py.File(f, 'a') as f5:
-        f5['masks'] = torch.cat(all_masks, dim=0).numpy()
+    with h5py.File(f, "a") as f5:
+        f5["masks"] = torch.cat(all_masks, dim=0).numpy()
 
 ##
 if False:
-    with h5py.File(f, 'r') as f5:
-        n_cells = len(f5['alpha'])
+    with h5py.File(f, "r") as f5:
+        n_cells = len(f5["alpha"])
         print(n_cells)
         ii = sorted(np.random.choice(n_cells, 10000, replace=False))
-        alphas = f5['alpha'][ii, ...]
-        betas = f5['beta'][ii, ...]
-        mus = f5['mu'][ii, ...]
-        stds = f5['std'][ii, ...]
-        masks = f5['masks'][ii, ...]
+        alphas = f5["alpha"][ii, ...]
+        betas = f5["beta"][ii, ...]
+        mus = f5["mu"][ii, ...]
+        stds = f5["std"][ii, ...]
+        masks = f5["masks"][ii, ...]
 
 if True:
     alpha, beta, mu, std, z = list(zip(*list_of_z))
@@ -265,7 +265,7 @@ if True:
     masks = torch.cat(alpha, dim=0).numpy()[ii]
 ##
 # unperturbed because we don't call .perturb()
-unperturbed_cells_ds = PerturbedCellDataset('validation')
+unperturbed_cells_ds = PerturbedCellDataset("validation")
 expression = unperturbed_cells_ds.merged[ii, ...].numpy()
 ##
 r = alphas
@@ -283,7 +283,10 @@ axes = plt.subplots(8, 5, figsize=(20, 40))[1].flatten()
 for i, ax in enumerate(axes):
     if i < 39:
         ax.scatter(expression[:, i], mean_expression[:, i])
-plt.suptitle('for each channel: cell expression (x) vs averaged predicted per pixel expected expression (y)', y=0.995)
+plt.suptitle(
+    "for each channel: cell expression (x) vs averaged predicted per pixel expected expression (y)",
+    y=0.995,
+)
 plt.tight_layout()
 plt.show()
 ##
@@ -291,7 +294,6 @@ from scipy.stats import spearmanr
 
 for i in range(39):
     r, p = spearmanr(expression[:, i], mean_expression[:, i])
-    print(f'channel {i}: {r}')
+    print(f"channel {i}: {r}")
 
 ##
-

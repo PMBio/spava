@@ -431,6 +431,7 @@ class VAE(pl.LightningModule):
             assert batch_val_elbo is not None
             self.log("batch_val_elbo", batch_val_elbo)
 
+
 # from https://medium.com/@adrian.waelchli/3-simple-tricks-that-will-change-the-way-you-debug-pytorch-5c940aa68b03
 class LogComputationalGraph(pl.Callback):
     def __init__(self):
@@ -666,12 +667,11 @@ if __name__ == "__main__":
             objective(study.best_trial)
         else:
             df = study.trials_dataframe()
-            df = df.sort_values(by='value')
+            df = df.sort_values(by="value")
             import pandas as pd
 
-            pd.set_option('display.max_rows', 500)
-            pd.set_option('display.max_columns', 500)
-            pd.set_option('display.width', 1000)
+            pd.set_option("display.max_rows", 500)
+            pd.set_option("display.max_columns", 500)
+            pd.set_option("display.width", 1000)
             print(df)
             # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
-

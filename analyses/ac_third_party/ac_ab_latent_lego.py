@@ -182,6 +182,7 @@ def f():
     ae.compile()
     return ae
 
+
 # does clone_model clean also the optimizer state? let's just stay safe
 latent_lego(
     model_original=f(),
@@ -194,17 +195,14 @@ latent_lego(
 from latent.modules import VariationalEncoder, NegativeBinomialDecoder
 
 # Creates a VariationalEncoder with a standard normal prior
-encoder = VariationalEncoder(latent_dim=20, prior='normal', kld_weight=0.01)
+encoder = VariationalEncoder(latent_dim=20, prior="normal", kld_weight=0.01)
 # Creates a NegativeBinomialDecoder with a constant dispersion estimate
-decoder = NegativeBinomialDecoder(x_dim=x_train.shape[1], dispersion='constant')
+decoder = NegativeBinomialDecoder(x_dim=x_train.shape[1], dispersion="constant")
 
 # Constructs an Autoencoder object with predefined encoder and decoder
-ae = Autoencoder(
-    encoder=encoder,
-    decoder=decoder
-)
+ae = Autoencoder(encoder=encoder, decoder=decoder)
 ae.compile()
 
 # Fit input data using size factors for each cell
-x_sf = np.array([1.]*100)
+x_sf = np.array([1.0] * 100)
 ae.fit([x_train, x_sf], epochs=10, batch_size=10)

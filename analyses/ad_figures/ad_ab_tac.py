@@ -111,7 +111,7 @@ for q in tqdm(qs, desc="plotting similar images"):
         # this works only if not transforming Space.raw_sum
         # assert np.isclose(xx, expression[c])
         ax.imshow(ome[CH, :, :], vmin=vmin, vmax=vmax)
-        ax.set(title=f'cell {yy}')
+        ax.set(title=f"cell {yy}")
         numpy_mask = np.squeeze(mask.numpy(), 0)
         contours = skimage.measure.find_contours(numpy_mask, 0.4)
         for contour in contours:
@@ -168,7 +168,7 @@ for des_c in tqdm(range(n_channels)):
             yy = np.where(ch_y[des_c] == yy)[0][0]
             # xx = expressions[yy, des_c]
             xx = ch_x[des_c][yy]
-            ax.axvline(x=xx, c='r', linewidth=0.5)
+            ax.axvline(x=xx, c="r", linewidth=0.5)
             # print(xx)
             # print(yy)
     else:
@@ -179,13 +179,13 @@ for des_c in tqdm(range(n_channels)):
             # xx = expressions[yy, des_c]
             xx = ch_x[des_c][yy]
             # print(xx)
-            ax.axvline(x=xx, ymin=0, ymax=0.5, c='r', linewidth=1)
+            ax.axvline(x=xx, ymin=0, ymax=0.5, c="r", linewidth=1)
         # print('o')
         for yy in cool_cells1:
             yy = np.where(ch_y[des_c] == yy)[0][0]
             # xx = expressions[yy, des_c]
             xx = ch_x[des_c][yy]
-            ax.axvline(x=xx, ymin=0.5, ymax=1, c='k', linewidth=1)
+            ax.axvline(x=xx, ymin=0.5, ymax=1, c="k", linewidth=1)
 axes[-1].set_axis_off()
 plt.tight_layout()
 plt.show()

@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 
 m = False
-m = __name__ == '__main__'
+m = __name__ == "__main__"
 
 ##
 N_CHANNELS = 39
@@ -153,9 +153,11 @@ if m:
 ###
 class FakeRGBCells(Dataset):
     def __init__(self, split: str):
-        splits = {'train': slice(0, 2000),
-                  'validation': slice(2000, 2800),}
-                  # 'test': slice(2800, 2800)}
+        splits = {
+            "train": slice(0, 2000),
+            "validation": slice(2000, 2800),
+        }
+        # 'test': slice(2800, 2800)}
         s = splits[split]
         self.t = torch.tensor(t[s])
         self.filter = filter[s]
@@ -169,8 +171,7 @@ class FakeRGBCells(Dataset):
         corrupted_entries = torch.zeros_like(x, dtype=torch.bool)[:, 0, 0]
         return x, mask, corrupted_entries
 
+
 if m:
-    ds = FakeRGBCells('train')
+    ds = FakeRGBCells("train")
     print(ds[0])
-
-

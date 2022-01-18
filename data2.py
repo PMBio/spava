@@ -34,15 +34,15 @@ try:
     def file_path(f):
         return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
 
-
 except NameError:
     print("setting data path manually")
 
     def file_path(f):
         return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
 
-CI_TEST = 'CI_TEST' in os.environ
-print(f'CI_TEST = {CI_TEST}')
+
+CI_TEST = "CI_TEST" in os.environ
+print(f"CI_TEST = {CI_TEST}")
 
 if __name__ == "__main__":
     if CI_TEST:
@@ -543,7 +543,7 @@ if COMPUTE:
     if DEBUG:
         lists_of_centers = {"train": [], "validation": [], "test": []}
         lists_of_expressions = {"train": [], "validation": [], "test": []}
-    
+
     DEBUG_WITH_PLOTS = False
 
     with h5py.File(f_out, "w") as f5_out:

@@ -82,21 +82,24 @@ for k, v in d.items():
         norm = plt.Normalize(0, np.max(xx))
         ax.imshow(np.moveaxis(xx, 0, 1), cmap=cmap)
         # ax.set_axis_off()
-        ax.set(xlabel='', xticks=[], ylabel='', yticks=[])
-plt.title('Spaital protein profiling')
+        ax.set(xlabel="", xticks=[], ylabel="", yticks=[])
+plt.title("Spaital protein profiling")
 
 from data2 import ExpressionFilteredDataset
-ds2 = ExpressionFilteredDataset('train')
+
+ds2 = ExpressionFilteredDataset("train")
 ds0 = CenterFilteredDataset("train")
 xy = ds0[j]
 if True:
     expressions = ds2[j]
     from data2 import IndexInfo
-    ii = IndexInfo('train')
+
+    ii = IndexInfo("train")
     begin = ii.filtered_begins[j]
     end = ii.filtered_ends[j]
     ds1 = RGBCells("train")
     from tqdm import tqdm
+
     for jj in tqdm(range(begin, end)):
         expression, ome, mask = ds1[jj]
         numpy_mask = np.squeeze(mask.numpy(), 0)
@@ -113,28 +116,39 @@ if True:
                     scores[k] = max(scores[k], e[idx])
             highest = max(scores, key=lambda k: scores.get(k))
             color = colors[highest]
-            ax.plot(contour[:, 0] + x - 16, contour[:, 1] + y - 16, linewidth=1, color=color)
-    plt.title('Visualizing cells')
+            ax.plot(
+                contour[:, 0] + x - 16, contour[:, 1] + y - 16, linewidth=1, color=color
+            )
+    plt.title("Visualizing cells")
 
 if True:
     from matplotlib_scalebar.scalebar import ScaleBar
 
-    scalebar = ScaleBar(1, "um", length_fraction=0.25, box_color='black', color='white', location='lower right',
-                        fixed_value=100)
+    scalebar = ScaleBar(
+        1,
+        "um",
+        length_fraction=0.25,
+        box_color="black",
+        color="white",
+        location="lower right",
+        fixed_value=100,
+    )
     ax.add_artist(scalebar)
     from matplotlib.lines import Line2D
 
-    custom_lines = [Line2D([0], [0], marker='o', color=colors['tumor'], markersize=10, lw=0),
-                    Line2D([0], [0], marker='o', color=colors['immune'], markersize=10, lw=0),
-                    Line2D([0], [0], marker='o', color=colors['hist'], markersize=10, lw=0)]
+    custom_lines = [
+        Line2D([0], [0], marker="o", color=colors["tumor"], markersize=10, lw=0),
+        Line2D([0], [0], marker="o", color=colors["immune"], markersize=10, lw=0),
+        Line2D([0], [0], marker="o", color=colors["hist"], markersize=10, lw=0),
+    ]
 
-    ax.legend(custom_lines, ['Tumor', 'Immune', 'Stroma'])
+    ax.legend(custom_lines, ["Tumor", "Immune", "Stroma"])
 
 if True:
-    cmap = matplotlib.cm.get_cmap('Blues')
+    cmap = matplotlib.cm.get_cmap("Blues")
     from graphs import get_graph_file
 
-    f = get_graph_file('knn', 'train', j)
+    f = get_graph_file("knn", "train", j)
     import torch
 
     data = torch.load(f)
@@ -147,8 +161,9 @@ if True:
     edges_to_plot = [(e[0], e[1]) for e in g.edges(data=True) if e[2]["edge_attr"] > 0]
 
     import networkx
+
     node_size = 0
-    node_colors = 'black'
+    node_colors = "black"
     edge_cmap = cmap
     networkx.drawing.nx_pylab.draw_networkx(
         g,
@@ -166,7 +181,7 @@ if True:
         edge_vmax=np.max(weights),
         ax=ax,
     )
-    plt.title('Physical proximity graph')
+    plt.title("Physical proximity graph")
 
 x = ds[j]
 ax.set(xlim=[0, x.shape[0]], ylim=[0, x.shape[1]])

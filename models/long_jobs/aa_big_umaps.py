@@ -12,11 +12,11 @@ import anndata as ad
 import time
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--normalization-method', type=str, required=True)
-parser.add_argument('--test', action='store_const', const=True)
+parser.add_argument("--normalization-method", type=str, required=True)
+parser.add_argument("--test", action="store_const", const=True)
 args = parser.parse_args()
 
-assert args.normalization_method in ['raw', 'transformed', 'vae_mu']
+assert args.normalization_method in ["raw", "transformed", "vae_mu"]
 
 merged = merge_cells(args.normalization_method)
 print(merged.shape)
@@ -32,7 +32,9 @@ print(cell_index_to_ome(begin))
 print(cell_index_to_ome(end - 1))
 print(cell_index_to_ome(end))
 
-index_info_omes, index_info_begins, index_info_ends = pickle.load(open(file_path('merged_cells_info.pickle'), 'rb'))
+index_info_omes, index_info_begins, index_info_ends = pickle.load(
+    open(file_path("merged_cells_info.pickle"), "rb")
+)
 
 if args.test:
     small = index_info_ends[3]
@@ -40,24 +42,24 @@ if args.test:
 
 a = ad.AnnData(merged)
 
-print('computing pca')
+print("computing pca")
 start = time.time()
-sc.tl.pca(a, svd_solver='arpack')
-print(f'pca computed: {time.time() - start}')
+sc.tl.pca(a, svd_solver="arpack")
+print(f"pca computed: {time.time() - start}")
 
-print('computing neighbors')
+print("computing neighbors")
 start = time.time()
 sc.pp.neighbors(a)
-print(f'neighbors computed: {time.time() - start}')
+print(f"neighbors computed: {time.time() - start}")
 
 # sc.tl.leiden(b0)
 
-print('computing umap')
+print("computing umap")
 start = time.time()
 sc.tl.umap(a)
-print(f'umap computed: {time.time() - start}')
+print(f"umap computed: {time.time() - start}")
 
-f = file_path(f'umap_{args.normalization_method}.adata')
+f = file_path(f"umap_{args.normalization_method}.adata")
 a.write(f)
 # with h5py.File(f0, 'w') as f5:
 #     for o, begin, end in zip(index_info_omes, index_info_begins, index_info_ends):

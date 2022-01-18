@@ -525,11 +525,13 @@ class CellGraph(InMemoryDataset):
                 np.linalg.norm(data.regions_centers - center, axis=1) < SUBGRAPH_RADIUS
             )
         elif self.graph_method == "knn":
-            g = to_networkx(data, edge_attrs=["edge_attr"], node_attrs=["regions_centers"])
+            g = to_networkx(
+                data, edge_attrs=["edge_attr"], node_attrs=["regions_centers"]
+            )
             neighbors = list(g.neighbors(local_cell_index))
             l = []
             for node in neighbors:
-                w = g.get_edge_data(local_cell_index, node)['edge_attr']
+                w = g.get_edge_data(local_cell_index, node)["edge_attr"]
                 l.append((node, w))
             l = sorted(l, key=lambda x: x[1])
             nearest = [l[i][0] for i in range(GRAPH_KNN_SUBGRAPH_K - 1)]

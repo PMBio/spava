@@ -139,10 +139,12 @@ if m and PLOT:
     scanpy_compute(b)
 
     #
-    sc.pl.umap(b, color="louvain", title=f'{MODEL} latent space')
+    sc.pl.umap(b, color="louvain", title=f"{MODEL} latent space")
     import pickle
 
-    pickle.dump({'latent': b}, open(file_path(f"latent_anndata_from_{MODEL}.pickle"), "wb"))
+    pickle.dump(
+        {"latent": b}, open(file_path(f"latent_anndata_from_{MODEL}.pickle"), "wb")
+    )
 ##
 if m:
     list_of_z_perturbed = get_list_of_z(loader=loader_perturbed, model=model_perturbed)
@@ -207,6 +209,7 @@ if m:
 ##
 if m:
     import dill
+
     d = {f"{MODEL} expression": kwargs}
     dill.dump(d, open(file_path(f"{MODEL}_scores.pickle"), "wb"))
 
@@ -289,7 +292,7 @@ if m and BUG:
     # print(f'vw = {very_wrong}')
     # print(f'w = {wrong}')
     if w + vw > 0:
-        print('bug')
+        print("bug")
         for i in very_wrong:
             b0, b1 = get_bb(i)
             print(b0, b1)
@@ -297,8 +300,16 @@ if m and BUG:
         ##
         b0, b1 = get_bb(i)
         print(b0, b1)
-        expression, expression_graph, is_perturbed, is_perturbed_graph, is_center0 = get_full_tensors(i)
-        expression, expression_center, is_perturbed, is_perturbed_center = get_tensors(i)
+        (
+            expression,
+            expression_graph,
+            is_perturbed,
+            is_perturbed_graph,
+            is_center0,
+        ) = get_full_tensors(i)
+        expression, expression_center, is_perturbed, is_perturbed_center = get_tensors(
+            i
+        )
         print(is_perturbed)
         print(is_perturbed_center)
         ##
@@ -310,33 +321,36 @@ if m and BUG:
         print(torch.where(is_center0 == 1.0))
         print(expression_graph[torch.where(is_center0 == 1.0), :])
 
-    ##
+        ##
         from data2 import IndexInfo
-        ii = IndexInfo('validation')
+
+        ii = IndexInfo("validation")
         print(ii.filtered_begins[:10])
         print(very_wrong)
         print(wrong[:10])
 
-    ##
+        ##
         from graphs import CellExpressionGraph
-        cell_expression_ds = CellExpressionGraph('validation', 'gaussian')
+
+        cell_expression_ds = CellExpressionGraph("validation", "gaussian")
         cell_expression_ds.merge()
         get_ome = cell_expression_ds.cell_graph.get_ome_index_from_cell_index
-    ##
+        ##
         last_ok = wrong[0] - 1
         first_wrong = wrong[0]
         first_very_wrong = very_wrong[0]
 
-    ##
+        ##
         def analyse(cell_index):
             ##
             # cell_index = first_very_wrong  # remember to comment this
-            print('cell_index =', cell_index)
+            print("cell_index =", cell_index)
             ome_index, local_cell_index = get_ome(cell_index)
-            print(f'ome_index = {ome_index}')
+            print(f"ome_index = {ome_index}")
             data = cell_expression_ds[cell_index]
             from data2 import ExpressionFilteredDataset, quantiles_for_normalization
-            expression_filtered_dataset = ExpressionFilteredDataset(split='validation')
+
+            expression_filtered_dataset = ExpressionFilteredDataset(split="validation")
             expression_for_ome = expression_filtered_dataset[ome_index]
             expression_for_ome /= quantiles_for_normalization
             computed_local_cell_index = cell_index - ii.filtered_begins[ome_index]
@@ -345,36 +359,49 @@ if m and BUG:
             real_expression1, _, _ = cell_ds_original[cell_index]
             assert np.allclose(real_expression0, real_expression1)
             if False:
-                print('expression from ome_index:')
+                print("expression from ome_index:")
                 print(real_expression0)
-                print('expression from cell_ds_original')
+                print("expression from cell_ds_original")
                 print(real_expression1)
-                print('all expressions from ome_index:')
+                print("all expressions from ome_index:")
                 print(expression_for_ome.shape)
                 print(np.where((expression_for_ome == real_expression0).all(axis=1)))
-                print(f'local_cell_index = {local_cell_index}')
-                print(np.where(np.isclose(expression_for_ome, real_expression1).all(axis=1)))
-                print(f'len(expression_for_ome) = {len(expression_for_ome)}')
+                print(f"local_cell_index = {local_cell_index}")
+                print(
+                    np.where(
+                        np.isclose(expression_for_ome, real_expression1).all(axis=1)
+                    )
+                )
+                print(f"len(expression_for_ome) = {len(expression_for_ome)}")
             expression = data.x[data.center_index].numpy()
             assert np.allclose(expression, real_expression0)
             expression
             np.where(np.isclose(expression_for_ome, expression).all(axis=1))
-            np.where(np.isclose(expression_filtered_dataset[ome_index - 1], expression).all(axis=1))
-            np.where(np.isclose(expression_filtered_dataset[ome_index + 1], expression).all(axis=1))
+            np.where(
+                np.isclose(expression_filtered_dataset[ome_index - 1], expression).all(
+                    axis=1
+                )
+            )
+            np.where(
+                np.isclose(expression_filtered_dataset[ome_index + 1], expression).all(
+                    axis=1
+                )
+            )
             all_expressions = cell_expression_ds.merged_expressions.numpy()
             np.where(np.isclose(all_expressions, expression).all(axis=1))
-            print(f'cell_index = {cell_index}')
-            print(f'ome_index = {ome_index}')
-            print(f'get_ome(1417) = {get_ome(1417)}')
-            print(f'ii.filtered_begins[1] = {ii.filtered_begins[1]}')
-            print(f'local_cell_index = {local_cell_index}')
-    ##
+            print(f"cell_index = {cell_index}")
+            print(f"ome_index = {ome_index}")
+            print(f"get_ome(1417) = {get_ome(1417)}")
+            print(f"ii.filtered_begins[1] = {ii.filtered_begins[1]}")
+            print(f"local_cell_index = {local_cell_index}")
+
+        ##
         analyse(last_ok)
         analyse(first_wrong)
         analyse(first_very_wrong)
         ##
         # quick test
-        cell_expression_ds_unmerged = CellExpressionGraph('validation', 'gaussian')
+        cell_expression_ds_unmerged = CellExpressionGraph("validation", "gaussian")
         ##
         data = cell_expression_ds_unmerged[first_wrong]
         data.x[data.center_index]

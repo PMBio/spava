@@ -333,7 +333,7 @@ def get_loaders(
 def objective(trial: optuna.trial.Trial) -> float:
     from models.boilerplate import training_boilerplate
 
-    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name='ai_fake')
+    logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="ai_fake")
     print(f"logging in {logger.experiment.log_dir}")
     version = int(logger.experiment.log_dir.split("version_")[-1])
     trial.set_user_attr("version", version)
@@ -359,7 +359,8 @@ def objective(trial: optuna.trial.Trial) -> float:
             checkpoint_callback,
             early_stop_callback,
             PyTorchLightningPruningCallback(trial, monitor="batch_val_elbo"),
-            ImageSampler(), LogComputationalGraph()
+            ImageSampler(),
+            LogComputationalGraph(),
         ],
         logger=logger,
         num_sanity_val_steps=0,  # track_grad_norm=2,

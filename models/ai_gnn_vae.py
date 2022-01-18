@@ -39,6 +39,7 @@ import torch.nn.functional as F
 from torch import autograd
 from torch import nn
 from torch_geometric.data import DataLoader as GeometricDataLoader
+
 # from torch.utils.data import Subset
 from torch_geometric.nn.conv import GINEConv
 
@@ -47,7 +48,7 @@ from graphs import CellExpressionGraphOptimized
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-m = __name__ == '__main__'
+m = __name__ == "__main__"
 
 # heavy to load, when debugging better to have this done only once so I can call objective (which calls get_loaders,
 # which needs these datasets), multiple times
@@ -60,9 +61,9 @@ if m:
 
 def get_ds(split: str, perturbed: bool):
     def _get_ds():
-        return CellExpressionGraphOptimized(split, 'gaussian', perturbed)
+        return CellExpressionGraphOptimized(split, "gaussian", perturbed)
 
-    if split == 'train':
+    if split == "train":
         if perturbed:
             global _train_ds_perturbed
             if _train_ds_perturbed is None:
@@ -73,7 +74,7 @@ def get_ds(split: str, perturbed: bool):
             if _train_ds is None:
                 _train_ds = _get_ds()
             return _train_ds
-    elif split == 'validation':
+    elif split == "validation":
         if perturbed:
             global _val_ds_perturbed
             if _val_ds_perturbed is None:
@@ -90,6 +91,7 @@ def get_ds(split: str, perturbed: bool):
 
 ##
 
+
 def get_detect_anomaly_cm():
     if ppp.DETECT_ANOMALY:
         cm = autograd.detect_anomaly()
@@ -103,21 +105,23 @@ class GnnEncoder(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         if optuna_parameters is not None:
-            self.p_dropout = output['p_dropout']
+            self.p_dropout = output["p_dropout"]
         else:
             self.p_dropout = 0.1
-        gine0_nn = nn.Sequential(nn.Linear(self.in_channels + 1, self.in_channels + 1),
-                                 nn.BatchNorm1d(self.in_channels + 1),
-                                 nn.ReLU(),
-                                 nn.Dropout(p=self.p_dropout),
-                                 nn.Linear(self.in_channels + 1, self.in_channels),
-                                 )
-        gine1_nn = nn.Sequential(nn.Linear(self.in_channels + 1, self.in_channels + 1),
-                                 nn.BatchNorm1d(self.in_channels + 1),
-                                 nn.ReLU(),
-                                 nn.Dropout(p=self.p_dropout),
-                                 nn.Linear(self.in_channels + 1, self.in_channels),
-                                 )
+        gine0_nn = nn.Sequential(
+            nn.Linear(self.in_channels + 1, self.in_channels + 1),
+            nn.BatchNorm1d(self.in_channels + 1),
+            nn.ReLU(),
+            nn.Dropout(p=self.p_dropout),
+            nn.Linear(self.in_channels + 1, self.in_channels),
+        )
+        gine1_nn = nn.Sequential(
+            nn.Linear(self.in_channels + 1, self.in_channels + 1),
+            nn.BatchNorm1d(self.in_channels + 1),
+            nn.ReLU(),
+            nn.Dropout(p=self.p_dropout),
+            nn.Linear(self.in_channels + 1, self.in_channels),
+        )
         self.gcn0 = GINEConv(gine0_nn)
         self.gcn1 = GINEConv(gine1_nn)
         self.linear0 = nn.Linear(1, self.in_channels + 1)
@@ -136,7 +140,7 @@ class GnnEncoder(nn.Module):
         x = self.dropout0(x)
         x_with_center_info = torch.cat((x, is_center.view(-1, 1)), dim=1)
         x = self.gcn1(x_with_center_info, edge_index, e) + original_x
-        indices_is_center, = torch.where(is_center == 1)
+        (indices_is_center,) = torch.where(is_center == 1)
         x = x[indices_is_center, :]
         # x = is_center @ x
         # n = torch.argmax(is_center, dim=0)
@@ -171,7 +175,7 @@ class GnnVae(pl.LightningModule):
         self.out_channels = self.n_channels
         self.gnn_encoder = GnnEncoder(in_channels=self.n_channels)
         self.linear0 = nn.Linear(self.n_channels, 20)
-        self.dropout0 = nn.Dropout(p=optuna_parameters['p_dropout'])
+        self.dropout0 = nn.Dropout(p=optuna_parameters["p_dropout"])
         self.linear1_0 = nn.Linear(20, self.latent_dim)
         self.linear1_1 = nn.Linear(20, self.latent_dim)
 
@@ -279,10 +283,10 @@ class GnnVae(pl.LightningModule):
             # decoded
             a = self.decoder(z)
             if (
-                    torch.isnan(a).any()
-                    or torch.isnan(mu).any()
-                    or torch.isnan(std).any()
-                    or torch.isnan(z).any()
+                torch.isnan(a).any()
+                or torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 self.trainer.should_stop = True
@@ -298,17 +302,24 @@ class GnnVae(pl.LightningModule):
         is_center = batch.is_center
         # the scalar product will not introduce numbers not in {0., 1.}
         # corrupted_entries = (is_center @ batch.is_perturbed.float()).bool()
-        corrupted_entries = batch.is_perturbed[torch.where(is_center == 1.)[0], :]
-        expression = x[torch.where(is_center == 1.)[0], :]
+        corrupted_entries = batch.is_perturbed[torch.where(is_center == 1.0)[0], :]
+        expression = x[torch.where(is_center == 1.0)[0], :]
         # expression = is_center @ x
         return x, edge_index, edge_attr, is_center, corrupted_entries, expression
 
     def training_step(self, batch, batch_idx):
-        x, edge_index, edge_attr, is_center, corrupted_entries, expression = self.unfold_batch(batch)
+        (
+            x,
+            edge_index,
+            edge_attr,
+            is_center,
+            corrupted_entries,
+            expression,
+        ) = self.unfold_batch(batch)
         a, mu, std, z = self.forward(x, edge_index, edge_attr, is_center)
         # n = torch.argmax(is_center, dim=0)
         # expression = x[n, :]
-        expression = x[torch.where(is_center == 1.)[0], :]
+        expression = x[torch.where(is_center == 1.0)[0], :]
         # expression = is_center @ x
         elbo, kl, recon_loss = self.loss_function(
             expression, a, mu, std, z, corrupted_entries
@@ -326,7 +337,14 @@ class GnnVae(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
         if not self.trainer.should_stop:
-            x, edge_index, edge_attr, is_center, corrupted_entries, expression = self.unfold_batch(batch)
+            (
+                x,
+                edge_index,
+                edge_attr,
+                is_center,
+                corrupted_entries,
+                expression,
+            ) = self.unfold_batch(batch)
             a, mu, std, z = self.forward(x, edge_index, edge_attr, is_center)
             n = torch.argmax(is_center, dim=0)
             expression = x[n, :]
@@ -335,7 +353,8 @@ class GnnVae(pl.LightningModule):
             )
         else:
             from models.boilerplate import optuna_nan_workaround
-            nan = torch.Tensor([float('NaN')]).to(self.device)
+
+            nan = torch.Tensor([float("NaN")]).to(self.device)
             elbo = optuna_nan_workaround(nan)
             kl = recon_loss = elbo
 
@@ -367,14 +386,18 @@ class GnnVae(pl.LightningModule):
 if m and False:
     #
     ds = CellExpressionGraphOptimized("validation", "gaussian")
-    loader = GeometricDataLoader(ds, batch_size=32, shuffle=True, num_workers=ppp.NUM_WORKERS)
+    loader = GeometricDataLoader(
+        ds, batch_size=32, shuffle=True, num_workers=ppp.NUM_WORKERS
+    )
     #
     o = dict(vae_latent_dims=10, log_c=0)
     model = GnnVae(optuna_parameters=o, n_channels=39)
     data = loader.__iter__().__next__()
     output = model(data.x, data.edge_index, data.edge_attr, data.is_center)
     a, mu, std, z = output
-    print(f'a.shape = {a.shape}, mu.shape = {mu.shape}, std.shape = {std.shape}, z.shape = {z.shape}')
+    print(
+        f"a.shape = {a.shape}, mu.shape = {mu.shape}, std.shape = {std.shape}, z.shape = {z.shape}"
+    )
     # ##
     # import sys
     #
@@ -398,12 +421,12 @@ class GeometricSubset(torch_geometric.data.Dataset):
 
 
 def get_loaders(
-        perturb: bool,
-        shuffle_train=False,
-        val_subset=False,
+    perturb: bool,
+    shuffle_train=False,
+    val_subset=False,
 ):
-    train_ds = get_ds('train', perturb)
-    val_ds = get_ds('validation', perturb)
+    train_ds = get_ds("train", perturb)
+    val_ds = get_ds("validation", perturb)
     assert train_ds is not None
     assert val_ds is not None
 
@@ -477,7 +500,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e-1, log=True)
-    p_dropout = trial.suggest_float("p_dropout", 0., 0.5)
+    p_dropout = trial.suggest_float("p_dropout", 0.0, 0.5)
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,

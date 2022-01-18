@@ -1,4 +1,5 @@
 from data2 import CHANNEL_NAMES
+
 print(CHANNEL_NAMES[0], CHANNEL_NAMES[5], CHANNEL_NAMES[6])
 
 ##
@@ -91,7 +92,7 @@ def get_image(loader, model, return_cells=False):
 
             for c in range(n_channels):
                 is_perturbed_entry = (
-                        perturbed_entries is not None and perturbed_entries[i, c]
+                    perturbed_entries is not None and perturbed_entries[i, c]
                 )
                 original_c = original[:, :, c]
                 original_c = torch.stack([original_c] * 3, dim=2)
@@ -159,7 +160,7 @@ def get_image(loader, model, return_cells=False):
     l = []  ####
     pixels = []
     for original, reconstructed, mask in zip(
-            all_originals, all_reconstructed, all_masks
+        all_originals, all_reconstructed, all_masks
     ):
         pixels.extend(original.permute(1, 2, 0).reshape((-1, n_channels)))
         upscaled_mask = upscale(torch.unsqueeze(mask, 0))
@@ -186,7 +187,7 @@ def get_image(loader, model, return_cells=False):
         return x
 
     for original, reconstructed, mask in zip(
-            all_originals, all_reconstructed, all_masks
+        all_originals, all_reconstructed, all_masks
     ):
         to_transform = original.permute(1, 2, 0).reshape((-1, n_channels)).numpy()
         pca = reducer.transform(to_transform)
@@ -227,10 +228,10 @@ def get_image(loader, model, return_cells=False):
 
     for c in range(n_channels):
         l += (
-                all_original_c[c]
-                + all_reconstructed_c[c]
-                + all_original_masked_c[c]
-                + all_reconstructed_masked_c[c]
+            all_original_c[c]
+            + all_reconstructed_c[c]
+            + all_original_masked_c[c]
+            + all_reconstructed_masked_c[c]
         )
 
     #### from sklearn.decomposition import PCA

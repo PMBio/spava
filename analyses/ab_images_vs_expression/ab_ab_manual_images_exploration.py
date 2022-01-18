@@ -11,9 +11,9 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
-ds = PerturbedRGBCells(split='validation')
+ds = PerturbedRGBCells(split="validation")
 
-cells_ds = PerturbedCellDataset(split='validation')
+cells_ds = PerturbedCellDataset(split="validation")
 if False:
     ds.perturb()
     cells_ds.perturb()
@@ -44,7 +44,9 @@ if False:
 n_channels = ds[42][0].shape[0]
 n_cells = 10
 
-axes = plt.subplots(n_channels, n_cells, figsize=(2 * n_cells, 2 * n_channels))[1].T.flatten()
+axes = plt.subplots(n_channels, n_cells, figsize=(2 * n_cells, 2 * n_channels))[
+    1
+].T.flatten()
 for j in tqdm(range(n_cells)):
     ome, mask, is_perturbed = ds[j]
     numpy_mask = mask.squeeze(0).numpy()
@@ -52,8 +54,8 @@ for j in tqdm(range(n_cells)):
     for c in range(n_channels):
         k = j * n_channels + c
         ax = axes[k]
-        p = '' if not is_perturbed[c] else ' (perturbed)'
-        ax.set(title=f'ds[{j}], ch {c}{p}')
+        p = "" if not is_perturbed[c] else " (perturbed)"
+        ax.set(title=f"ds[{j}], ch {c}{p}")
         ax.imshow(ome[c, :, :].numpy())
 
         # show mask border
@@ -66,21 +68,28 @@ plt.tight_layout()
 plt.show()
 ##
 # selected channels
-d = {0: 'subcellular', 37: 'subcellular', 38: 'subcellular',
-     3: 'boundary', 4: 'boundary', 5: 'boundary',
-     10: 'both', 35: 'both'}
+d = {
+    0: "subcellular",
+    37: "subcellular",
+    38: "subcellular",
+    3: "boundary",
+    4: "boundary",
+    5: "boundary",
+    10: "both",
+    35: "both",
+}
 # plotting more cells
 n_channels = len(d)
-for channel, description in tqdm(d.items(), desc='channels'):
+for channel, description in tqdm(d.items(), desc="channels"):
     fig, axes = plt.subplots(5, 5, figsize=(20, 20))
     axes = axes.flatten()
-    plt.suptitle(f'channel {channel} ({description})')
+    plt.suptitle(f"channel {channel} ({description})")
     for i, ax in enumerate(axes):
         ome, mask, is_perturbed = ds[i]
         numpy_mask = mask.squeeze(0).numpy()
         contours = measure.find_contours(numpy_mask, 0.4)
-        p = '' if not is_perturbed[channel] else ' (perturbed)'
-        ax.set(title=f'ds[{i}], ch {channel}{p}')
+        p = "" if not is_perturbed[channel] else " (perturbed)"
+        ax.set(title=f"ds[{i}], ch {channel}{p}")
         ax.imshow(ome[channel, :, :].numpy())
 
         # show mask border
