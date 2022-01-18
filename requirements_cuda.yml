@@ -33,6 +33,7 @@ dependencies:
   - cudatoolkit >= 10.2
   - pytest
   - pyg
+  - pip
   - pip:
       - matplotlib-scalebar
 #      - git+https://github.com/ilia-kats/spatialmuon.git@202112_regions

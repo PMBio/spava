@@ -1,6 +1,7 @@
 name: Run tests
 on:
-  workflow_dispatch:
+  [push]
+#    workflow_dispatch,
   schedule:
     - cron: '0 23 * * *'
 jobs:

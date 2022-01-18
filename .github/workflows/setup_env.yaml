@@ -1,6 +1,6 @@
 name: Setup env
 on:
-  [workflow_dispatch]
+  [push]
 jobs:
   test-envs:
     runs-on: self-hosted
