@@ -5,10 +5,9 @@ jobs:
   test-data:
     runs-on: self-hosted
     steps:
-#      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          cd /data/l989o/deployed/a
           conda activate ci_env
           python -m pytest tests
 #
