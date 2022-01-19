@@ -18,11 +18,10 @@ import torchvision.transforms
 import vigra
 import os
 
-# from tqdm.notebook import tqdm
 from torch import nn
 from torch.nn import functional as F
 from torchvision.transforms import functional as TF
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from torch.utils.data import Dataset
 from sklearn.decomposition import PCA
 import splits
@@ -134,8 +133,8 @@ def channels_subsetting_and_hot_pixel_filtering(s):
 
 ##
 def u(raw: bool):
-    for split in tqdm(["train", "validation", "test"], desc="split"):
-        for index in tqdm(range(len(get_split(split))), desc="slide"):
+    for split in tqdm(["train", "validation", "test"], desc="split", position=0, leave=True):
+        for index in tqdm(range(len(get_split(split))), desc="slide", position=0, leave=True):
             s = get_smu_file(split, index, raw=raw)
             yield s
 
