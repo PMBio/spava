@@ -47,12 +47,11 @@ def setup_ci(name):
 
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
+    if not os.path.exists("data"):
+        raise NameError
 
     def file_path(f):
-        if os.path.exists("data"):
-            return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
-        else:
-            raise NameError
+        return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
 
 except NameError:
     print("setting data path manually")
