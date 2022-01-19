@@ -1,6 +1,6 @@
 import os
 from joblib import Memory
-from data2 import file_path
+from utils import file_path
 import numpy as np
 import matplotlib
 import sys
