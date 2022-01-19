@@ -1,6 +1,5 @@
 import os
 from joblib import Memory
-from utils import file_path
 import numpy as np
 import matplotlib
 import sys
