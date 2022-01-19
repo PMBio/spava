@@ -46,7 +46,10 @@ try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
 
     def file_path(f):
-        return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+        if os.path.exists('data'):
+            return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+        else:
+            raise NameError
 
 except NameError:
     print("setting data path manually")
