@@ -256,3 +256,25 @@ if n_ or t_ or p_ and False:
     plt.show()
 
 ##
+if n_ or t_ or c_ and False:
+    all_expressions = []
+    for index in tqdm(range(len(get_split('train'))), desc="slide", position=0, leave=True):
+        s = get_smu_file('train', index)
+        e = s['imc']['mean'].X[...]
+        all_expressions.append(e)
+    expressions = np.concatenate(all_expressions, axis=0)
+    transformed = np.arcsinh(expressions)
+    quantile = 0.9
+    scaling_factors = np.quantile(transformed, q=quantile, axis=0)
+
+    for s in all_processed_smu():
+        regions = s['imc']['mean']
+        new_x = regions.X[...] / scaling_factors
+        new_regions = smu.Regions(X=new_x, masks=regions.masks, var=regions.var)
+        if 'transformed_mean' in s['imc']:
+            del s['imc']['transformed_mean']
+        s['imc']['transformed_mean'] = new_regions
+        if t_:
+            break
+
+pass
