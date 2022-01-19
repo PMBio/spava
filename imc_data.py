@@ -41,7 +41,7 @@ c_, p_, t_, n_ = setup_ci(__name__)
 plt.style.use("dark_background")
 
 ##
-RAW_FOLDER = file_path('spatialmuon')
+RAW_FOLDER = file_path("spatialmuon")
 PROCESSED_FOLDER = file_path("spatialmuon_processed")
 
 
@@ -115,8 +115,8 @@ def channels_subsetting_and_hot_pixel_filtering(s):
 
     new_var = s["imc"]["ome"].var.iloc[CHANNELS_TO_KEEP]
     new_var.reset_index(inplace=True)
-    new_var.rename(columns={"index": "original_index", 'channel_name': 'probe'})
-    new_var['channel_name'] = CHANNEL_NAMES
+    new_var.rename(columns={"index": "original_index", "channel_name": "probe"})
+    new_var["channel_name"] = CHANNEL_NAMES
 
     ## md
     ## hot pixel filtering
@@ -131,18 +131,22 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     ##
     new_imc["ome"] = smu.Raster(X=new_x, var=new_var, coordinate_unit="um")
 
+
 ##
 def u(raw: bool):
-    for split in tqdm(["train", 'validation', 'test'], desc="split"):
-        for index in tqdm(range(len(get_split(split))), desc='slide'):
+    for split in tqdm(["train", "validation", "test"], desc="split"):
+        for index in tqdm(range(len(get_split(split))), desc="slide"):
             s = get_smu_file(split, index, raw=raw)
             yield s
+
 
 def all_processed_smu():
     return u(raw=False)
 
+
 def all_raw_smu():
     return u(raw=True)
+
 
 ##
 if n_ or t_ or c_ and False:
@@ -155,7 +159,7 @@ if n_ or t_ or c_ and False:
 if n_ or t_ or p_ and False:
     s = get_smu_file("train", 0, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)
-    s['imc']['ome'].plot(channels='DNA1', preprocessing=np.arcsinh)
+    s["imc"]["ome"].plot(channels="DNA1", preprocessing=np.arcsinh)
 
 ## md
 # accumulate features
@@ -163,7 +167,7 @@ if n_ or t_ or p_ and False:
 if n_ or t_ or c_ and False:
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
-        k = 'mean'
+        k = "mean"
         if k in s["imc"]:
             del s["imc"][k]
         s["imc"][k] = accumulated[k]
@@ -180,37 +184,39 @@ if n_ or t_ or c_ and False:
     if n_ or t_ or p_ and False:
         areas = []
         for s in all_processed_smu():
-            a = s['imc']['mean'].masks.obs['count']
+            a = s["imc"]["mean"].masks.obs["count"]
             areas.append(a.to_numpy())
         areas = np.concatenate(areas)
         ##
         plt.figure()
         plt.hist(areas, bins=100)
         plt.axvline(x=CUTOFF)
-        plt.title('cutoff to filter cells by area')
-        plt.xlabel('cell area')
-        plt.ylabel('count')
+        plt.title("cutoff to filter cells by area")
+        plt.xlabel("cell area")
+        plt.ylabel("count")
         plt.show()
         ##
         plt.figure()
         plt.hist(areas, bins=1000)
         plt.xlim([0, 100])
         plt.axvline(x=CUTOFF)
-        plt.title('cutoff to filter cells by area')
-        plt.xlabel('cell area')
-        plt.ylabel('count')
+        plt.title("cutoff to filter cells by area")
+        plt.xlabel("cell area")
+        plt.ylabel("count")
         plt.show()
     ##
     for s in all_processed_smu():
-        o = s['imc']['mean'].masks.obs
-        obs_to_keep = o['count'] > CUTOFF
+        o = s["imc"]["mean"].masks.obs
+        obs_to_keep = o["count"] > CUTOFF
         indices_to_keep = np.where(obs_to_keep.to_numpy())[0]
         all_indices = o.index.to_numpy()
         indices_to_discard = np.setdiff1d(all_indices, indices_to_keep)
 
         def new_regions_obj(regions):
             _mask = regions.masks._mask[...]
-            labels_to_remove = regions.masks.obs['original_labels'].iloc[indices_to_discard].tolist()
+            labels_to_remove = (
+                regions.masks.obs["original_labels"].iloc[indices_to_discard].tolist()
+            )
             for ii in labels_to_remove:
                 assert np.sum(_mask == ii) <= CUTOFF
                 _mask[_mask == ii] = 0
@@ -219,34 +225,35 @@ if n_ or t_ or c_ and False:
             new_masks = smu.RasterMasks(mask=_mask)
             new_masks._obs = obs
             assert regions.isbacked
-            if 'X' in regions.backing:
+            if "X" in regions.backing:
                 new_x = regions.X
                 new_x = new_x[indices_to_keep, :]
             else:
                 new_x = None
             new_regions = smu.Regions(X=new_x, masks=new_masks, var=regions.var)
             return new_regions
-        old_masks = s['imc']['masks']
-        old_mean = s['imc']['mean']
+
+        old_masks = s["imc"]["masks"]
+        old_mean = s["imc"]["mean"]
         new_masks = new_regions_obj(old_masks)
         new_mean = new_regions_obj(old_mean)
-        if 'filtered_masks' in s['imc']:
-            del s['imc']['filtered_masks']
-        if 'filtered_mean' in s['imc']:
-            del s['imc']['filtered_mean']
-        s['imc']['filtered_masks'] = new_masks
-        s['imc']['filtered_mean'] = new_mean
+        if "filtered_masks" in s["imc"]:
+            del s["imc"]["filtered_masks"]
+        if "filtered_mean" in s["imc"]:
+            del s["imc"]["filtered_mean"]
+        s["imc"]["filtered_masks"] = new_masks
+        s["imc"]["filtered_mean"] = new_mean
         if t_:
             break
 
 ##
 if n_ or t_ or p_ and False:
-    s = get_smu_file('train', 2)
+    s = get_smu_file("train", 2)
     _, ax = plt.subplots(1, figsize=(20, 20))
-    s['imc']['masks'].masks.plot(fill_colors='red', ax=ax)
+    s["imc"]["masks"].masks.plot(fill_colors="red", ax=ax)
     # s['imc']['filtered_mean'].masks.plot(fill_colors='black', ax=ax)
-    s['imc']['filtered_mean'].plot(0, ax=ax)
-    plt.suptitle('cells filtered because too small shown in red')
+    s["imc"]["filtered_mean"].plot(0, ax=ax)
+    plt.suptitle("cells filtered because too small shown in red")
     plt.show()
 
 ##
