@@ -21,26 +21,33 @@ def reproducible_random_choice(n: int, k: int):
 
 def setup_ci(name):
     CI_TEST = "CI_TEST" in os.environ
+    NOTEBOOK_EXPORTER = "NOTEBOOK_EXPORTER" in os.environ
+    assert not (CI_TEST and NOTEBOOK_EXPORTER)
 
-    if name == "__main__":
-        PLOT = True
-        COMPUTE = True
-        DEBUG = True
-    elif CI_TEST:
+    if CI_TEST:
         if sys.gettrace() is None:
             matplotlib.use("Agg")
+        COMPUTE = True
         PLOT = True
+        TEST = True
+        NOTEBOOK = False
+    elif NOTEBOOK_EXPORTER:
         COMPUTE = True
-        DEBUG = False
+        PLOT = True
+        TEST = False
+        NOTEBOOK = True
+    elif name == '__main__':
+        COMPUTE = True
+        PLOT = True
+        TEST = False
+        NOTEBOOK = False
     else:
-        PLOT = False
         COMPUTE = False
-        DEBUG = False
-
-    if PLOT:
-        COMPUTE = True
-    print(f'COMPUTE = {COMPUTE}, PLOT = {PLOT}, DEBUG = {DEBUG}')
-    return COMPUTE, PLOT, DEBUG
+        PLOT = False
+        TEST = False
+        NOTEBOOK = False
+    print(f'COMPUTE = {COMPUTE}, PLOT = {PLOT}, TEST = {TEST}, NOTEBOOK = {NOTEBOOK}')
+    return COMPUTE, PLOT, TEST, NOTEBOOK
 
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()

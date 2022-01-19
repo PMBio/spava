@@ -36,7 +36,7 @@ import tempfile
 import pathlib
 from utils import setup_ci, file_path
 
-c_, p_, d_ = setup_ci(__name__)
+c_, p_, t_, n_ = setup_ci(__name__)
 
 plt.style.use("dark_background")
 
@@ -69,7 +69,7 @@ def get_smu_file(split, index, raw=False):
 
 
 ##
-if c_ and False:
+if n_ or t_ or c_ and False:
     d = get_smu_file("train", 0, raw=True)
     old_obs = d["imc"]["masks"].masks.obs
     if len(old_obs.columns) == 0:
@@ -77,11 +77,11 @@ if c_ and False:
     print(d)
 
 ##
-if p_ and False:
+if n_ or t_ or p_ and False:
     d["imc"]["ome"].plot(preprocessing=np.arcsinh)
 
 ##
-if p_ and False:
+if n_ or t_ or p_ and False:
     d["imc"]["masks"].plot()
 
 ## md
@@ -145,12 +145,14 @@ def all_raw_smu():
     return u(raw=True)
 
 ##
-if c_ and False:
+if n_ or t_ or c_ and False:
     for s in all_raw_smu():
         channels_subsetting_and_hot_pixel_filtering(s)
+        if t_:
+            break
 
 ##
-if p_ and False:
+if n_ or t_ or p_ and False:
     s = get_smu_file("train", 0, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)
     s['imc']['ome'].plot(channels='DNA1', preprocessing=np.arcsinh)
@@ -158,7 +160,7 @@ if p_ and False:
 ## md
 # accumulate features
 ##
-if c_ and False:
+if n_ or t_ or c_ and False:
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
         k = 'mean'
@@ -167,13 +169,15 @@ if c_ and False:
         s["imc"][k] = accumulated[k]
         # for k in accumulated.keys():
         #     del s["imc"][k]
+        if t_:
+            break
 ##
 ## md
 # filter small cells
 ##
-if c_ and False:
+if n_ or t_ or c_ and False:
     CUTOFF = 20
-    if p_ and False:
+    if n_ or t_ or p_ and False:
         areas = []
         for s in all_processed_smu():
             a = s['imc']['mean'].masks.obs['count']
@@ -232,10 +236,11 @@ if c_ and False:
             del s['imc']['filtered_mean']
         s['imc']['filtered_masks'] = new_masks
         s['imc']['filtered_mean'] = new_mean
-        break
+        if t_:
+            break
 
 ##
-if p_ and False:
+if n_ or t_ or p_ and False:
     s = get_smu_file('train', 2)
     _, ax = plt.subplots(1, figsize=(20, 20))
     s['imc']['masks'].masks.plot(fill_colors='red', ax=ax)

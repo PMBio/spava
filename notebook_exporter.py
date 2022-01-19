@@ -12,6 +12,9 @@ from utils import file_path
 assert len(sys.argv) == 2
 f = sys.argv[1]
 print(f)
+import os
+
+os.environ["NOTEBOOK_EXPORTER"] = "aaa"
 
 with tempfile.TemporaryDirectory() as tempdir:
     assert os.path.isfile(f)
