@@ -1,11 +1,21 @@
+import os
+
+os.environ["SPATIALMUON_TEST"] = "aaa"
+
+
 def test_preprocess_imc_data():
-    import os
+    import datasets.imc_data
 
-    os.environ["CI_TEST"] = "aaa"
 
-    # there should be a "import imc_data" here, be careful that PyCharm does not remove it
-    import imc_data
+def test_preprocess_imc_jeongbin_data():
+    import datasets.imc_jeongbin_data
+
+
+def test_preprocess_visium_data():
+    import datasets.visium_data
 
 
 if __name__ == "__main__":
     test_preprocess_imc_data()
+    test_preprocess_imc_jeongbin_data()
+    test_preprocess_visium_data()

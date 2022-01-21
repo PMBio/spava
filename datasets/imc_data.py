@@ -34,6 +34,7 @@ import tempfile
 
 import pathlib
 from utils import setup_ci, file_path
+import colorama
 
 c_, p_, t_, n_ = setup_ci(__name__)
 
@@ -95,8 +96,11 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     new_s = smu.SpatialMuData(backing=processed_file)
     new_imc = smu.SpatialModality()
     new_s["imc"] = new_imc
-    new_masks = copy.copy(s["imc"]["masks"])
-    new_imc["masks"] = new_masks
+
+    masks = s['imc']['masks'].masks.data
+    relabelled = skimage.measure.label(masks, connectivity=1)
+    new_masks = smu.RasterMasks(mask=relabelled)
+    new_imc["masks"] = smu.Regions(masks=new_masks, coordinate_unit='um')
 
     ## md
     ## channels subsetting
@@ -130,11 +134,14 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     ##
     new_imc["ome"] = smu.Raster(X=new_x, var=new_var, coordinate_unit="um")
 
-
 ##
 def u(raw: bool):
-    for split in tqdm(["train", "validation", "test"], desc="split", position=0, leave=True):
-        for index in tqdm(range(len(get_split(split))), desc="slide", position=0, leave=True):
+    for split in tqdm(
+        ["train", "validation", "test"], desc="split", position=0, leave=True
+    ):
+        for index in tqdm(
+            range(len(get_split(split))), desc="slide", position=0, leave=True
+        ):
             s = get_smu_file(split, index, raw=raw)
             yield s
 
@@ -149,6 +156,7 @@ def all_raw_smu():
 
 ##
 if n_ or t_ or c_ and False:
+    print(f'{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}')
     for s in all_raw_smu():
         channels_subsetting_and_hot_pixel_filtering(s)
         if t_:
@@ -164,6 +172,7 @@ if n_ or t_ or p_ and False:
 # accumulate features
 ##
 if n_ or t_ or c_ and False:
+    print(f"{colorama.Fore.MAGENTA}feature accumulation:{colorama.Fore.RESET}")
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
         k = "mean"
@@ -204,6 +213,7 @@ if n_ or t_ or c_ and False:
         plt.ylabel("count")
         plt.show()
     ##
+    print(f'{colorama.Fore.MAGENTA}filtering cells by area{colorama.Fore.RESET}')
     for s in all_processed_smu():
         o = s["imc"]["mean"].masks.obs
         obs_to_keep = o["count"] > CUTOFF
@@ -256,25 +266,66 @@ if n_ or t_ or p_ and False:
     plt.show()
 
 ##
-if n_ or t_ or c_ and False:
+def compute_scaling_factors():
     all_expressions = []
-    for index in tqdm(range(len(get_split('train'))), desc="slide", position=0, leave=True):
-        s = get_smu_file('train', index)
-        e = s['imc']['mean'].X[...]
+    for index in tqdm(
+        range(len(get_split("train"))),
+        desc="computing scaling factors",
+        position=0,
+        leave=True,
+    ):
+        s = get_smu_file("train", index)
+        e = s["imc"]["mean"].X[...]
         all_expressions.append(e)
     expressions = np.concatenate(all_expressions, axis=0)
     transformed = np.arcsinh(expressions)
     quantile = 0.9
     scaling_factors = np.quantile(transformed, q=quantile, axis=0)
+    return scaling_factors
 
+
+if n_ or t_ or c_ and False:
+    print(f'{colorama.Fore.MAGENTA}scaling accumulated data{colorama.Fore.RESET}')
+    scaling_factors = compute_scaling_factors()
     for s in all_processed_smu():
-        regions = s['imc']['mean']
-        new_x = regions.X[...] / scaling_factors
+        regions = s["imc"]["mean"]
+        new_x = np.arcsinh(regions.X[...]) / scaling_factors
         new_regions = smu.Regions(X=new_x, masks=regions.masks, var=regions.var)
-        if 'transformed_mean' in s['imc']:
-            del s['imc']['transformed_mean']
-        s['imc']['transformed_mean'] = new_regions
+        if "transformed_mean" in s["imc"]:
+            del s["imc"]["transformed_mean"]
+        s["imc"]["transformed_mean"] = new_regions
         if t_:
             break
+
+if n_ or t_ or c_ and False:
+    print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
+    scaling_factors = compute_scaling_factors()
+    f = file_path("imc_tiles.hdf5")
+    with h5py.File(f, "w") as f5:
+        for split in tqdm(
+            ["train", "validation", "test"], desc="split", position=0, leave=True
+        ):
+            for index in tqdm(
+                range(len(get_split(split))), desc="slide", position=0, leave=True
+            ):
+                s = get_smu_file(split, index)
+                raster = s["imc"]["ome"]
+                x = raster.X[...]
+                new_x = np.arcsinh(x) / scaling_factors
+                new_x = new_x.astype(np.float32)
+
+                ##
+                transformed_raster = smu.Raster(
+                    X=new_x, var=raster.var, coordinate_unit="um"
+                )
+                tiles = smu.Tiles(
+                    raster=transformed_raster,
+                    masks=s["imc"]["masks"].masks,
+                    tile_dim=32,
+                )
+                ##
+                filename = os.path.basename(s.backing.filename)
+                f5[f"{split}/{filename}/raster"] = tiles.raster_tiles
+                f5[f"{split}/{filename}/masks"] = tiles.masks_tiles
 
 pass

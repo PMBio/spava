@@ -15,8 +15,8 @@ def reproducible_random_choice(n: int, k: int):
 
 
 def setup_ci(name):
-    CI_TEST = "CI_TEST" in os.environ
-    NOTEBOOK_EXPORTER = "NOTEBOOK_EXPORTER" in os.environ
+    CI_TEST = "SPATIALMUON_TEST" in os.environ
+    NOTEBOOK_EXPORTER = "SPATIALMUON_NOTEBOOK" in os.environ
     assert not (CI_TEST and NOTEBOOK_EXPORTER)
 
     if CI_TEST:
@@ -41,6 +41,8 @@ def setup_ci(name):
         PLOT = False
         TEST = False
         NOTEBOOK = False
+    if 'SPATIALMUON_AGG' in os.environ:
+        matplotlib.use('Agg')
     print(f"COMPUTE = {COMPUTE}, PLOT = {PLOT}, TEST = {TEST}, NOTEBOOK = {NOTEBOOK}")
     return COMPUTE, PLOT, TEST, NOTEBOOK
 
