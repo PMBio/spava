@@ -50,16 +50,23 @@ def setup_ci(name):
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
     if not os.path.exists("data"):
-        raise NameError
+        raise NameError()
 
     def file_path(f):
-        return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+        if "SPATIALMUON_TEST" not in os.environ:
+            return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+        else:
+            return os.path.join(current_file_path, "data/spatial_uzh_processed/a_test", f)
+
 
 except NameError:
     print("setting data path manually")
 
     def file_path(f):
-        return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
+        if "SPATIALMUON_TEST" not in os.environ:
+            return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
+        else:
+            return os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a_test", f)
 
 
 f = file_path("joblib_cache_dir")

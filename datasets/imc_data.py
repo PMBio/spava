@@ -36,6 +36,7 @@ import pathlib
 from utils import setup_ci, file_path
 import colorama
 
+# os.environ['SPATIALMUON_TEST'] = 'aaa'
 c_, p_, t_, n_ = setup_ci(__name__)
 
 plt.style.use("dark_background")
@@ -47,12 +48,13 @@ PROCESSED_FOLDER = file_path("spatialmuon_processed")
 
 def get_split(split):
     assert split in ["train", "validation", "test"]
+    ii = slice(0, 1) if t_ else slice()
     if split == "train":
-        return splits.train
+        return splits.train[ii]
     elif split == "validation":
-        return splits.validation
+        return splits.validation[ii]
     else:
-        return splits.test
+        return splits.test[ii]
 
 
 def get_smu_file(split, index, raw=False):
@@ -97,9 +99,9 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     new_imc = smu.SpatialModality()
     new_s["imc"] = new_imc
 
-    masks = s['imc']['masks'].masks.data
-    relabelled = skimage.measure.label(masks, connectivity=1)
-    new_masks = smu.RasterMasks(mask=relabelled)
+    masks = s['imc']['masks'].masks.X
+    relabelled = skimage.measure.label(masks, connectivity=1).astype(np.uint32)
+    new_masks = smu.RasterMasks(X=relabelled)
     new_imc["masks"] = smu.Regions(masks=new_masks, coordinate_unit='um')
 
     ## md
@@ -159,8 +161,6 @@ if n_ or t_ or c_ and False:
     print(f'{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}')
     for s in all_raw_smu():
         channels_subsetting_and_hot_pixel_filtering(s)
-        if t_:
-            break
 
 ##
 if n_ or t_ or p_ and False:
@@ -179,10 +179,9 @@ if n_ or t_ or c_ and False:
         if k in s["imc"]:
             del s["imc"][k]
         s["imc"][k] = accumulated[k]
+        print("ooo")
         # for k in accumulated.keys():
         #     del s["imc"][k]
-        if t_:
-            break
 ##
 ## md
 # filter small cells
@@ -222,7 +221,7 @@ if n_ or t_ or c_ and False:
         indices_to_discard = np.setdiff1d(all_indices, indices_to_keep)
 
         def new_regions_obj(regions):
-            _mask = regions.masks._mask[...]
+            _mask = regions.masks.X[...]
             labels_to_remove = (
                 regions.masks.obs["original_labels"].iloc[indices_to_discard].tolist()
             )
@@ -231,9 +230,9 @@ if n_ or t_ or c_ and False:
                 _mask[_mask == ii] = 0
             obs = regions.masks.obs.iloc[indices_to_keep]
             # obs.reset_index()
-            new_masks = smu.RasterMasks(mask=_mask)
+            new_masks = smu.RasterMasks(X=_mask)
             new_masks._obs = obs
-            assert regions.isbacked
+            assert regions.is_backed
             if "X" in regions.backing:
                 new_x = regions.X
                 new_x = new_x[indices_to_keep, :]
@@ -252,12 +251,10 @@ if n_ or t_ or c_ and False:
             del s["imc"]["filtered_mean"]
         s["imc"]["filtered_masks"] = new_masks
         s["imc"]["filtered_mean"] = new_mean
-        if t_:
-            break
 
 ##
 if n_ or t_ or p_ and False:
-    s = get_smu_file("train", 2)
+    s = get_smu_file("train", 0)
     _, ax = plt.subplots(1, figsize=(20, 20))
     s["imc"]["masks"].masks.plot(fill_colors="red", ax=ax)
     # s['imc']['filtered_mean'].masks.plot(fill_colors='black', ax=ax)
@@ -294,8 +291,6 @@ if n_ or t_ or c_ and False:
         if "transformed_mean" in s["imc"]:
             del s["imc"]["transformed_mean"]
         s["imc"]["transformed_mean"] = new_regions
-        if t_:
-            break
 
 if n_ or t_ or c_ and False:
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
@@ -309,23 +304,31 @@ if n_ or t_ or c_ and False:
                 range(len(get_split(split))), desc="slide", position=0, leave=True
             ):
                 s = get_smu_file(split, index)
+                filename = os.path.basename(s.backing.filename)
                 raster = s["imc"]["ome"]
                 x = raster.X[...]
                 new_x = np.arcsinh(x) / scaling_factors
                 new_x = new_x.astype(np.float32)
-
-                ##
                 transformed_raster = smu.Raster(
                     X=new_x, var=raster.var, coordinate_unit="um"
                 )
+                ##
                 tiles = smu.Tiles(
                     raster=transformed_raster,
                     masks=s["imc"]["masks"].masks,
-                    tile_dim=32,
+                    tile_dim_in_pixels=32,
                 )
+                if p_:
+                    tiles._example_plot()
+                f5[f"{split}/{filename}/raster"] = tiles.tiles
                 ##
-                filename = os.path.basename(s.backing.filename)
-                f5[f"{split}/{filename}/raster"] = tiles.raster_tiles
-                f5[f"{split}/{filename}/masks"] = tiles.masks_tiles
+                masks_tiles = smu.Tiles(
+                    masks=s["imc"]["masks"].masks,
+                    tile_dim_in_pixels=32,
+                )
+                if p_:
+                    masks_tiles._example_plot()
+                ##
+                f5[f"{split}/{filename}/masks"] = masks_tiles.tiles
 
-pass
+print('done')
