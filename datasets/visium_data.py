@@ -33,8 +33,9 @@ regions = s["Visium"][name]
 raster = s["Visium"][name_hne]
 
 ##
-# regions.plot(channels=["Olfm1", "Plp1", "Itpka", 0])
-# raster.plot()
+regions
+regions.plot(channels=["Olfm1", "Plp1", "Itpka"])
+raster.plot()
 
 ##
 # x = regions.X[...]

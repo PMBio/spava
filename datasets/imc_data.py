@@ -48,7 +48,7 @@ PROCESSED_FOLDER = file_path("spatialmuon_processed")
 
 def get_split(split):
     assert split in ["train", "validation", "test"]
-    ii = slice(0, 1) if t_ else slice()
+    ii = slice(0, 1) if t_ else slice(None)
     if split == "train":
         return splits.train[ii]
     elif split == "validation":
