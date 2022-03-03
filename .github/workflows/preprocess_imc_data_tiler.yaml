@@ -1,4 +1,4 @@
-name: Preprocess IMC data
+name: Preprocess IMC data tiler
 on: 
   workflow_dispatch
 #  workflow_dispatch:
@@ -12,5 +12,6 @@ jobs:
       - run: |
           source ~/.bashrc
           conda activate ci_env
+          export SPATIALMUON_NOTEBOOK="aaa"
           python -m datasets.tilers.imc_data_tiler
 # to wait for another workflow: https://stackoverflow.com/questions/63343937/how-to-use-the-github-actions-workflow-run-event
