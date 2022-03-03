@@ -171,7 +171,7 @@ if n_ or t_ or p_ and False:
         m0 = s['Visium']['ST8059049'].masks
         m1 = s['Visium']['processed'].masks
     else:
-        m0 = s['visium']['ST8059049'].masks
+        m0 = s['visium']['expression'].masks
         m1 = s['visium']['processed'].masks
 
     m0.plot()
@@ -184,7 +184,7 @@ if n_ or t_ or p_ and False:
         raster = s['Visium']['ST8059049H&E']
     else:
         processed_regions = s['visium']['processed']
-        raster = s['visium']['ST8059049H&E']
+        raster = s['visium']['image']
     if not t_:
         bb = smu.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
@@ -206,7 +206,7 @@ if n_ or t_ or c_:
         raster = s['Visium']['ST8059049H&E']
     else:
         masks = s['visium']['processed'].masks
-        raster = s['visium']['ST8059049H&E']
+        raster = s['visium']['image']
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     f = file_path("visium_tiles.hdf5")
     with h5py.File(f, "w") as f5:
