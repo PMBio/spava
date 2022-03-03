@@ -17,7 +17,7 @@ import h5py
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
 c_, p_, t_, n_ = setup_ci(__name__)
-matplotlib.use('module://backend_interagg')
+# matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
 
