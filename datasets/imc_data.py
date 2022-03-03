@@ -42,8 +42,8 @@ c_, p_, t_, n_ = setup_ci(__name__)
 plt.style.use("dark_background")
 
 ##
-RAW_FOLDER = file_path("spatialmuon")
-PROCESSED_FOLDER = file_path("spatialmuon_processed")
+RAW_FOLDER = file_path("spatialmuon/imc")
+PROCESSED_FOLDER = file_path("spatialmuon_processed/imc")
 
 
 def get_split(split):
