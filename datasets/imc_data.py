@@ -308,43 +308,4 @@ if n_ or t_ or c_ and False:
     )
 
 ##
-if n_ or t_ or c_ and False:
-    print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
-    scaling_factors = compute_scaling_factors()
-    f = file_path("imc_tiles.hdf5")
-    with h5py.File(f, "w") as f5:
-        for split in tqdm(
-            ["train", "validation", "test"], desc="split", position=0, leave=True
-        ):
-            for index in tqdm(
-                range(len(get_split(split))), desc="slide", position=0, leave=True
-            ):
-                s = get_smu_file(split, index)
-                filename = os.path.basename(s.backing.filename)
-                raster = s["imc"]["ome"]
-                x = raster.X[...]
-                new_x = np.arcsinh(x) / scaling_factors
-                new_x = new_x.astype(np.float32)
-                transformed_raster = smu.Raster(
-                    X=new_x, var=raster.var, coordinate_unit="um"
-                )
-                ##
-                tiles = smu.Tiles(
-                    raster=transformed_raster,
-                    masks=s["imc"]["masks"].masks,
-                    tile_dim_in_pixels=32,
-                )
-                # if p_:
-                #     tiles._example_plot()
-                f5[f"{split}/{filename}/raster"] = tiles.tiles
-                ##
-                masks_tiles = smu.Tiles(
-                    masks=s["imc"]["masks"].masks,
-                    tile_dim_in_pixels=32,
-                )
-                # if p_:
-                #     masks_tiles._example_plot()
-                ##
-                f5[f"{split}/{filename}/masks"] = masks_tiles.tiles
-
 print("done")
