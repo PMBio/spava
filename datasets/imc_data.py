@@ -302,7 +302,7 @@ if n_ or t_ or c_ and False:
 if n_ or t_ or c_ and False:
     assert np.alltrue(
         get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
-        == get_smu_file("validation", 1)["imc"]["transformed_mean"].uns["scaling_factors"][
+        == get_smu_file("validation", 0)["imc"]["transformed_mean"].uns["scaling_factors"][
             ...
         ]
     )
