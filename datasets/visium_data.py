@@ -167,8 +167,12 @@ if n_ or t_ or c_ and False:
 ##
 if n_ or t_ or p_ and False:
     s = get_smu_file()
-    m0 = s['Visium']['ST8059049'].masks
-    m1 = s['Visium']['processed'].masks
+    if not t_:
+        m0 = s['Visium']['ST8059049'].masks
+        m1 = s['Visium']['processed'].masks
+    else:
+        m0 = s['visium']['ST8059049'].masks
+        m1 = s['visium']['processed'].masks
 
     m0.plot()
     m1.plot()
@@ -177,15 +181,16 @@ if n_ or t_ or p_ and False:
     s = get_smu_file()
     if not t_:
         processed_regions = s['Visium']['processed']
+        raster = s['Visium']['ST8059049H&E']
     else:
         processed_regions = s['visium']['processed']
+        raster = s['visium']['ST8059049H&E']
     if not t_:
         bb = smu.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
     else:
         transformed_bb = None
 
-    raster = s['Visium']['ST8059049H&E']
 
     plt.figure()
     ax = plt.gca()
@@ -196,13 +201,18 @@ if n_ or t_ or p_ and False:
 ##
 if n_ or t_ or c_:
     s = get_smu_file()
-    raster = s['Visium']['ST8059049H&E']
+    if not t_:
+        masks = s['Visium']['processed'].masks
+        raster = s['Visium']['ST8059049H&E']
+    else:
+        masks = s['visium']['processed'].masks
+        raster = s['visium']['ST8059049H&E']
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     f = file_path("visium_tiles.hdf5")
     with h5py.File(f, "w") as f5:
         tiles = smu.Tiles(
             raster=raster,
-            masks=s['Visium']['processed'].masks,
+            masks=masks,
             tile_dim_in_pixels=32,
         )
         filename = os.path.basename(s.backing.filename)
