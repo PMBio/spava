@@ -37,7 +37,9 @@ from utils import setup_ci, file_path
 import colorama
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
 c_, p_, t_, n_ = setup_ci(__name__)
+# matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
 
@@ -95,14 +97,14 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     processed_file = os.path.join(PROCESSED_FOLDER, name)
     if os.path.isfile(processed_file):
         os.unlink(processed_file)
-    new_s = smu.SpatialMuData(backing=processed_file)
+    new_s = smu.SpatialMuData(backing=processed_file, backingmode="w")
     new_imc = smu.SpatialModality()
     new_s["imc"] = new_imc
 
-    masks = s['imc']['masks'].masks.X
+    masks = s["imc"]["masks"].masks.X
     relabelled = skimage.measure.label(masks, connectivity=1).astype(np.uint32)
     new_masks = smu.RasterMasks(X=relabelled)
-    new_imc["masks"] = smu.Regions(masks=new_masks, coordinate_unit='um')
+    new_imc["masks"] = smu.Regions(masks=new_masks, coordinate_unit="um")
 
     ## md
     ## channels subsetting
@@ -118,7 +120,7 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     # fmt: on
     new_x = x[:, :, CHANNELS_TO_KEEP]
 
-    new_var = s["imc"]["ome"].var.iloc[CHANNELS_TO_KEEP]
+    new_var = s["imc"]["ome"].var.iloc[CHANNELS_TO_KEEP].copy()
     new_var.reset_index(inplace=True)
     new_var.rename(columns={"index": "original_index", "channel_name": "probe"})
     new_var["channel_name"] = CHANNEL_NAMES
@@ -135,6 +137,7 @@ def channels_subsetting_and_hot_pixel_filtering(s):
     new_x = torch.from_numpy(new_x).float()
     ##
     new_imc["ome"] = smu.Raster(X=new_x, var=new_var, coordinate_unit="um")
+
 
 ##
 def u(raw: bool):
@@ -158,7 +161,9 @@ def all_raw_smu():
 
 ##
 if n_ or t_ or c_ and False:
-    print(f'{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}')
+    print(
+        f"{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}"
+    )
     for s in all_raw_smu():
         channels_subsetting_and_hot_pixel_filtering(s)
 
@@ -179,7 +184,6 @@ if n_ or t_ or c_ and False:
         if k in s["imc"]:
             del s["imc"][k]
         s["imc"][k] = accumulated[k]
-        print("ooo")
         # for k in accumulated.keys():
         #     del s["imc"][k]
 ##
@@ -212,7 +216,7 @@ if n_ or t_ or c_ and False:
         plt.ylabel("count")
         plt.show()
     ##
-    print(f'{colorama.Fore.MAGENTA}filtering cells by area{colorama.Fore.RESET}')
+    print(f"{colorama.Fore.MAGENTA}filtering cells by area{colorama.Fore.RESET}")
     for s in all_processed_smu():
         o = s["imc"]["mean"].masks.obs
         obs_to_keep = o["count"] > CUTOFF
@@ -281,8 +285,9 @@ def compute_scaling_factors():
     return scaling_factors
 
 
+##
 if n_ or t_ or c_ and False:
-    print(f'{colorama.Fore.MAGENTA}scaling accumulated data{colorama.Fore.RESET}')
+    print(f"{colorama.Fore.MAGENTA}scaling accumulated data{colorama.Fore.RESET}")
     scaling_factors = compute_scaling_factors()
     for s in all_processed_smu():
         regions = s["imc"]["mean"]
@@ -291,7 +296,18 @@ if n_ or t_ or c_ and False:
         if "transformed_mean" in s["imc"]:
             del s["imc"]["transformed_mean"]
         s["imc"]["transformed_mean"] = new_regions
+        s["imc"]["transformed_mean"].uns["scaling_factors"] = scaling_factors
+        s.commit_changes_on_disk()
+##
+if n_ or t_ or c_ and False:
+    assert np.alltrue(
+        get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
+        == get_smu_file("validation", 1)["imc"]["transformed_mean"].uns["scaling_factors"][
+            ...
+        ]
+    )
 
+##
 if n_ or t_ or c_ and False:
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     scaling_factors = compute_scaling_factors()
@@ -318,17 +334,17 @@ if n_ or t_ or c_ and False:
                     masks=s["imc"]["masks"].masks,
                     tile_dim_in_pixels=32,
                 )
-                if p_:
-                    tiles._example_plot()
+                # if p_:
+                #     tiles._example_plot()
                 f5[f"{split}/{filename}/raster"] = tiles.tiles
                 ##
                 masks_tiles = smu.Tiles(
                     masks=s["imc"]["masks"].masks,
                     tile_dim_in_pixels=32,
                 )
-                if p_:
-                    masks_tiles._example_plot()
+                # if p_:
+                #     masks_tiles._example_plot()
                 ##
                 f5[f"{split}/{filename}/masks"] = masks_tiles.tiles
 
-print('done')
+print("done")
