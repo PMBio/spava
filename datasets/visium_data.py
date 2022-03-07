@@ -97,7 +97,9 @@ if n_ or t_ or p_ and False:
 
 ##
 if n_ or t_ or p_ and False:
-    sc.pp.regress_out(adata, ["total_counts"])
+    # we need statsmodels 0.13.2 for regress_out
+    # https://stackoverflow.com/questions/71106940/cannot-import-name-centered-from-scipy-signal-signaltools
+    # sc.pp.regress_out(adata, ["total_counts"])
     sc.pp.scale(adata, max_value=10)
 
 ##

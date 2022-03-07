@@ -244,7 +244,7 @@ if n_ or t_ or c_ and False:
             assert regions.is_backed
             if "X" in regions.backing:
                 new_x = regions.X
-                new_x = new_x[indices_to_keep, :]
+                new_x = new_x[...][indices_to_keep, :]
             else:
                 new_x = None
             new_regions = smu.Regions(X=new_x, masks=new_masks, var=regions.var)
