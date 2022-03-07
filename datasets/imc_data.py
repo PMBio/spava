@@ -73,6 +73,7 @@ def get_smu_file(split, index, raw=False):
 
 
 ##
+# if n_ or t_ or c_:
 if n_ or t_ or c_ and False:
     d = get_smu_file("train", 0, raw=True)
     old_obs = d["imc"]["masks"].masks.obs
@@ -81,10 +82,12 @@ if n_ or t_ or c_ and False:
     print(d)
 
 ##
+# if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     d["imc"]["ome"].plot(preprocessing=np.arcsinh)
 
 ##
+# if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     d["imc"]["masks"].plot()
 
@@ -160,6 +163,7 @@ def all_raw_smu():
 
 
 ##
+# if n_ or t_ or c_:
 if n_ or t_ or c_ and False:
     print(
         f"{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}"
@@ -168,6 +172,7 @@ if n_ or t_ or c_ and False:
         channels_subsetting_and_hot_pixel_filtering(s)
 
 ##
+# if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     s = get_smu_file("train", 0, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)

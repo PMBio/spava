@@ -27,12 +27,12 @@ dependencies:
   - jupyter
   - jupyterlab
   # torch stuff
-  - pytorch >= 1.7.0
-  - torchvision >= 0.8.1
-  - torchaudio >= 0.7.0
-  - cudatoolkit >= 10.2
+#  - pytorch==1.9
+#  - torchvision
+#  - torchaudio
+#  - cudatoolkit==10.2
+  #  - pyg
   - pytest
-  - pyg
   - jupytext
   - leidenalg
   # markupsafe because of this: https://github.com/aws/aws-sam-cli/issues/3661
@@ -45,5 +45,3 @@ dependencies:
   - pip:
       - matplotlib-scalebar
 #      - git+https://github.com/ilia-kats/spatialmuon.git@202112_regions
-
-#mamba install pytorch==1.7.0 torchvision==0.8.1 torchaudio==0.7.0 cudatoolkit=10.2 -c pytorch -y

@@ -26,22 +26,33 @@ import os
 import torch
 from torch.utils.data import DataLoader
 
-from utils import setup_ci, file_path
+from utils import setup_ci, file_path, get_bimap
 import colorama
 from datasets.imc_data import get_smu_file, get_split
 
 c_, p_, t_, n_ = setup_ci(__name__)
 
 plt.style.use("dark_background")
+
+
 ##
 class CellsDataset(Dataset):
     def __init__(self, split):
         self.split = split
-        self.filenames = get_split(self.split)
-
         self.tiles_file = file_path("imc_tiles.hdf5")
-        self.map_left = {}
-        self.map_right = {}
+
+
+        self.filenames = get_split(self.split)
+        names_length_map = {}
+        for filename in self.filenames:
+            filename = filename.replace('.tiff', '.h5smu')
+            rasters = self.f5[f'{self.split}/{filename}/raster']
+            masks = self.f5[f'{self.split}/{filename}/masks']
+            assert len(rasters) == len(masks)
+            n = len(rasters)
+            names_length_map[filename] = n
+        self.map_left, self.map_right = get_bimap(names_length_map)
+
         self.f5 = h5py.File(self.tiles_file, 'r')
         # with h5py.File(self.tiles_file, 'r') as f5:
         i = 0
@@ -79,20 +90,33 @@ class CellsDataset(Dataset):
         expression = self.recompute_expression(raster, mask)
         return raster, mask, expression
 
-##
-loader = DataLoader(
-    CellsDataset('train'),
-    batch_size=1024,
-    num_workers=16,
-)
-##
-for x in tqdm(loader):
-    pass
 
 ##
 if n_ or t_ or c_:
     train_ds = CellsDataset(split="train")
     raster, mask = train_ds[0]
+
+
+##
+def get_cells_data_loader(split, batch_size):
+    loader = DataLoader(
+        CellsDataset(split),
+        batch_size=batch_size,
+        num_workers=16,
+    )
+    return loader
+
+
+##
+if n_ or t_ or c_ and False:
+    loader = get_cells_data_loader('train', 1024)
+    for x in tqdm(loader):
+        pass
+
+##
+print('TODO: create torch geometric dataset and torch geometric dataloader')
+
+##
 # class CellDataset(Dataset):
 #     def __init__(
 #             self,
