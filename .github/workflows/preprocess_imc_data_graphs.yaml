@@ -1,4 +1,4 @@
-name: Preprocess IMC data tiler
+name: Preprocess IMC data graphs
 on: 
   workflow_dispatch
 #  workflow_dispatch:

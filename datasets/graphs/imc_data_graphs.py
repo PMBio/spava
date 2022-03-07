@@ -160,8 +160,8 @@ class CellGraphsDataset(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 ##
-if n_ or t_ or p_:
-# if n_ or t_ or p_ and False:
+# if n_ or t_ or p_:
+if n_ or t_ or p_ and False:
     CURRENT_SUBGRAPH_NAME = "knn_10_max_distance_in_units_50"
 
 # if n_ or t_ or p_:
@@ -179,8 +179,8 @@ if n_ or t_ or p_ and False:
     f = file_path(f"subgraphs_test_{CURRENT_SUBGRAPH_NAME}/processed")
     shutil.rmtree(f)
 ##
-if n_ or t_ or p_:
-# if n_ or t_ or p_ and False:
+# if n_ or t_ or p_:
+if n_ or t_ or p_ and False:
     ds = CellGraphsDataset(
         split="train", name=CURRENT_SUBGRAPH_NAME
     )
