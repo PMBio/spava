@@ -7,8 +7,6 @@ channels:
   - bioconda
   - nvidia
   - rapidsai
-  - pytorch
-  - pyg
 dependencies:
   - python >= 3.8
   - click
@@ -26,12 +24,6 @@ dependencies:
   - anndata
   - jupyter
   - jupyterlab
-  # torch stuff
-#  - pytorch==1.9
-#  - torchvision
-#  - torchaudio
-#  - cudatoolkit==10.2
-  #  - pyg
   - pytest
   - jupytext
   - leidenalg
@@ -41,10 +33,6 @@ dependencies:
   - shapely
   - trimesh
   - geopandas
-  - optuna
-  - optuna-dashboard
-  - pyro-ppl
-  - pytorch-lightning
   - pip
   - pip:
       - matplotlib-scalebar
