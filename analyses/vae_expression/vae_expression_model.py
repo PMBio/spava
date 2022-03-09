@@ -8,7 +8,7 @@ class Ppp:
 ppp = Ppp()
 
 ppp.LOG_PER_CHANNEL_VALUES = False
-ppp.MAX_EPOCHS = 20
+ppp.MAX_EPOCHS = 15
 ppp.BATCH_SIZE = 1024
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
