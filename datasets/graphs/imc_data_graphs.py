@@ -167,17 +167,20 @@ if n_ or t_ or p_ and False:
 # if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     f = file_path(f"subgraphs_train_{CURRENT_SUBGRAPH_NAME}/processed")
-    shutil.rmtree(f)
+    if os.path.isdir(f):
+        shutil.rmtree(f)
 ##
 # if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     f = file_path(f"subgraphs_validation_{CURRENT_SUBGRAPH_NAME}/processed")
-    shutil.rmtree(f)
+    if os.path.isdir(f):
+        shutil.rmtree(f)
 ##
 # if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
     f = file_path(f"subgraphs_test_{CURRENT_SUBGRAPH_NAME}/processed")
-    shutil.rmtree(f)
+    if os.path.isdir(f):
+        shutil.rmtree(f)
 ##
 # if n_ or t_ or p_:
 if n_ or t_ or p_ and False:
