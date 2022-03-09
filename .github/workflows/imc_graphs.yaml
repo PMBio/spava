@@ -1,4 +1,4 @@
-name: Preprocess IMC data graphs
+name: IMC preprocess graphs
 on: 
   workflow_dispatch
 #  workflow_dispatch:

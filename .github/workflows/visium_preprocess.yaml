@@ -1,4 +1,4 @@
-name: Preprocess Visium data
+name: Visium preprocess data
 on: 
   workflow_dispatch
 jobs:

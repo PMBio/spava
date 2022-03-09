@@ -1,4 +1,4 @@
-name: Preprocess IMC data
+name: IMC preprocess data
 on: 
   workflow_dispatch
 #  workflow_dispatch:

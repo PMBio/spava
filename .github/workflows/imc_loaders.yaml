@@ -1,4 +1,4 @@
-name: Preprocess IMC data loaders
+name: IMC test loaders
 on: 
   workflow_dispatch
 #  workflow_dispatch:

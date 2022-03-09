@@ -1,6 +1,6 @@
 name: Run tests
 on:
-  push
+  [push, workflow_dispatch]
 jobs:
   test-data:
     runs-on: self-hosted

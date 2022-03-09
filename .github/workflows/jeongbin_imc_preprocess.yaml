@@ -1,4 +1,4 @@
-name: Preprocess Jeongbin IMC data
+name: Jeongbin IMC preprocess data
 on: 
   workflow_dispatch
 jobs:
