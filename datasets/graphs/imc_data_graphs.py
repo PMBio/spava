@@ -156,6 +156,7 @@ class CellGraphsDataset(InMemoryDataset):
                     center_index=center_index,
                     original_indices=original_indices,
                 )
+                sub_data.num_nodes = n
                 data_list.append(sub_data)
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
@@ -187,9 +188,13 @@ if n_ or t_ or p_ and False:
     ds = CellGraphsDataset(
         split="train", name=CURRENT_SUBGRAPH_NAME
     )
+# if n_ or t_ or p_:
+if n_ or t_ or p_ and False:
     ds = CellGraphsDataset(
         split="validation", name=CURRENT_SUBGRAPH_NAME
     )
+# if n_ or t_ or p_:
+if n_ or t_ or p_ and False:
     ds = CellGraphsDataset(
         split="test", name=CURRENT_SUBGRAPH_NAME
     )

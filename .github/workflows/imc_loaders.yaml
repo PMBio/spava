@@ -1,0 +1,16 @@
+name: Preprocess IMC data loaders
+on: 
+  workflow_dispatch
+#  workflow_dispatch:
+#   schedule:
+#    - cron: '0 23 * * *'
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          conda activate ci_env
+          export SPATIALMUON_NOTEBOOK="aaa"
+          python -m datasets.loaders.imc_data_loaders

@@ -41,6 +41,10 @@ dependencies:
   - shapely
   - trimesh
   - geopandas
+  - optuna
+  - optuna-dashboard
+  - pyro-ppl
+  - pytorch-lightning
   - pip
   - pip:
       - matplotlib-scalebar
