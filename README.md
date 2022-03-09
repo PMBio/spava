@@ -8,19 +8,19 @@
 ## IMC Jackson-Fischer dataset
 | name | type |
 |-----------------------------------------------------------------------|---------|
-| [![Preprocess](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data.yaml)                                                          | on demand |
-| [![Tiler](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data_tiler.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data_tiler.yaml) | on demand (no Juptyer)|
-| [![Preprocess IMC data graphs](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/preprocess_imc_data_graphs.yaml) | on demand |
+| [![Preprocess](https://github.com/PMBio/a/actions/workflows/imc_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_preprocess.yaml)                                                          | on demand |
+| [![Tiler](https://github.com/PMBio/a/actions/workflows/imc_tiler.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_tiler.yaml) | on demand (no Juptyer)|
+| [![Preprocess IMC data graphs](https://github.com/PMBio/a/actions/workflows/imc_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_graphs.yaml) | on demand |
 
 ## IMC Jeongbin dataset
 | name | type |
 |-----------------------------------------------------------------------|---------|
-| [![Preprocess](https://github.com/PMBio/a/actions/workflows/preprocess_imc_jeongbin_data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/preprocess_imc_jeongbin_data.yaml) | on demand |
+| [![Preprocess](https://github.com/PMBio/a/actions/workflows/jeongbin_imc_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/jeongbin_imc_preprocess.yaml) | on demand |
 
 ## Visium mouse brain dataset
 | name | type |
 |-----------------------------------------------------------------------|---------|
-| [![Preprocess](https://github.com/PMBio/a/actions/workflows/preprocess_visium_data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/preprocess_visium_data.yaml)                                                 | on demand |
+| [![Preprocess](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml)                                                 | on demand |
 
 ## Visium endometrium dataset
 | name | type |
