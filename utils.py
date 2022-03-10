@@ -19,27 +19,36 @@ def get_execute_function():
     def adjust_path(f):
         if os.path.isfile(f):
             parent_path = str(pathlib.Path(__file__).parent.absolute()) + "/"
-            assert f.startswith(parent_path), f'f = "{f}", parent_path = "{parent_path}"'
+            assert f.startswith(
+                parent_path
+            ), f'f = "{f}", parent_path = "{parent_path}"'
             f = f.replace(parent_path, "")
             return f
         else:
             return f
 
     def execute_():
-        if "SPATIALMUON_NOTEBOOK" not in os.environ and 'SPATIALMUON_TEST' not in os.environ:
+        if (
+            "SPATIALMUON_NOTEBOOK" not in os.environ
+            and "SPATIALMUON_TEST" not in os.environ
+        ):
             return False
         else:
             if "SPATIALMUON_NOTEBOOK" in os.environ:
-                assert 'SPATIALMUON_TEST' not in os.environ
+                assert "SPATIALMUON_TEST" not in os.environ
                 target = os.environ["SPATIALMUON_NOTEBOOK"]
             else:
                 if sys.gettrace() is None:
                     matplotlib.use("Agg")
-                target = os.environ['SPATIALMUON_TEST']
+                target = os.environ["SPATIALMUON_TEST"]
             caller_filename = inspect.stack()[1].filename
             caller_filename = adjust_path(caller_filename)
-            # print(f"target = {target}, caller_filename = {caller_filename}")
-            return target == caller_filename
+            print(f"target = {target}, caller_filename = {caller_filename}")
+            return (
+                target == caller_filename
+                or "SPATIALMUON_NOTEBOOK" in os.environ
+                and caller_filename.startswith("<ipython-input-")
+            )
 
     return execute_
 
