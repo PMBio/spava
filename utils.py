@@ -41,7 +41,7 @@ def get_execute_function():
             print(f"target = {target}, caller_filename = {caller_filename}")
             return target == caller_filename
 
-    return execute_()
+    return execute_
 
 
 try:
