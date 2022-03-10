@@ -10,7 +10,8 @@ echo ">>>>>>>>>> installing most of the packages <<<<<<<<<<"
 # mamba env update -n ci_env -f requirements_cuda.yml
 mamba env update -n ci_env -f /data/l989o/deployed/a/requirements_cuda.yml
 # echo ">>>>>>>>>> installing torch <<<<<<<<<<"
-mamba install -c pytorch -c pyg -c conda-forge pytorch torchvision torchaudio cudatoolkit=10.2 pyg optuna optuna-dashboard pyro-ppl pytorch-lightning
+mamba install -c pytorch -c pyg -c conda-forge pytorch torchvision torchaudio cudatoolkit=10.2 pyg optuna
+optuna-dashboard pyro-ppl pytorch-lightning -y
 # mamba install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch -y
 # mamba install -c pyg -c conda-forge pyg -y
 # mamba install -c conda-forge optuna optuna-dashboard pyro-ppl pytorch-lightning -y
