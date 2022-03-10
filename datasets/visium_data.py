@@ -29,7 +29,7 @@ def get_smu_file(initialize=False):
 
     os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         src_f = os.path.join(RAW_FOLDER, "visium.h5smu")
         des_f = os.path.join(PROCESSED_FOLDER, "visium.h5smu")
     else:
@@ -45,7 +45,7 @@ def get_smu_file(initialize=False):
 ##
 if e_():
     s = get_smu_file(initialize=True)
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         name = "ST8059049"
         name_hne = name + "H&E"
 
@@ -64,7 +64,7 @@ if e_():
 ##
 if e_():
     # biologically relevant channels
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         chosen_genes = ['Olfm1', 'Plp1', 'Itpka']
     else:
         chosen_genes = ["Prex2", "Atp6v1h", "Xkr4"]
@@ -153,7 +153,7 @@ if e_():
     processed_regions.plot(chosen_genes)
     processed_regions.masks.plot('leiden')
 
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         if 'processed' in s['Visium']:
             del s['Visium']['processed']
         s['Visium']['processed'] = processed_regions
@@ -169,7 +169,7 @@ if e_():
 ##
 if e_():
     s = get_smu_file()
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         m0 = s['Visium']['ST8059049'].masks
         m1 = s['Visium']['processed'].masks
     else:
@@ -181,13 +181,13 @@ if e_():
 ##
 if e_():
     s = get_smu_file()
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         processed_regions = s['Visium']['processed']
         raster = s['Visium']['ST8059049H&E']
     else:
         processed_regions = s['visium']['processed']
         raster = s['visium']['image']
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         bb = smu.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
     else:
@@ -203,7 +203,7 @@ if e_():
 ##
 if e_():
     s = get_smu_file()
-    if not t_:
+    if 'SPATIALMUON_TEST' not in os.environ:
         masks = s['Visium']['processed'].masks
         raster = s['Visium']['ST8059049H&E']
     else:

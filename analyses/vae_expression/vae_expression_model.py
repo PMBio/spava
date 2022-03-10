@@ -1,4 +1,6 @@
 ##
+import os
+
 from analyses.torch_boilerplate import optuna_nan_workaround
 
 class Ppp:
@@ -8,7 +10,10 @@ class Ppp:
 ppp = Ppp()
 
 ppp.LOG_PER_CHANNEL_VALUES = False
-ppp.MAX_EPOCHS = 15
+if 'SPATIALMUON_TEST' not in os.environ:
+    ppp.MAX_EPOCHS = 15
+else:
+    ppp.MAX_EPOCHS = 2
 ppp.BATCH_SIZE = 1024
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
@@ -490,6 +495,8 @@ def get_loaders(
         n = ppp.BATCH_SIZE * 2
     else:
         n = ppp.BATCH_SIZE * 20
+    # when testing we otherwise have n > len(train_ds)
+    n = min(n, len(train_ds))
     indices = np.random.choice(len(train_ds), n, replace=False)
     train_subset = Subset(train_ds_validation, indices)
 
@@ -545,12 +552,13 @@ def get_loaders(
 def objective(trial: optuna.trial.Trial) -> float:
     from analyses.torch_boilerplate import training_boilerplate
 
+    val_check_internal = 1 if ppp.DEBUG or 'SPATIALMUON_TEST' in os.environ else 300
     trainer, logger = training_boilerplate(
         trial=trial,
         extra_callbacks=[ImageSampler(), LogComputationalGraph(), AfterTraining()],
         max_epochs=ppp.MAX_EPOCHS,
         log_every_n_steps=15 if not ppp.DEBUG else 1,
-        val_check_interval=1 if ppp.DEBUG else 300,
+        val_check_interval=val_check_internal,
         model_name="expression_vae",
     )
 
@@ -615,7 +623,11 @@ if e_() or __name__ == "__main__":
     OPTIMIZE = True
     # OPTIMIZE = False
     if OPTIMIZE:
-        study.optimize(objective, n_trials=100, timeout=3600)
+        if 'SPATIALMUON_TEST' not in os.environ:
+            n_trials = 100
+        else:
+            n_trials = 1
+        study.optimize(objective, n_trials=n_trials, timeout=3600)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
