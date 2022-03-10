@@ -9,14 +9,14 @@ import matplotlib
 
 import os
 
-from utils import setup_ci, file_path
+from utils import get_execute_function, file_path
 import colorama
 import scanpy as sc
 import h5py
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
-c_, p_, t_, n_ = setup_ci(__name__)
+e_ = get_execute_function()
 # matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
@@ -43,7 +43,7 @@ def get_smu_file(initialize=False):
     return s
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     s = get_smu_file(initialize=True)
     if not t_:
         name = "ST8059049"
@@ -55,14 +55,14 @@ if n_ or t_ or c_ and False:
         regions = s['visium']['expression']
         raster = s['visium']['image']
 ##
-if n_ or t_ or p_ and False:
+if e_():
     _, ax = plt.subplots(1)
     raster.plot(ax=ax)
     regions.plot(0, ax=ax)
     plt.show()
 
 ##
-if n_ or t_ or p_ and False:
+if e_():
     # biologically relevant channels
     if not t_:
         chosen_genes = ['Olfm1', 'Plp1', 'Itpka']
@@ -72,7 +72,7 @@ if n_ or t_ or p_ and False:
     raster.plot()
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     # x = regions.X[...]
     # if isinstance(x, ad._core.sparse_dataset.SparseDataset):
     #     x = x.todense()
@@ -84,19 +84,19 @@ if n_ or t_ or c_ and False:
     sc.pp.filter_genes(adata, min_cells=3)
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
     adata
 
 ##
-if n_ or t_ or p_ and False:
+if e_():
     plt.style.use("default")
     sc.pl.violin(adata, ["n_genes_by_counts", "total_counts"], jitter=0.4, multi_panel=True)
     plt.style.use("dark_background")
     sc.pl.scatter(adata, x="total_counts", y="n_genes_by_counts")
 
 ##
-if n_ or t_ or p_ and False:
+if e_():
     # we need statsmodels 0.13.2 for regress_out
     # https://stackoverflow.com/questions/71106940/cannot-import-name-centered-from-scipy-signal-signaltools
     # sc.pp.regress_out(adata, ["total_counts"])
@@ -113,18 +113,18 @@ if False:
     plt.style.use("dark_background")
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)
 
-if n_ or t_ or p_ and False:
+if e_():
     sc.pl.umap(adata, color=chosen_genes)
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     sc.tl.leiden(adata)
 
-if n_ or t_ or p_ and False:
+if e_():
     sc.pl.umap(adata, color=['leiden'])
     sc.pl.spatial(adata, color=['leiden'], spot_size=20)
 
@@ -143,7 +143,7 @@ if False:
 # regions.var
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     processed_regions = smu.Regions(X=adata.X, var=adata.var, masks=regions.masks.clone(), anchor=regions.anchor)
     processed_regions.var.reset_index(inplace=True)
     processed_regions.var.rename(columns={'index': 'channel_name'})
@@ -167,7 +167,7 @@ if n_ or t_ or c_ and False:
     print('ooo')
 
 ##
-if n_ or t_ or p_ and False:
+if e_():
     s = get_smu_file()
     if not t_:
         m0 = s['Visium']['ST8059049'].masks
@@ -179,7 +179,7 @@ if n_ or t_ or p_ and False:
     m0.plot()
     m1.plot()
 ##
-if n_ or t_ or p_ and False:
+if e_():
     s = get_smu_file()
     if not t_:
         processed_regions = s['Visium']['processed']
@@ -201,7 +201,7 @@ if n_ or t_ or p_ and False:
     raster.set_lims_to_bounding_box(transformed_bb)
     plt.show()
 ##
-if n_ or t_ or c_:
+if e_():
     s = get_smu_file()
     if not t_:
         masks = s['Visium']['processed'].masks

@@ -27,11 +27,11 @@ import torch
 from torch.utils.data import DataLoader
 from torch_geometric.data import DataLoader as GeometricDataLoader
 
-from utils import setup_ci, file_path, get_bimap
+from utils import get_execute_function, file_path, get_bimap
 import colorama
 from datasets.imc_data import get_smu_file, get_split
 
-c_, p_, t_, n_ = setup_ci(__name__)
+e_ = get_execute_function()
 
 plt.style.use("dark_background")
 
@@ -114,15 +114,18 @@ class CellsDataset(Dataset):
 
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     train_ds = CellsDataset(split="train")
-    raster, mask = train_ds[0]
+    raster, mask, expression, is_corrupted = train_ds[0]
 
 
 ##
-def get_cells_data_loader(split, batch_size):
+def get_cells_data_loader(split, batch_size, perturb=False):
+    ds = CellsDataset(split)
+    if perturb:
+        ds.perturb()
     loader = DataLoader(
-        CellsDataset(split),
+        ds,
         batch_size=batch_size,
         num_workers=16,
     )
@@ -130,7 +133,7 @@ def get_cells_data_loader(split, batch_size):
 
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     loader = get_cells_data_loader("train", 1024)
     for x in tqdm(loader, desc="iterating cells data loader"):
         pass
@@ -151,7 +154,7 @@ def get_graphs_data_loader(split, subgraph_name, batch_size):
     return loader
 
 
-if n_ or t_ or c_ and False:
+if e_():
     loader = get_graphs_data_loader(
         split="train", subgraph_name="knn_10_max_distance_in_units_50", batch_size=64
     )

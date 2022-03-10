@@ -12,5 +12,4 @@ jobs:
       - run: |
           source ~/.bashrc
           conda activate ci_env
-          export SPATIALMUON_NOTEBOOK="aaa"
-          python -m datasets.loaders.imc_data_loaders
+          python notebook_exporter.py datasets/loaders/imc_data_loaders.py

@@ -33,19 +33,19 @@ import sys
 import tempfile
 
 import pathlib
-from utils import setup_ci, file_path
+from utils import get_execute_function, file_path
 import colorama
 from datasets.imc_data import get_smu_file, get_split
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
-c_, p_, t_, n_ = setup_ci(__name__)
+e_ = get_execute_function()
 # matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     scaling_factors = get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
     f = file_path("imc_tiles.hdf5")

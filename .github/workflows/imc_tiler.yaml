@@ -12,5 +12,5 @@ jobs:
       - run: |
           source ~/.bashrc
           conda activate ci_env
-          export SPATIALMUON_NOTEBOOK="aaa"
+          export SPATIALMUON_NOTEBOOK="datasets/tilers/imc_data_tiler.py"
           python -m datasets.tilers.imc_data_tiler

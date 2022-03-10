@@ -33,12 +33,12 @@ import sys
 import tempfile
 
 import pathlib
-from utils import setup_ci, file_path
+from utils import get_execute_function, file_path
 import colorama
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
-c_, p_, t_, n_ = setup_ci(__name__)
+e_ = get_execute_function()
 # matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
@@ -50,7 +50,7 @@ PROCESSED_FOLDER = file_path("spatialmuon_processed/imc")
 
 def get_split(split):
     assert split in ["train", "validation", "test"]
-    ii = slice(0, 1) if t_ else slice(None)
+    ii = slice(0, 1) if 'SPATIALMUON_TEST' in os.environ else slice(None)
     if split == "train":
         return splits.train[ii]
     elif split == "validation":
@@ -73,8 +73,7 @@ def get_smu_file(split, index, raw=False):
 
 
 ##
-# if n_ or t_ or c_:
-if n_ or t_ or c_ and False:
+if e_():
     d = get_smu_file("train", 0, raw=True)
     old_obs = d["imc"]["masks"].masks.obs
     if len(old_obs.columns) == 0:
@@ -82,13 +81,11 @@ if n_ or t_ or c_ and False:
     print(d)
 
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+if e_():
     d["imc"]["ome"].plot(preprocessing=np.arcsinh)
 
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+if e_():
     d["imc"]["masks"].plot()
 
 ## md
@@ -163,8 +160,7 @@ def all_raw_smu():
 
 
 ##
-# if n_ or t_ or c_:
-if n_ or t_ or c_ and False:
+if e_():
     print(
         f"{colorama.Fore.MAGENTA}channel subsetting, hot-pixel filtering, masks relabeling:{colorama.Fore.RESET}"
     )
@@ -172,8 +168,7 @@ if n_ or t_ or c_ and False:
         channels_subsetting_and_hot_pixel_filtering(s)
 
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+if e_():
     s = get_smu_file("train", 0, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)
     s["imc"]["ome"].plot(channels="DNA1", preprocessing=np.arcsinh)
@@ -181,7 +176,7 @@ if n_ or t_ or p_ and False:
 ## md
 # accumulate features
 ##
-if n_ or t_ or c_ and False:
+if e_():
     print(f"{colorama.Fore.MAGENTA}feature accumulation:{colorama.Fore.RESET}")
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
@@ -195,31 +190,30 @@ if n_ or t_ or c_ and False:
 ## md
 # filter small cells
 ##
-if n_ or t_ or c_ and False:
+if e_():
     CUTOFF = 20
-    if n_ or t_ or p_ and False:
-        areas = []
-        for s in all_processed_smu():
-            a = s["imc"]["mean"].masks.obs["count"]
-            areas.append(a.to_numpy())
-        areas = np.concatenate(areas)
-        ##
-        plt.figure()
-        plt.hist(areas, bins=100)
-        plt.axvline(x=CUTOFF)
-        plt.title("cutoff to filter cells by area")
-        plt.xlabel("cell area")
-        plt.ylabel("count")
-        plt.show()
-        ##
-        plt.figure()
-        plt.hist(areas, bins=1000)
-        plt.xlim([0, 100])
-        plt.axvline(x=CUTOFF)
-        plt.title("cutoff to filter cells by area")
-        plt.xlabel("cell area")
-        plt.ylabel("count")
-        plt.show()
+    areas = []
+    for s in all_processed_smu():
+        a = s["imc"]["mean"].masks.obs["count"]
+        areas.append(a.to_numpy())
+    areas = np.concatenate(areas)
+    ##
+    plt.figure()
+    plt.hist(areas, bins=100)
+    plt.axvline(x=CUTOFF)
+    plt.title("cutoff to filter cells by area")
+    plt.xlabel("cell area")
+    plt.ylabel("count")
+    plt.show()
+    ##
+    plt.figure()
+    plt.hist(areas, bins=1000)
+    plt.xlim([0, 100])
+    plt.axvline(x=CUTOFF)
+    plt.title("cutoff to filter cells by area")
+    plt.xlabel("cell area")
+    plt.ylabel("count")
+    plt.show()
     ##
     print(f"{colorama.Fore.MAGENTA}filtering cells by area{colorama.Fore.RESET}")
     for s in all_processed_smu():
@@ -262,7 +256,7 @@ if n_ or t_ or c_ and False:
         s["imc"]["filtered_mean"] = new_mean
 
 ##
-if n_ or t_ or p_ and False:
+if e_():
     s = get_smu_file("train", 0)
     _, ax = plt.subplots(1, figsize=(20, 20))
     s["imc"]["masks"].masks.plot(fill_colors="red", ax=ax)
@@ -291,7 +285,7 @@ def compute_scaling_factors():
 
 
 ##
-if n_ or t_ or c_ and False:
+if e_():
     print(f"{colorama.Fore.MAGENTA}scaling accumulated data{colorama.Fore.RESET}")
     scaling_factors = compute_scaling_factors()
     for s in all_processed_smu():
@@ -304,7 +298,7 @@ if n_ or t_ or c_ and False:
         s["imc"]["transformed_mean"].uns["scaling_factors"] = scaling_factors
         s.commit_changes_on_disk()
 ##
-if n_ or t_ or c_ and False:
+if e_():
     assert np.alltrue(
         get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
         == get_smu_file("validation", 0)["imc"]["transformed_mean"].uns["scaling_factors"][

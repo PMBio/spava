@@ -1,9 +1,9 @@
 import os
 
-os.environ["SPATIALMUON_TEST"] = "aaa"
 
 
 def test_train_vae_expression():
+    os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_model.py"
     import analyses.vae_expression.vae_expression_model
 
 

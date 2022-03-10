@@ -48,8 +48,8 @@ from datasets.loaders.imc_data_loaders import CellsDataset
 
 pl.seed_everything(1234)
 
-from utils import file_path, setup_ci
-c_, p_, t_, n_ = setup_ci(__name__)
+from utils import file_path, get_execute_function
+e_ = get_execute_function()
 
 
 class ImageSampler(pl.Callback):
@@ -592,7 +592,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     return elbo
 
 
-if __name__ == "__main__":
+if e_() or __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
     study_name = "vae_expression"

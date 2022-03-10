@@ -36,20 +36,19 @@ import sys
 import tempfile
 
 import pathlib
-from utils import setup_ci, file_path, get_bimap
+from utils import get_execute_function, file_path, get_bimap
 import colorama
 from datasets.imc_data import get_smu_file, get_split, all_processed_smu
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
-c_, p_, t_, n_ = setup_ci(__name__)
+e_ = get_execute_function()
 # matplotlib.use('module://backend_interagg')
 
 plt.style.use("dark_background")
 
 ##
-# if n_ or t_ or c_:
-if n_ or t_ or c_ and False:
+if e_():
     print(f"{colorama.Fore.MAGENTA}computing graphs{colorama.Fore.RESET}")
     for s in all_processed_smu():
         g = s["imc"]["transformed_mean"].compute_knn_graph(
@@ -60,8 +59,8 @@ if n_ or t_ or c_ and False:
             del s["imc"]["transformed_mean"]["graph"]
         s["imc"]["transformed_mean"].graph = g
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     _, ax = plt.subplots(figsize=(10, 10))
     s["imc"]["ome"].plot(
         0, ax=ax, preprocessing=np.arcsinh, cmap=matplotlib.cm.get_cmap("gray")
@@ -76,8 +75,8 @@ if n_ or t_ or p_ and False:
     )
     plt.show()
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     _, ax = plt.subplots(figsize=(10, 10))
     s["imc"]["ome"].plot(
         0, ax=ax, preprocessing=np.arcsinh, cmap=matplotlib.cm.get_cmap("gray")
@@ -112,7 +111,7 @@ class CellGraphsDataset(InMemoryDataset):
         start = time.time()
         super().__init__(self.root)
         self.data, self.slices = torch.load(self.processed_paths[0])
-        print(f'loading from disk: {time.time() - start}')
+        print(f"loading from disk: {time.time() - start}")
 
     @property
     def processed_file_names(self):
@@ -160,42 +159,38 @@ class CellGraphsDataset(InMemoryDataset):
                 data_list.append(sub_data)
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
+
+
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     CURRENT_SUBGRAPH_NAME = "knn_10_max_distance_in_units_50"
 
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     f = file_path(f"subgraphs_train_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     f = file_path(f"subgraphs_validation_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
+
+if e_():
     f = file_path(f"subgraphs_test_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
-    ds = CellGraphsDataset(
-        split="train", name=CURRENT_SUBGRAPH_NAME
-    )
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
-    ds = CellGraphsDataset(
-        split="validation", name=CURRENT_SUBGRAPH_NAME
-    )
-# if n_ or t_ or p_:
-if n_ or t_ or p_ and False:
-    ds = CellGraphsDataset(
-        split="test", name=CURRENT_SUBGRAPH_NAME
-    )
+
+if e_():
+    ds = CellGraphsDataset(split="train", name=CURRENT_SUBGRAPH_NAME)
+
+if e_():
+    ds = CellGraphsDataset(split="validation", name=CURRENT_SUBGRAPH_NAME)
+
+if e_():
+    ds = CellGraphsDataset(split="test", name=CURRENT_SUBGRAPH_NAME)
 ##

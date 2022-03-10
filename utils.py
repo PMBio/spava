@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib
 import sys
 import pathlib
+import inspect
 
 
 def reproducible_random_choice(n: int, k: int):
@@ -14,37 +15,33 @@ def reproducible_random_choice(n: int, k: int):
     return ii
 
 
-def setup_ci(name):
-    CI_TEST = "SPATIALMUON_TEST" in os.environ
-    NOTEBOOK_EXPORTER = "SPATIALMUON_NOTEBOOK" in os.environ
-    assert not (CI_TEST and NOTEBOOK_EXPORTER)
+def get_execute_function():
+    def adjust_path(f):
+        if os.path.isfile(f):
+            parent_path = str(pathlib.Path(__file__).parent.absolute()) + "/"
+            assert f.startswith(parent_path)
+            f = f.replace(parent_path, "")
+            return f
+        else:
+            return f
 
-    if CI_TEST:
-        if sys.gettrace() is None:
-            matplotlib.use("Agg")
-        COMPUTE = True
-        PLOT = True
-        TEST = True
-        NOTEBOOK = False
-    elif NOTEBOOK_EXPORTER:
-        COMPUTE = True
-        PLOT = True
-        TEST = False
-        NOTEBOOK = True
-    elif name == "__main__":
-        COMPUTE = True
-        PLOT = True
-        TEST = False
-        NOTEBOOK = False
-    else:
-        COMPUTE = False
-        PLOT = False
-        TEST = False
-        NOTEBOOK = False
-    if "SPATIALMUON_AGG" in os.environ:
-        matplotlib.use("Agg")
-    print(f"COMPUTE = {COMPUTE}, PLOT = {PLOT}, TEST = {TEST}, NOTEBOOK = {NOTEBOOK}")
-    return COMPUTE, PLOT, TEST, NOTEBOOK
+    def execute_():
+        if "SPATIALMUON_NOTEBOOK" not in os.environ and 'SPATIALMUON_TEST' not in os.environ:
+            return False
+        else:
+            if "SPATIALMUON_NOTEBOOK" in os.environ:
+                assert 'SPATIALMUON_TEST' not in os.environ
+                target = os.environ["SPATIALMUON_NOTEBOOK"]
+            else:
+                if sys.gettrace() is None:
+                    matplotlib.use("Agg")
+                target = os.environ['SPATIALMUON_TEST']
+            caller_filename = inspect.stack()[2].filename
+            caller_filename = adjust_path(caller_filename)
+            print(f"target = {target}, caller_filename = {caller_filename}")
+            return target == caller_filename
+
+    return execute_()
 
 
 try:

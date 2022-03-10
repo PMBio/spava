@@ -15,7 +15,7 @@ f = sys.argv[1]
 print(f)
 import os
 
-os.environ["SPATIALMUON_NOTEBOOK"] = "aaa"
+os.environ["SPATIALMUON_NOTEBOOK"] = f
 
 with tempfile.TemporaryDirectory() as tempdir:
     assert os.path.isfile(f)
