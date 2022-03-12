@@ -96,7 +96,8 @@ if e_():
 ##
 class CellGraphsDataset(InMemoryDataset):
     def __init__(self, split: str, name: str):
-        self.root = file_path(f"subgraphs_{split}_{name}")
+        os.makedirs(file_path("imc/"), exist_ok=True)
+        self.root = file_path(f"imc/subgraphs_{split}_{name}")
         os.makedirs(self.root, exist_ok=True)
         self.split = split
         self.name = name
@@ -168,19 +169,19 @@ if e_():
 
 
 if e_():
-    f = file_path(f"subgraphs_train_{CURRENT_SUBGRAPH_NAME}/processed")
+    f = file_path(f"imc/subgraphs_train_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##
 
 if e_():
-    f = file_path(f"subgraphs_validation_{CURRENT_SUBGRAPH_NAME}/processed")
+    f = file_path(f"imc/subgraphs_validation_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##
 
 if e_():
-    f = file_path(f"subgraphs_test_{CURRENT_SUBGRAPH_NAME}/processed")
+    f = file_path(f"imc/subgraphs_test_{CURRENT_SUBGRAPH_NAME}/processed")
     if os.path.isdir(f):
         shutil.rmtree(f)
 ##

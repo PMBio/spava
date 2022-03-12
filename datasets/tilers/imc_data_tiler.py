@@ -49,7 +49,9 @@ if e_():
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     scaling_factors = get_smu_file(split="train", index=0, read_only=True)["imc"]["transformed_mean"].uns[
         "scaling_factors"][...]
-    f = file_path("imc_tiles.hdf5")
+    d = file_path('imc/')
+    os.makedirs(d, exist_ok=True)
+    f = file_path("imc/imc_tiles.hdf5")
     with h5py.File(f, "w") as f5:
         for split in tqdm(
             ["train", "validation", "test"], desc="split", position=0, leave=True
