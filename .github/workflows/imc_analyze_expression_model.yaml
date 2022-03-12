@@ -1,4 +1,4 @@
-name: IMC loaders
+name: IMC analyze expression model
 on: 
   workflow_dispatch
 #  workflow_dispatch:
@@ -12,4 +12,4 @@ jobs:
       - run: |
           source ~/.bashrc
           conda activate ci_env
-          python notebook_exporter.py datasets/loaders/imc_data_loaders.py
+          python notebook_exporter.py analyses/vae_expression/vae_expression_analysis.py
