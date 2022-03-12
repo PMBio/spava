@@ -21,7 +21,9 @@ plt.style.use("dark_background")
 ##
 # if e_():
 #     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
-#     scaling_factors = get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
+#     scaling_factors = get_smu_file(split="train", index=0, read_only=True)["imc"]["transformed_mean"].uns[
+#     "scaling_factors"][
+#     ...]
 #     f = file_path("imc_tiles.hdf5")
 #     with h5py.File(f, "w") as f5:
 #         for split in tqdm(
@@ -30,7 +32,7 @@ plt.style.use("dark_background")
 #             for index in tqdm(
 #                 range(len(get_split(split))), desc="slide", position=0, leave=True
 #             ):
-#                 s = get_smu_file(split, index)
+#                 s = get_smu_file(split=split, index=index, read_only=True)
 #                 filename = os.path.basename(s.backing.filename)
 #                 raster = s["imc"]["ome"]
 #                 x = raster.X[...]

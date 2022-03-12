@@ -21,7 +21,7 @@ e_ = get_execute_function()
 plt.style.use("dark_background")
 
 ##
-def get_smu_file(initialize=False):
+def get_smu_file(read_only: bool, initialize=False):
     "/data/spatialmuon/datasets/visium_mousebrain/smu"
     RAW_FOLDER = file_path('spatialmuon/visium_mousebrain')
     PROCESSED_FOLDER = file_path("spatialmuon_processed/visium_mousebrain")
@@ -47,12 +47,13 @@ def get_smu_file(initialize=False):
             del s['Visium']
             s['visium'] = sm
             s.backing.close()
-    s = smu.SpatialMuData(des_f)
+    backingmode = 'r+' if not read_only else 'r'
+    s = smu.SpatialMuData(des_f, backingmode=backingmode)
     return s
 
 ##
 if e_():
-    s = get_smu_file(initialize=True)
+    s = get_smu_file(initialize=True, read_only=False)
     regions = s['visium']['expression']
     raster = s['visium']['image']
 ##
@@ -158,20 +159,20 @@ if e_():
         del s['visium']['processed']
     s['visium']['processed'] = processed_regions
     s.commit_changes_on_disk()
-    t = get_smu_file()
+    t = get_smu_file(read_only=True)
     print(t)
     print('ooo')
 
 ##
 if e_():
-    s = get_smu_file()
+    s = get_smu_file(read_only=True)
     m0 = s['visium']['expression'].masks
     m1 = s['visium']['processed'].masks
     m0.plot()
     m1.plot()
 ##
 if e_():
-    s = get_smu_file()
+    s = get_smu_file(read_only=True)
     processed_regions = s['visium']['processed']
     raster = s['visium']['image']
     if 'SPATIALMUON_TEST' not in os.environ:
@@ -189,7 +190,7 @@ if e_():
     plt.show()
 ##
 if e_():
-    s = get_smu_file()
+    s = get_smu_file(read_only=True)
     masks = s['visium']['processed'].masks
     raster = s['visium']['image']
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')

@@ -59,7 +59,7 @@ def get_split(split):
         return splits.test[ii]
 
 
-def get_smu_file(split, index, raw=False, read_only=False):
+def get_smu_file(split, index, read_only: bool, raw=False):
     if raw:
         spatialmuon_files_dir = RAW_FOLDER
     else:
@@ -75,7 +75,7 @@ def get_smu_file(split, index, raw=False, read_only=False):
 
 ##
 if e_():
-    d = get_smu_file("train", 0, raw=True)
+    d = get_smu_file("train", 0, raw=True, read_only=False)
     old_obs = d["imc"]["masks"].masks.obs
     if len(old_obs.columns) == 0:
         d["imc"]["masks"].masks.update_obs_from_masks()
@@ -141,23 +141,23 @@ def channels_subsetting_and_hot_pixel_filtering(s):
 
 
 ##
-def u(raw: bool):
+def u(raw: bool, read_only: bool):
     for split in tqdm(
         ["train", "validation", "test"], desc="split", position=0, leave=True
     ):
         for index in tqdm(
             range(len(get_split(split))), desc="slide", position=0, leave=True
         ):
-            s = get_smu_file(split, index, raw=raw)
+            s = get_smu_file(split=split, index=index, read_only=read_only, raw=raw)
             yield s
 
 
 def all_processed_smu():
-    return u(raw=False)
+    return u(raw=False, read_only=False)
 
 
 def all_raw_smu():
-    return u(raw=True)
+    return u(raw=True, read_only=False)
 
 
 ##
@@ -170,7 +170,7 @@ if e_():
 
 ##
 if e_():
-    s = get_smu_file("train", 0, raw=False)
+    s = get_smu_file(split="train", index=0, read_only=True, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)
     s["imc"]["ome"].plot(channels="DNA1", preprocessing=np.arcsinh)
 
@@ -258,7 +258,7 @@ if e_():
 
 ##
 if e_():
-    s = get_smu_file("train", 0)
+    s = get_smu_file(split="train", index=0, read_only=True)
     _, ax = plt.subplots(1, figsize=(20, 20))
     s["imc"]["masks"].masks.plot(fill_colors="red", ax=ax)
     # s['imc']['filtered_mean'].masks.plot(fill_colors='black', ax=ax)
@@ -275,7 +275,7 @@ def compute_scaling_factors():
         position=0,
         leave=True,
     ):
-        s = get_smu_file("train", index)
+        s = get_smu_file(split="train", index=index, read_only=True)
         e = s["imc"]["mean"].X[...]
         all_expressions.append(e)
     expressions = np.concatenate(all_expressions, axis=0)
@@ -301,8 +301,8 @@ if e_():
 ##
 if e_():
     assert np.alltrue(
-        get_smu_file("train", 0)["imc"]["transformed_mean"].uns["scaling_factors"][...]
-        == get_smu_file("validation", 0)["imc"]["transformed_mean"].uns["scaling_factors"][
+        get_smu_file(split="train", index=0, read_only=True)["imc"]["transformed_mean"].uns["scaling_factors"][...]
+        == get_smu_file(split="validation", index=0, read_only=True)["imc"]["transformed_mean"].uns["scaling_factors"][
             ...
         ]
     )

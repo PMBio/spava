@@ -23,7 +23,7 @@ plt.style.use("dark_background")
 ##
 if e_():
     print(f"{colorama.Fore.MAGENTA}computing graphs{colorama.Fore.RESET}")
-    s = get_smu_file()
+    s = get_smu_file(read_only=False)
     g = s["imc"]["transformed_mean"].compute_knn_graph(
         k=10, max_distance_in_units=50
     )
@@ -76,7 +76,7 @@ class CellGraphsDataset(InMemoryDataset):
         self.filenames = get_split(self.split)
         names_length_map = {}
         for i in range(len(self.filenames)):
-            s = get_smu_file(self.split, i, read_only=True)
+            s = get_smu_file(split=self.split, index=i, read_only=True)
             n = len(s["imc"]["transformed_mean"].X)
             names_length_map[i] = n
         self.map_left, self.map_right = get_bimap(names_length_map)
@@ -101,7 +101,7 @@ class CellGraphsDataset(InMemoryDataset):
             leave=True,
             position=0,
         ):
-            s = get_smu_file(self.split, i, read_only=True)
+            s = get_smu_file(split=self.split, index=i, read_only=True)
             g = s["imc"]["transformed_mean"].graph
             n = len(s["imc"]["transformed_mean"].X)
             x = s["imc"]["transformed_mean"].X[...]

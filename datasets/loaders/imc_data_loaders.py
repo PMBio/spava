@@ -69,7 +69,7 @@ class CellsDataset(Dataset):
                 self.map_right[(filename, j)] = i
                 i += 1
 
-        s = get_smu_file("train", 0, read_only=True)
+        s = get_smu_file(split="train", index=0, read_only=True)
         self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         s.backing.close()
         self.seed = None
@@ -141,7 +141,7 @@ if e_():
             _, _, expression, is_corrupted = data
             list_of_expression.append(expression)
         expressions = torch.cat(list_of_expression, dim=0)
-        s = get_smu_file("train", 0, read_only=True)
+        s = get_smu_file(split="train", index=0, read_only=True)
         n_channels = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         f = file_path(f'imc_merged_expressions_{split}.hdf5')
         with h5py.File(f, 'w') as f5:
@@ -154,7 +154,7 @@ class CellsDatasetOnlyExpression(Dataset):
         f = file_path(f'imc_merged_expressions_{split}.hdf5')
         with h5py.File(f, 'r') as f5:
             self.expressions = f5['expressions'][...]
-        s = get_smu_file("train", 0, read_only=True)
+        s = get_smu_file(split="train", index=0, read_only=True)
         self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         s.backing.close()
         self.seed = None

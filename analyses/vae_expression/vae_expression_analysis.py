@@ -182,7 +182,7 @@ if e_():
         for j, split in enumerate(tqdm(["train", "validation", "test"], desc='splits', position=0, leave=True)):
             l = []
             for i in tqdm(range(lengths[j]), desc='cell areas', position=0, leave=True):
-                s = get_smu_file(split, i, read_only=True)
+                s = get_smu_file(split=split, index=i, read_only=True)
                 x = s['imc']['transformed_mean'].obs['count'].to_numpy()
                 l.append(x)
             areas = np.concatenate(l, axis=0)

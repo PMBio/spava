@@ -67,7 +67,7 @@ from datasets.imc_data import get_smu_file
 
 e_ = get_execute_function()
 
-s = get_smu_file("train", 0, read_only=True)
+s = get_smu_file(split="train", index=0, read_only=True)
 scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
 s.backing.close()
 
