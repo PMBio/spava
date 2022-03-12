@@ -1,7 +1,12 @@
 ##
 import os
 
-from analyses.torch_boilerplate import optuna_nan_workaround
+from analyses.torch_boilerplate import (
+    optuna_nan_workaround,
+    ZeroInflatedGamma,
+    ZeroInflatedNormal,
+)
+
 
 class Ppp:
     pass
@@ -10,7 +15,7 @@ class Ppp:
 ppp = Ppp()
 
 ppp.LOG_PER_CHANNEL_VALUES = False
-if 'SPATIALMUON_TEST' not in os.environ:
+if "SPATIALMUON_TEST" not in os.environ:
     ppp.MAX_EPOCHS = 15
 else:
     ppp.MAX_EPOCHS = 2
@@ -25,9 +30,9 @@ if ppp.DEBUG:
     ppp.DETECT_ANOMALY = True
 else:
     ppp.NUM_WORKERS = 16
+    # ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = False
 ppp.NOISE_MODEL = "gaussian"
-
 # ppp.NOISE_MODEL = 'gamma'
 # ppp.NOISE_MODEL = 'zip'
 # ppp.NOISE_MODEL = 'zin'
@@ -47,15 +52,24 @@ import torch
 import torch.nn.functional as F
 from torch import autograd
 from torch import nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, Dataset
+from tqdm.auto import tqdm
+import copy
 
-from datasets.loaders.imc_data_loaders import CellsDataset
+from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
 
 pl.seed_everything(1234)
 
 from utils import file_path, get_execute_function
+from datasets.imc_data import get_smu_file
+
 e_ = get_execute_function()
 
+s = get_smu_file("train", 0, read_only=True)
+scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
+s.backing.close()
+
+# TODO: use so that visium data works
 
 class ImageSampler(pl.Callback):
     def __init__(self):
@@ -94,96 +108,6 @@ def get_detect_anomaly_cm():
     else:
         cm = contextlib.nullcontext()
     return cm
-
-
-from pyro.distributions.zero_inflated import ZeroInflatedDistribution
-from pyro.distributions import Gamma
-from torch.distributions import constraints
-
-
-class ZeroInflatedNormal(ZeroInflatedDistribution):
-    """
-    A Zero Inflated Normal distribution.
-    """
-
-    arg_constraints = {
-        "loc": constraints.real,
-        "scale": constraints.positive,
-        "gate": constraints.unit_interval,
-        "gate_logits": constraints.real,
-    }
-    support = constraints.real
-
-    def __init__(self, loc, scale, *, gate=None, gate_logits=None, validate_args=None):
-        base_dist = pyro.distributions.Normal(
-            loc=loc,
-            scale=scale,
-            validate_args=False,
-        )
-        base_dist._validate_args = validate_args
-
-        super().__init__(
-            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
-        )
-
-    @property
-    def location(self):
-        return self.base_dist.mean
-
-    @property
-    def stddev(self):
-        return self.base_dist.stddev
-
-
-class ZeroInflatedGamma(ZeroInflatedDistribution):
-    """
-    A Zero Inflated Gamma distribution.
-
-    :param concentration: shape parameter of the distribution (often referred to as alpha).
-    :type concentration: float or torch.Tensor
-    :param rate: rate = 1 / scale of the distribution (often referred to as beta).
-    :type float or torch.Tensor
-    :param torch.Tensor gate: probability of extra zeros.
-    :param torch.Tensor gate_logits: logits of extra zeros.
-    """
-
-    arg_constraints = {
-        "concentration": constraints.greater_than(0.0),
-        "rate": constraints.greater_than(0.0),
-        "gate": constraints.unit_interval,
-        "gate_logits": constraints.real,
-    }
-    support = constraints.greater_than(0.0)
-
-    def __init__(
-        self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
-    ):
-        base_dist = Gamma(
-            concentration=concentration,
-            rate=rate,
-            validate_args=False,
-        )
-        base_dist._validate_args = validate_args
-
-        super().__init__(
-            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
-        )
-
-    @property
-    def concentration(self):
-        return self.base_dist.concentration
-
-    @property
-    def rate(self):
-        return self.base_dist.rate
-
-
-# dist = Gamma(10, 10)
-# dist = ZeroInflatedGamma(10, 10, gate=torch.tensor([0.1]))
-# x = dist.sample((10000,))
-# plt.figure()
-# plt.hist(x.numpy(), bins=100)
-# plt.show()
 
 
 class VAE(pl.LightningModule):
@@ -294,10 +218,10 @@ class VAE(pl.LightningModule):
         zero = torch.tensor([2.0]).to(a.device)
         if torch.any(dist.log_prob(zero).isinf()):
             print("infinite value detected")
-            self.trainer.should_stop = True
+            raise RuntimeError("manual abort")
         if torch.any(dist.log_prob(zero).isnan()):
             print("nan value detected")
-            self.trainer.should_stop = True
+            raise RuntimeError("manual abort")
         if ppp.NOISE_MODEL in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
         else:
@@ -319,6 +243,14 @@ class VAE(pl.LightningModule):
         # --------------------------
         # 1. define the first two probabilities (in this case Normal for both)
         p = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(std))
+        if (
+            torch.isnan(mu).any()
+            or torch.isnan(std).any()
+            or torch.isinf(mu).any()
+            or torch.isinf(std).any()
+        ):
+            print("nan or inf in (mu, std) detected (computing the kl)!")
+            raise RuntimeError("manual abort")
         q = torch.distributions.Normal(mu, std)
 
         # 2. get the probabilities from the equation
@@ -336,23 +268,32 @@ class VAE(pl.LightningModule):
         cm = get_detect_anomaly_cm()
         with cm:
             if ppp.MONTE_CARLO:
-                recon_loss = self.reconstruction_likelihood(a, b, x, corrupted_entries)
+                if (
+                    torch.isnan(a).any()
+                    or torch.isnan(b).any()
+                    or torch.isinf(a).any()
+                    or torch.isinf(b).any()
+                ):
+                    print("nan or inf in (a, b) detected!")
+                    # this recon_loss will contain a NaN and NaN will be propagated to elbo, which will trigger a
+                    # print and optuna_nan_workaround()
+                    recon_loss = torch.sum(a, dim=1) + torch.sum(b, dim=1)
+                    raise RuntimeError("manual abort")
+                else:
+                    recon_loss = self.reconstruction_likelihood(
+                        a, b, x, corrupted_entries
+                    )
                 # kl
                 kl = self.kl_divergence(z, mu, std)
-                # elbo
-                # elbo = kl - recon_loss
             else:
                 recon_loss = -self.mse_loss(a, x, corrupted_entries)
                 log_var = 2 * torch.log(std)
                 kl = self.kld_loss(mu, log_var)
             elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
-            if torch.isnan(elbo).any():
-                print("nan in loss detected!")
-                self.trainer.should_stop = True
-            if torch.isinf(elbo).any():
-                print("inf in loss detected!")
-                self.trainer.should_stop = True
+            if torch.isinf(elbo).any() or torch.isnan(elbo).any():
+                print("nan or inf in loss detected!")
+                raise RuntimeError("manual abort")
             elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
@@ -364,8 +305,20 @@ class VAE(pl.LightningModule):
             mu, log_var = self.encoder(x)
 
             # sample z from q
-            std = torch.exp(log_var / 2)
-            q = torch.distributions.Normal(mu, std)
+            eps = 1e-7
+            std = torch.exp(log_var / 2) + eps
+            if (
+                torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isinf(mu).any()
+                or torch.isinf(std).any()
+            ):
+                print("nan or inf in (mu, std) detected!")
+                raise RuntimeError("manual abort")
+            try:
+                q = torch.distributions.Normal(mu, std)
+            except ValueError:
+                print("ooo")
             z = q.rsample()
 
             # decoded
@@ -377,21 +330,29 @@ class VAE(pl.LightningModule):
                 or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
-                self.trainer.should_stop = True
+                raise RuntimeError("manual abort")
 
             # print('so far so good')
             return a, b, mu, std, z
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        raster, mask, expression, is_corrupted = batch
+        expression, is_corrupted = batch
         assert len(expression.shape) == 2
         # encode x to get the mu and variance parameters
         a, b, mu, std, z = self.forward(expression)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
-
+        if elbo is None:
+            self.log_dict(
+                {
+                    "elbo": torch.tensor(float("nan")),
+                    "kl": torch.tensor(float("nan")),
+                    "reconstruction": torch.tensor(float("nan")),
+                }
+            )
+            return torch.tensor(float("nan"))
         self.log_dict(
             {
                 "elbo": elbo,
@@ -399,24 +360,31 @@ class VAE(pl.LightningModule):
                 "reconstruction": recon_loss.mean(),
             }
         )
-
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        raster, mask, expression, is_corrupted = batch
+        expression, is_corrupted = batch
         assert len(expression.shape) == 2
         a, b, mu, std, z = self.forward(expression)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
-
-        self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
-        d = {
-            "elbo": elbo,
-            "kl": kl.mean(),
-            "reconstruction": recon_loss.mean(),
-        }
-        return d
+        if elbo is None:
+            self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
+            d = {
+                "elbo": torch.tensor(float("nan")),
+                "kl": torch.tensor(float("nan")),
+                "reconstruction": torch.tensor(float("nan")),
+            }
+            return d
+        else:
+            self.logger.log_hyperparams(params={}, metrics={"hp_metric": elbo})
+            d = {
+                "elbo": elbo,
+                "kl": kl.mean(),
+                "reconstruction": recon_loss.mean(),
+            }
+            return d
 
     def validation_epoch_end(self, outputs):
         if not self.trainer.sanity_checking:
@@ -451,40 +419,17 @@ class LogComputationalGraph(pl.Callback):
                 # pl_module.logger.experiment.add_graph(VAE(), sample_image)
 
 
-class AfterTraining(pl.Callback):
-    def on_fit_end(self, trainer, pl_module):
-        print("hi from AfterTraining!")
-        # for dataloader_idx in [0, 1]:
-        #     loader = trainer.val_dataloaders[dataloader_idx]
-        #     dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
-        #     img = get_image(loader, pl_module)
-        #     trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
-        #                                         trainer.global_step)
-
-
-# class LogHyperparameters(pl.Callback):
-#     def __init__(self):
-#         self.alredy_logged = False
-#
-#     def on_validation_start(self, trainer, pl_module) -> None:
-#         if not trainer.sanity_checking:
-#             if not self.alredy_logged:
-#                 pl_module.logger.log_hyperparams(ppp.__dict__)
-#                 self.alredy_logged = True
-
-
 def get_loaders(
     perturb: bool = False,
     shuffle_train=False,
 ):
-    train_ds = CellsDataset("train")
-    train_ds_validation = CellsDataset("train")
-    val_ds = CellsDataset("validation")
-
+    train_ds = CellsDatasetOnlyExpression("train")
+    train_ds_validation = CellsDatasetOnlyExpression("train")
+    val_ds = CellsDatasetOnlyExpression("validation")
     if perturb:
-        train_ds.perturb()
-        train_ds_validation.perturb()
-        val_ds.perturb()
+        train_ds = train_ds.perturb()
+        train_ds_validation = train_ds_validation.perturb()
+        val_ds = val_ds.perturb()
 
     # print(
     #     f"len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ="
@@ -552,12 +497,12 @@ def get_loaders(
 def objective(trial: optuna.trial.Trial) -> float:
     from analyses.torch_boilerplate import training_boilerplate
 
-    val_check_internal = 1 if ppp.DEBUG or 'SPATIALMUON_TEST' in os.environ else 300
+    val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 300
     trainer, logger = training_boilerplate(
         trial=trial,
-        extra_callbacks=[ImageSampler(), LogComputationalGraph(), AfterTraining()],
+        extra_callbacks=[ImageSampler(), LogComputationalGraph()],
         max_epochs=ppp.MAX_EPOCHS,
-        log_every_n_steps=15 if not ppp.DEBUG else 1,
+        log_every_n_steps=30 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
         model_name="expression_vae",
     )
@@ -567,6 +512,13 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
+
+    # # leading to nan values
+    # vae_latent_dims = 5
+    # vae_beta = 1.231490907826831e-7
+    # log_c = -2.20108960756478
+    # learning_rate = 0.5985518082388829
+
     optuna_parameters = dict(
         vae_latent_dims=vae_latent_dims,
         vae_beta=vae_beta,
@@ -589,15 +541,22 @@ def objective(trial: optuna.trial.Trial) -> float:
     train_loader, val_loader, train_loader_batch = get_loaders(
         shuffle_train=True,
     )
-    trainer.fit(
-        vae,
-        train_dataloaders=train_loader,
-        val_dataloaders=[train_loader_batch, val_loader],
-    )
-    print(f"finished logging in {logger.experiment.log_dir}")
+    try:
+        trainer.fit(
+            vae,
+            train_dataloaders=train_loader,
+            val_dataloaders=[train_loader_batch, val_loader],
+        )
+        print(f"finished logging in {logger.experiment.log_dir}")
 
-    elbo = trainer.callback_metrics["batch_val_elbo"].item()
-    return elbo
+        elbo = trainer.callback_metrics["batch_val_elbo"].item()
+        return elbo
+    except RuntimeError as e:
+        if str(e) == "manual abort":
+            elbo = optuna_nan_workaround(torch.tensor(float("nan")))
+            return elbo
+        else:
+            raise e
 
 
 if e_() or __name__ == "__main__":
@@ -620,14 +579,14 @@ if e_() or __name__ == "__main__":
         load_if_exists=True,
         study_name=study_name,
     )
-    OPTIMIZE = True
-    # OPTIMIZE = False
+    # OPTIMIZE = True
+    OPTIMIZE = False
     if OPTIMIZE:
-        if 'SPATIALMUON_TEST' not in os.environ:
+        if "SPATIALMUON_TEST" not in os.environ:
             n_trials = 100
         else:
             n_trials = 1
-        study.optimize(objective, n_trials=n_trials, timeout=3600)
+        study.optimize(objective, n_trials=n_trials, timeout=4 * 3600)
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
@@ -636,10 +595,14 @@ if e_() or __name__ == "__main__":
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
     else:
-        TRAIN = True
+        # TRAIN = True
+        TRAIN = False
         if TRAIN:
             objective(study.best_trial)
         else:
+            print('best trial:')
+            print(study.best_trial)
+
             df = study.trials_dataframe()
             df = df.sort_values(by="value")
             import pandas as pd

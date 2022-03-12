@@ -1,0 +1,30 @@
+#+STARTUP:showall
+* interactive job
+dkfz1
+interactive
+* pc02 -> cluster
+** copy data
+ssh l989o@odcf-worker01.dkfz.de "mkdir -p /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/"
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/spatialmuon_processed/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/spatialmuon_processed/
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc_tiles.hdf5 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc_tiles.hdf5
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc_merged_expressions_{train}.hdf5 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc_merged_expressions_{train}.hdf5
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc_merged_expressions_{validation}.hdf5 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc_merged_expressions_{validation}.hdf5
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc_merged_expressions_{test}.hdf5 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc_merged_expressions_{test}.hdf5
+*** copy graphs
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/subgraphs_test_knn_10_max_distance_in_units_50 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/subgraphs_test_knn_10_max_distance_in_units_50
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/subgraphs_validation_knn_10_max_distance_in_units_50 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/subgraphs_validation_knn_10_max_distance_in_units_50
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/subgraphs_train_knn_10_max_distance_in_units_50 l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/subgraphs_train_knn_10_max_distance_in_units_50
+** copy code
+# the wiki says to put the code on the home folder
+*** spatialmuon
+rsync -avh --stats --exclude=.git --exclude=.idea --exclude=__pycache__ /data/l989o/deployed/spatialmuon/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/code/spatialmuon/
+*** a
+ssh l989o@odcf-worker01.dkfz.de "mkdir -p /dkfz/cluster/gpu/data/OE0540/l989o/code/"
+rsync -avh --stats --exclude=.git --exclude=.idea --exclude=__pycache__ /data/l989o/deployed/a/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/code/a/
+ssh l989o@odcf-worker01.dkfz.de "rm /dkfz/cluster/gpu/data/OE0540/l989o/code/a/data"
+ssh l989o@odcf-worker01.dkfz.de "ln -s /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/ /dkfz/cluster/gpu/data/OE0540/l989o/code/a/data"
+* conda
+cd /dkfz/cluster/gpu/data/OE0540/l989o/code/a/tests
+bash setup_env.sh
+* cluster -> pc02
+rsync -avh l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/checkpoints/ /data/l989o/data/basel_zurich/spatial_uzh_processed/a/checkpoints/

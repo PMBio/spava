@@ -7,91 +7,128 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from typing import Union
 from datasets.loaders.imc_data_loaders import get_cells_data_loader
+from analyses.vae_expression.vae_expression_model import VAE
+import anndata as ad
+import scanpy as sc
+from analyses.analisys_utils import compute_knn, louvain_plot
 
-from utils import reproducible_random_choice, get_execute_function
+import os
+from utils import reproducible_random_choice, get_execute_function, memory
+
 e_ = get_execute_function()
-
-##
-if e_:
-    SPLIT = "validation"
-    get_cells_data_loader(split=SPLIT, batch_size=1024)
-
-##
-if m:
-    ii = IndexInfo(SPLIT)
-    n = ii.filtered_ends[-1]
-    random_indices = reproducible_random_choice(n, 10000)
+os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
 
 ##
 # re-train the best model but by perturbing the dataset
-# if m:
-if m and False:
-    # train the model on dilated masks using the hyperparameters from the best model for original expression
-    from old_code.models import objective, ppp
-    from old_code.data2 import file_path
+# if True:
+if False:
+    from analyses.vae_expression.vae_expression_model import objective, ppp
+    from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "no-name-fbdac942-b370-43af-a619-621755ee9d1f"
-    ppp.PERTURB_PIXELS = False
-    ppp.PERTURB_PIXELS_SEED = 42
-    ppp.PERTURB_MASKS = False
+    study_name = "vae_expression"
     ppp.PERTURB = True
     study = optuna.load_study(
-        study_name=study_name, storage="sqlite:///" + file_path("optuna_ah.sqlite")
+        study_name=study_name,
+        storage="sqlite:///" + file_path("optuna_vae_expression.sqlite"),
     )
+    print('best trial:')
+    print(study.best_trial)
     objective(study.best_trial)
     sys.exit(0)
 
 ##
-from old_code.analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
-    precompute,
-    louvain_plot,
-)
+if e_():
+    SPLIT = "validation"
+    loader_non_perturbed = get_cells_data_loader(split=SPLIT, batch_size=1024)
+    loader_perturbed = get_cells_data_loader(split=SPLIT, batch_size=1024, perturb=True)
 
-if m:
-    # 133
+##
+if e_():
+    n = len(loader_non_perturbed.dataset)
+    random_indices = reproducible_random_choice(n, 10000)
+
+##
+if e_():
     MODEL_CHECKPOINT = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_145"
+        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_51"
         "/checkpoints/last.ckpt"
     )
-##
-if m and COMPLETE_RUN:
+#
+def precompute(loader, expression_model_checkpoint, random_indices):
+    expression_vae = VAE.load_from_checkpoint(expression_model_checkpoint)
+    print("merging expressions and computing embeddings... ", end="")
+    all_mu = []
+    all_expression = []
+    for data in tqdm(loader, desc="embedding expression"):
+        raster, mask, expression, is_corrupted = data
+        a, b, mu, std, z = expression_vae(expression)
+        all_mu.append(mu)
+        all_expression.append(expression)
+    mus = torch.cat(all_mu, dim=0)
+    expressions = torch.cat(all_expression, dim=0)
+    print("done")
+
+    a0 = ad.AnnData(mus.detach().numpy())
+    sc.tl.pca(a0)
+    sc.pl.pca(a0)
+    a1 = ad.AnnData(expressions.numpy())
+
+    b0 = a0[random_indices]
+    b1 = a1[random_indices]
+    # a, b = a0, b0
+    # for a, b in tqdm(zip([a0, a1], [b0, b1]), desc="AnnData objects", total=2):
+    for b in tqdm([b0, b1], desc="AnnData objects", total=2):
+        print("computing umap... ", end="")
+        sc.pp.neighbors(b)
+        sc.tl.umap(b)
+        sc.tl.louvain(b)
+        print("done")
+
+        print("computing nearest neighbors on subsetted data... ", end="")
+        compute_knn(b)
+
+        # print("computing nearest neighbors on the full data... ", end="")
+        # nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(a.X)
+        # distances, indices = nbrs.kneighbors(a.X)
+        # a.obsm["nearest_neighbors"] = indices
+        # print("done")
+    # return a0, a1, b0, b1
+    return b0, b1
+
+
+if e_():
     b0, b1 = precompute(
-        data_loaders=get_loaders(**perturb_kwargs),
+        loader=loader_perturbed,
         expression_model_checkpoint=MODEL_CHECKPOINT,
         random_indices=random_indices,
-        split=SPLIT,
     )
 ##
-if m and COMPLETE_RUN:
+if e_():
     louvain_plot(b1, "expression (perturbed)")
     louvain_plot(b0, "latent (perturbed)")
 
 ##
-if m:
-    loader = get_loaders(**perturb_kwargs)[["train", "validation"].index(SPLIT)]
-    loader_non_perturbed = get_loaders(perturb=False)[
-        ["train", "validation"].index(SPLIT)
-    ]
-    data = loader.__iter__().__next__()
+if e_():
+    data = loader_non_perturbed.__iter__().__next__()
     data_non_perturbed = loader_non_perturbed.__iter__().__next__()
     i0, i1 = torch.where(data[-1] == 1)
     # perturbed data are zero, non perturbed data are ok
     print(data[0][i0, i1])
     print(data_non_perturbed[0][i0, i1])
     # just a hash
-    h = torch.sum(torch.cat(torch.where(loader.dataset.corrupted_entries == 1)))
+    h = np.sum(np.concatenate(np.where(loader_perturbed.dataset.corrupted_entries == 1)))
     print(
         "corrupted entries hash:",
         h,
     )
 
 ##
-if m:
-    expression_vae = ExpressionVAE.load_from_checkpoint(MODEL_CHECKPOINT)
+if e_():
+    expression_vae = VAE.load_from_checkpoint(MODEL_CHECKPOINT)
 
     debug_i = 0
     print("merging expressions and computing embeddings... ", end="")
@@ -102,12 +139,12 @@ if m:
     all_is_perturbed = []
     all_expression_non_perturbed = []
     for data, data_non_perturbed in tqdm(
-        zip(loader, loader_non_perturbed),
+        zip(loader_perturbed, loader_non_perturbed),
         desc="embedding expression",
-        total=len(loader),
+        total=len(loader_perturbed),
     ):
-        expression, _, is_perturbed = data
-        expression_non_perturbed, _, _ = data_non_perturbed
+        _, _, expression, is_perturbed = data
+        _, _, expression_non_perturbed, _ = data_non_perturbed
         a, b, mu, std, z = expression_vae(expression)
         all_mu.append(mu)
         all_expression.append(expression)
@@ -133,32 +170,32 @@ if m:
     reconstructed = expression_vae.expected_value(a_s, b_s)
 
 ##
+from datasets.imc_data import get_smu_file
+##
+# if True:
+if e_():
+    @memory.cache(ignore=['ignore'])
+    def asldkjalefnaoswlsir(ignore: bool):
+        d = {}
+        from splits import train, validation, test
+        lengths = [len(train), len(validation), len(test)]
+        for j, split in enumerate(tqdm(["train", "validation", "test"], desc='splits', position=0, leave=True)):
+            l = []
+            for i in tqdm(range(lengths[j]), desc='cell areas', position=0, leave=True):
+                s = get_smu_file(split, i, read_only=True)
+                x = s['imc']['transformed_mean'].obs['count'].to_numpy()
+                l.append(x)
+            areas = np.concatenate(l, axis=0)
+            d[split] = areas
+        return d
+    d = asldkjalefnaoswlsir(ignore=e_())
+    areas_per_split = d
+
+##
 from enum import IntEnum
 from typing import Callable
 from old_code.data2 import quantiles_for_normalization
 
-from old_code.data2 import AreaFilteredDataset
-from utils import memory
-from tqdm import tqdm
-import numpy as np
-
-
-@memory.cache
-def f_xqoifaowi():
-    d = {}
-    for split in ["train", "validation", "test"]:
-        area_ds = AreaFilteredDataset(split)
-
-        l = []
-        for x in tqdm(area_ds, desc="merging"):
-            l.append(x)
-        areas = np.concatenate(l, axis=0)
-        d[split] = areas
-    return d
-
-
-areas = f_xqoifaowi()
-##
 Space = IntEnum("Space", "raw_sum raw_mean asinh_sum asinh_mean scaled_mean", start=0)
 
 from_to = [[None for _ in range(len(Space))] for _ in range(len(Space))]
@@ -213,7 +250,13 @@ assert test_path == [4, 3, 1, 0, 2], test_path
 def transform(
     x: np.ndarray, from_space: Space, to_space: Space, split: str
 ) -> np.ndarray:
-    a = areas[split]
+    # old code
+    # a = areas[split]
+    # end old code
+    # new code
+    a = areas_per_split[split]
+    a = np.tile(a.reshape(-1, 1), (1, x.shape[1]))
+    # end new code
     assert len(a) == len(x)
     path = find_path(from_node=from_space.value, to_node=to_space.value)
     for i in range(len(path) - 1):
@@ -224,24 +267,6 @@ def transform(
         x = f(x, a)
     return x
 
-
-# transform(x=np.random.rand(218618, 39), from_space=Space.scaled_sum, to_space=Space.scaled_mean, split='test')
-
-
-# f_set(Space.raw, Space.asinh, lambda x: np.arcsinh(x))
-# f_set(Space.asinh, Space.raw, lambda x: np.sinh(x))
-# f_set(Space.asinh, Space.scaled, lambda x: x / quantiles_for_normalization)
-# f_set(Space.scaled, Space.asinh, lambda x: x * quantiles_for_normalization)
-# f_set(
-#     Space.raw,
-#     Space.scaled,
-#     lambda x: f_get(Space.asinh, Space.scaled)(f_get(Space.raw, Space.asinh)(x)),
-# )
-# f_set(
-#     Space.scaled,
-#     Space.raw,
-#     lambda x: f_get(Space.asinh, Space.raw)(f_get(Space.scaled, Space.asinh)(x)),
-# )
 
 import math
 from scipy.stats import t as t_dist
@@ -428,7 +453,7 @@ class Prediction:
             if str(e) == "No points found":
                 print(str(e))
                 return
-        from scipy.stats import kde
+        from scipy.stats import gaussian_kde
         import time
 
         # data = np.vstack([x, y])
@@ -441,7 +466,7 @@ class Prediction:
 
         # Evaluate a gaussian kde on a regular grid of nbins x nbins over data extents
         try:
-            k = kde.gaussian_kde(data)
+            k = gaussian_kde(data)
         except ValueError as e:
             print(data)
             print(data.shape)
@@ -720,7 +745,7 @@ class Prediction:
         plt.show()
         plt.style.use("default")
 
-
+##
 def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):
     q0 = p0.transform_to(target_space)
     q1 = p1.transform_to(target_space)
@@ -742,33 +767,36 @@ def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):
 #         reconstructed_zero.append(x)
 
 ##
-if m:
+# if e_():
+if True:
     kwargs = dict(
         original=expressions_non_perturbed.cpu().numpy(),
         corrupted_entries=are_perturbed.cpu().numpy(),
         predictions_from_perturbed=reconstructed.detach().cpu().numpy(),
         space=Space.scaled_mean.value,
-        name="ah_expression",
+        name="expression vae",
         split="validation",
     )
-    ah_predictions = Prediction(**kwargs)
+    vae_predictions = Prediction(**kwargs)
 
-    ah_predictions.plot_reconstruction()
-    # ah_predictions.plot_scores()
-    ah_predictions.plot_summary()
+    plt.style.use('default')
+    vae_predictions.plot_reconstruction()
+    # vae_predictions.plot_scores()
+    vae_predictions.plot_summary()
 
 
-#
-if m and False:
-    p = ah_predictions.transform_to(Space.raw_sum)
-    p.name = "ah_expression raw"
+##
+if e_():
+    # this seems to be broken
+    p = vae_predictions.transform_to(Space.raw_sum)
+    p.name = "expression vae raw"
     p.plot_reconstruction()
     # p.plot_scores()
 
 ##
-from old_code.data2 import file_path
-import pickle
-
-if m:
-    d = {"vanilla VAE": kwargs}
-    pickle.dump(d, open(file_path("ah_scores.pickle"), "wb"))
+# from old_code.data2 import file_path
+# import pickle
+#
+# if m:
+#     d = {"vanilla VAE": kwargs}
+#     pickle.dump(d, open(file_path("ah_scores.pickle"), "wb"))

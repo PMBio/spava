@@ -32,6 +32,7 @@ import colorama
 from datasets.imc_data import get_smu_file, get_split
 
 e_ = get_execute_function()
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/imc_data_loaders.py'
 
 plt.style.use("dark_background")
 
@@ -68,7 +69,7 @@ class CellsDataset(Dataset):
                 self.map_right[(filename, j)] = i
                 i += 1
 
-        s = get_smu_file("train", 0)
+        s = get_smu_file("train", 0, read_only=True)
         self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         s.backing.close()
         self.seed = None
@@ -112,7 +113,6 @@ class CellsDataset(Dataset):
         expression = self.recompute_expression(raster, mask)
         return raster, mask, expression, is_corrupted
 
-
 ##
 if e_():
     train_ds = CellsDataset(split="train")
@@ -131,6 +131,56 @@ def get_cells_data_loader(split, batch_size, perturb=False):
     )
     return loader
 
+
+##
+if e_():
+    for split in tqdm(['train', 'validation', 'test'], desc='split', position=0, leave=True):
+        list_of_expression = []
+        dl = get_cells_data_loader(split=split, batch_size=1024)
+        for data in tqdm(dl, desc='precomputing expression', position=0, leave=True):
+            _, _, expression, is_corrupted = data
+            list_of_expression.append(expression)
+        expressions = torch.cat(list_of_expression, dim=0)
+        s = get_smu_file("train", 0, read_only=True)
+        n_channels = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
+        f = file_path(f'imc_merged_expressions_{split}.hdf5')
+        with h5py.File(f, 'w') as f5:
+            f5['expressions'] = expressions.numpy()
+
+##
+class CellsDatasetOnlyExpression(Dataset):
+    def __init__(self, split: str):
+        self.split = split
+        f = file_path(f'imc_merged_expressions_{split}.hdf5')
+        with h5py.File(f, 'r') as f5:
+            self.expressions = f5['expressions'][...]
+        s = get_smu_file("train", 0, read_only=True)
+        self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
+        s.backing.close()
+        self.seed = None
+        self.corrupted_entries = np.zeros(
+            (len(self), len(self.scaling_factors)), dtype=np.bool
+        )
+
+    def __len__(self):
+        return len(self.expressions)
+
+    def perturb(self, seed=0):
+        self.seed = seed
+        from torch.distributions import Bernoulli
+
+        dist = Bernoulli(probs=0.1)
+        shape = self.corrupted_entries.shape
+        state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        self.corrupted_entries = dist.sample(shape).bool().numpy()
+        torch.set_rng_state(state)
+
+    def __getitem__(self, item):
+        expression = self.expressions[item]
+        is_corrupted = self.corrupted_entries[item]
+        expression[is_corrupted] = 0.
+        return expression, is_corrupted
 
 ##
 if e_():

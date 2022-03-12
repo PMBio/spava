@@ -59,7 +59,7 @@ def get_split(split):
         return splits.test[ii]
 
 
-def get_smu_file(split, index, raw=False):
+def get_smu_file(split, index, raw=False, read_only=False):
     if raw:
         spatialmuon_files_dir = RAW_FOLDER
     else:
@@ -68,7 +68,8 @@ def get_smu_file(split, index, raw=False):
     f = l[index]
     ff = os.path.join(spatialmuon_files_dir, f)
     ff = ff.replace(".tiff", ".h5smu")
-    d = smu.SpatialMuData(backing=ff)
+    backingmode = 'r+' if not read_only else 'r'
+    d = smu.SpatialMuData(backing=ff, backingmode=backingmode)
     return d
 
 

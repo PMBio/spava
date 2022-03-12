@@ -9,4 +9,6 @@ jobs:
 #      - run: python tests/test_envs.py
 #      - run: python /data/l989o/deployed/a/tests/no_test_envs.py
       - uses: actions/checkout@v2
-      - run: bash tests/setup_env.sh
+      - run: | 
+          cd tests
+          bash setup_env.sh

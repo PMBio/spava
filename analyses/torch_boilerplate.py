@@ -60,3 +60,93 @@ def optuna_nan_workaround(loss):
     # loss = torch.nan_to_num(loss, nan=torch.finfo(loss.dtype).max)
     loss[torch.isnan(loss)] = torch.finfo(loss.dtype).max
     return loss
+
+
+from pyro.distributions.zero_inflated import ZeroInflatedDistribution
+from pyro.distributions import Gamma
+from torch.distributions import constraints
+
+
+class ZeroInflatedNormal(ZeroInflatedDistribution):
+    """
+    A Zero Inflated Normal distribution.
+    """
+
+    arg_constraints = {
+        "loc": constraints.real,
+        "scale": constraints.positive,
+        "gate": constraints.unit_interval,
+        "gate_logits": constraints.real,
+    }
+    support = constraints.real
+
+    def __init__(self, loc, scale, *, gate=None, gate_logits=None, validate_args=None):
+        base_dist = pyro.distributions.Normal(
+            loc=loc,
+            scale=scale,
+            validate_args=False,
+        )
+        base_dist._validate_args = validate_args
+
+        super().__init__(
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
+        )
+
+    @property
+    def location(self):
+        return self.base_dist.mean
+
+    @property
+    def stddev(self):
+        return self.base_dist.stddev
+
+
+class ZeroInflatedGamma(ZeroInflatedDistribution):
+    """
+    A Zero Inflated Gamma distribution.
+
+    :param concentration: shape parameter of the distribution (often referred to as alpha).
+    :type concentration: float or torch.Tensor
+    :param rate: rate = 1 / scale of the distribution (often referred to as beta).
+    :type float or torch.Tensor
+    :param torch.Tensor gate: probability of extra zeros.
+    :param torch.Tensor gate_logits: logits of extra zeros.
+    """
+
+    arg_constraints = {
+        "concentration": constraints.greater_than(0.0),
+        "rate": constraints.greater_than(0.0),
+        "gate": constraints.unit_interval,
+        "gate_logits": constraints.real,
+    }
+    support = constraints.greater_than(0.0)
+
+    def __init__(
+        self, concentration, rate, *, gate=None, gate_logits=None, validate_args=None
+    ):
+        base_dist = Gamma(
+            concentration=concentration,
+            rate=rate,
+            validate_args=False,
+        )
+        base_dist._validate_args = validate_args
+
+        super().__init__(
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
+        )
+
+    @property
+    def concentration(self):
+        return self.base_dist.concentration
+
+    @property
+    def rate(self):
+        return self.base_dist.rate
+
+
+# dist = Gamma(10, 10)
+# dist = ZeroInflatedGamma(10, 10, gate=torch.tensor([0.1]))
+# x = dist.sample((10000,))
+# plt.figure()
+# plt.hist(x.numpy(), bins=100)
+# plt.show()
