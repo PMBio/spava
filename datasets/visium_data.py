@@ -14,10 +14,9 @@ import colorama
 import scanpy as sc
 import h5py
 
-# os.environ['SPATIALMUON_TEST'] = 'aaa'
-# os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
 e_ = get_execute_function()
-# matplotlib.use('module://backend_interagg')
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/visium_data.py'
+# os.environ['SPATIALMUON_TEST'] = 'datasets/visium_data.py'
 
 plt.style.use("dark_background")
 
@@ -38,22 +37,24 @@ def get_smu_file(initialize=False):
 
     if initialize:
         shutil.copy(src_f, des_f)
-
+        if 'SPATIALMUON_TEST' not in os.environ:
+            s = smu.SpatialMuData(des_f)
+            name = "ST8059049"
+            name_hne = name + "H&E"
+            sm = smu.SpatialModality()
+            sm['expression'] = s['Visium'][name]
+            sm['image'] = s['Visium'][name_hne]
+            del s['Visium']
+            s['visium'] = sm
+            s.backing.close()
     s = smu.SpatialMuData(des_f)
     return s
 
 ##
 if e_():
     s = get_smu_file(initialize=True)
-    if 'SPATIALMUON_TEST' not in os.environ:
-        name = "ST8059049"
-        name_hne = name + "H&E"
-
-        regions = s["Visium"][name]
-        raster = s["Visium"][name_hne]
-    else:
-        regions = s['visium']['expression']
-        raster = s['visium']['image']
+    regions = s['visium']['expression']
+    raster = s['visium']['image']
 ##
 if e_():
     _, ax = plt.subplots(1)
@@ -153,14 +154,9 @@ if e_():
     processed_regions.plot(chosen_genes)
     processed_regions.masks.plot('leiden')
 
-    if 'SPATIALMUON_TEST' not in os.environ:
-        if 'processed' in s['Visium']:
-            del s['Visium']['processed']
-        s['Visium']['processed'] = processed_regions
-    else:
-        if 'processed' in s['visium']:
-            del s['visium']['processed']
-        s['visium']['processed'] = processed_regions
+    if 'processed' in s['visium']:
+        del s['visium']['processed']
+    s['visium']['processed'] = processed_regions
     s.commit_changes_on_disk()
     t = get_smu_file()
     print(t)
@@ -169,24 +165,15 @@ if e_():
 ##
 if e_():
     s = get_smu_file()
-    if 'SPATIALMUON_TEST' not in os.environ:
-        m0 = s['Visium']['ST8059049'].masks
-        m1 = s['Visium']['processed'].masks
-    else:
-        m0 = s['visium']['expression'].masks
-        m1 = s['visium']['processed'].masks
-
+    m0 = s['visium']['expression'].masks
+    m1 = s['visium']['processed'].masks
     m0.plot()
     m1.plot()
 ##
 if e_():
     s = get_smu_file()
-    if 'SPATIALMUON_TEST' not in os.environ:
-        processed_regions = s['Visium']['processed']
-        raster = s['Visium']['ST8059049H&E']
-    else:
-        processed_regions = s['visium']['processed']
-        raster = s['visium']['image']
+    processed_regions = s['visium']['processed']
+    raster = s['visium']['image']
     if 'SPATIALMUON_TEST' not in os.environ:
         bb = smu.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
@@ -203,12 +190,8 @@ if e_():
 ##
 if e_():
     s = get_smu_file()
-    if 'SPATIALMUON_TEST' not in os.environ:
-        masks = s['Visium']['processed'].masks
-        raster = s['Visium']['ST8059049H&E']
-    else:
-        masks = s['visium']['processed'].masks
-        raster = s['visium']['image']
+    masks = s['visium']['processed'].masks
+    raster = s['visium']['image']
     print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
     f = file_path("visium_tiles.hdf5")
     with h5py.File(f, "w") as f5:
