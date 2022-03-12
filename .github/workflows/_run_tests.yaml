@@ -9,5 +9,6 @@ jobs:
       - run: |
           source ~/.bashrc
           conda activate ci_env
-          python -m pytest tests
-#
+          python -m pytest tests/test_preprocess_data.py
+          python -m pytest tests/test_data_loaders.py 
+          python -m pytest tests/test_train_models.py

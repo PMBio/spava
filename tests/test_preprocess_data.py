@@ -5,6 +5,10 @@ def test_preprocess_imc_data():
     os.environ["SPATIALMUON_TEST"] = "datasets/imc_data.py"
     import datasets.imc_data
 
+def test_preprocess_imc_data_graphs():
+    os.environ["SPATIALMUON_TEST"] = "datasets/graphs/imc_data_graphs.py"
+    import datasets.graphs.imc_data_graphs
+
 
 def test_preprocess_imc_jeongbin_data():
     os.environ["SPATIALMUON_TEST"] = "datasets/imc_jeongbin_data.py"
@@ -18,5 +22,6 @@ def test_preprocess_visium_data():
 
 if __name__ == "__main__":
     test_preprocess_imc_data()
+    test_preprocess_imc_data_graphs()
     test_preprocess_imc_jeongbin_data()
     test_preprocess_visium_data()
