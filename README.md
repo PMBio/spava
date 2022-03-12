@@ -22,6 +22,8 @@
 | name | type |
 |-----------------------------------------------------------------------|---------|
 | [![Preprocess](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml)                                                 | on demand |
+| [![Visium tiler](https://github.com/PMBio/a/actions/workflows/visium_tiler.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_tiler.yaml) | on demand |
+| [![Visium preprocess graphs](https://github.com/PMBio/a/actions/workflows/visium_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_graphs.yaml) | on demand |
 
 ## Visium endometrium dataset
 | name | type |
