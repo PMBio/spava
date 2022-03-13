@@ -49,6 +49,7 @@ def get_execute_function():
                 or "SPATIALMUON_NOTEBOOK" in os.environ
                 and caller_filename.startswith("<ipython-input-")
             )
+
     return execute_
 
 
@@ -94,3 +95,8 @@ def get_bimap(names_length_map):
             map_right[(name, j)] = i
             i += 1
     return map_left, map_right
+
+
+def print_corrupted_entries_hash(corrupted_entries: np.ndarray, split: str):
+    h = np.sum(np.concatenate(np.where(corrupted_entries == 1)))
+    print(f"corrupted entries hash ({split}):", h)

@@ -334,8 +334,8 @@ if e_():
             l.append(x)
         areas = np.concatenate(l, axis=0)
         d[split] = areas
-        f = file_path("imc/merged_areas_per_split.pickle")
-        pickle.dump(d, open(f, "wb"))
+    f = file_path("imc/merged_areas_per_split.pickle")
+    pickle.dump(d, open(f, "wb"))
 
 
 def get_merged_areas_per_split():

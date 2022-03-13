@@ -14,7 +14,7 @@ from torch_geometric.loader import DataLoader as GeometricDataLoader
 from tqdm import tqdm
 
 from datasets.visium_data import get_smu_file, get_split_indices
-from utils import get_execute_function, file_path, get_bimap
+from utils import get_execute_function, file_path, get_bimap, print_corrupted_entries_hash
 
 e_ = get_execute_function()
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/visium_data_loaders.py'
@@ -49,6 +49,7 @@ class CellsDataset(Dataset):
         torch.manual_seed(seed)
         self.corrupted_entries = dist.sample(shape).bool().numpy()
         torch.set_rng_state(state)
+        print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
     def __len__(self):
         return len(self.indices)

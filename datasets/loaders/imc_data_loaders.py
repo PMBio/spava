@@ -9,11 +9,17 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torch_geometric.loader import DataLoader as GeometricDataLoader
+
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
 from datasets.imc_data import get_smu_file, get_split
-from utils import get_execute_function, file_path, get_bimap
+from utils import (
+    get_execute_function,
+    file_path,
+    get_bimap,
+    print_corrupted_entries_hash,
+)
 
 e_ = get_execute_function()
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/imc_data_loaders.py'
@@ -69,6 +75,7 @@ class CellsDataset(Dataset):
         torch.manual_seed(seed)
         self.corrupted_entries = dist.sample(shape).bool().numpy()
         torch.set_rng_state(state)
+        print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
     def __len__(self):
         assert len(self.map_left) == len(self.map_right)
@@ -95,6 +102,7 @@ class CellsDataset(Dataset):
         expression = self.recompute_expression(raster, mask)
         return raster, mask, expression, is_corrupted
 
+
 ##
 if e_():
     train_ds = CellsDataset(split="train")
@@ -116,27 +124,29 @@ def get_cells_data_loader(split, batch_size, perturb=False):
 
 ##
 if e_():
-    for split in tqdm(['train', 'validation', 'test'], desc='split', position=0, leave=True):
+    for split in tqdm(
+        ["train", "validation", "test"], desc="split", position=0, leave=True
+    ):
         list_of_expression = []
         dl = get_cells_data_loader(split=split, batch_size=1024)
-        for data in tqdm(dl, desc='precomputing expression', position=0, leave=True):
+        for data in tqdm(dl, desc="precomputing expression", position=0, leave=True):
             _, _, expression, is_corrupted = data
             list_of_expression.append(expression)
         expressions = torch.cat(list_of_expression, dim=0)
         s = get_smu_file(split="train", index=0, read_only=True)
         n_channels = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
-        os.makedirs(file_path('imc/'), exist_ok=True)
-        f = file_path(f'imc/imc_merged_expressions_{split}.hdf5')
-        with h5py.File(f, 'w') as f5:
-            f5['expressions'] = expressions.numpy()
+        os.makedirs(file_path("imc/"), exist_ok=True)
+        f = file_path(f"imc/imc_merged_expressions_{split}.hdf5")
+        with h5py.File(f, "w") as f5:
+            f5["expressions"] = expressions.numpy()
 
 ##
 class CellsDatasetOnlyExpression(Dataset):
     def __init__(self, split: str):
         self.split = split
-        f = file_path(f'imc/imc_merged_expressions_{split}.hdf5')
-        with h5py.File(f, 'r') as f5:
-            self.expressions = f5['expressions'][...]
+        f = file_path(f"imc/imc_merged_expressions_{split}.hdf5")
+        with h5py.File(f, "r") as f5:
+            self.expressions = f5["expressions"][...]
         s = get_smu_file(split="train", index=0, read_only=True)
         self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         s.backing.close()
@@ -158,12 +168,14 @@ class CellsDatasetOnlyExpression(Dataset):
         torch.manual_seed(seed)
         self.corrupted_entries = dist.sample(shape).bool().numpy()
         torch.set_rng_state(state)
+        print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
     def __getitem__(self, item):
         expression = self.expressions[item]
         is_corrupted = self.corrupted_entries[item]
-        expression[is_corrupted] = 0.
+        expression[is_corrupted] = 0.0
         return expression, is_corrupted
+
 
 ##
 if e_():
