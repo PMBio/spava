@@ -18,7 +18,7 @@ import os
 from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
-os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
 
 ##
 # re-train the best model but by perturbing the dataset

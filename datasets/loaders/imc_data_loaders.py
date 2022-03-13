@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch_geometric.data import DataLoader as GeometricDataLoader
+from torch_geometric.loader import DataLoader as GeometricDataLoader
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
@@ -25,9 +25,7 @@ plt.style.use("dark_background")
 class CellsDataset(Dataset):
     def __init__(self, split):
         self.split = split
-
-        self.tiles_file = file_path("imc_tiles.hdf5")
-
+        self.tiles_file = file_path("imc/imc_tiles.hdf5")
         self.f5 = h5py.File(self.tiles_file, "r")
         self.filenames = get_split(self.split)
         names_length_map = {}

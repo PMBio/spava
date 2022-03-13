@@ -216,20 +216,4 @@ if e_():
     raster.set_lims_to_bounding_box(transformed_bb)
     plt.show()
 ##
-if e_():
-    s = get_smu_file(read_only=True)
-    masks = s['visium']['processed'].masks
-    raster = s['visium']['image']
-    print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
-    f = file_path("visium_tiles.hdf5")
-    with h5py.File(f, "w") as f5:
-        tiles = smu.Tiles(
-            raster=raster,
-            masks=masks,
-            tile_dim_in_pixels=32,
-        )
-        filename = os.path.basename(s.backing.filename)
-        f5[f"{filename}/raster"] = tiles.tiles
-
-##
 print('done')
