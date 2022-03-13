@@ -2,7 +2,7 @@
 | name                                                                                                                                                         | type |
 |--------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
 | [![Setup env](https://github.com/PMBio/a/actions/workflows/setup_env.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_env.yaml)           | on demand |
-| [![Setup env](https://github.com/PMBio/a/actions/workflows/setup_scvi_env.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_scvi_env.yaml) | on demand |
+| [![Setup env](https://github.com/PMBio/a/actions/workflows/setup_env_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_env_scvi.yaml) | on demand |
 # Tests
 | name | type |
 |-------------|---------|

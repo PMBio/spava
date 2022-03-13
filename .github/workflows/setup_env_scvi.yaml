@@ -1,4 +1,4 @@
-name: Setup env
+name: Setup env scvi
 on:
   workflow_dispatch
 jobs:
@@ -8,4 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: | 
           cd tests
-          bash setup_scvi_env.sh
+          bash setup_env_scvi.sh
