@@ -39,12 +39,13 @@ if e_():
     data
 
 ##
-if e_():
+if e_() or True:
     from datasets.imc_data_transform_utils import joblib_get_merged_areas_per_split
     areas = joblib_get_merged_areas_per_split(ignore=e_())
 
     @memory.cache
     def joblib_merge_sum_data():
+        l0 = []
         l1 = []
         for i, s in enumerate(all_processed_smu()):
             x = s['imc']['sum'].X
