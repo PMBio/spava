@@ -12,7 +12,7 @@ import anndata as ad
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-from utils import get_execute_function, file_path, memory, reproducible_random_choice
+from utils import get_execute_function, file_path, memory, eproducible_random_choice
 from datasets.imc_data import all_processed_smu
 
 e_ = get_execute_function()

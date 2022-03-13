@@ -21,9 +21,7 @@ e_ = get_execute_function()
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
 
 ##
-# re-train the best model but by perturbing the dataset
-# if True:
-if False:
+if e_():
     from analyses.vae_expression.vae_expression_model import objective, ppp
     from utils import file_path
 
@@ -36,8 +34,18 @@ if False:
     )
     print('best trial:')
     print(study.best_trial)
-    objective(study.best_trial)
-    sys.exit(0)
+    print(study.best_trial.user_attrs['version'])
+
+    # re-train the best model but by perturbing the dataset
+    if False:
+        if True:
+            objective(study.best_trial)
+            sys.exit(0)
+        else:
+            # manually update version from the just trained perturbed model
+            version = -1
+    else:
+        version = study.best_trial.user_attrs['version']
 
 ##
 if e_():
@@ -48,12 +56,15 @@ if e_():
 ##
 if e_():
     n = len(loader_non_perturbed.dataset)
-    random_indices = reproducible_random_choice(n, 10000)
+    if 'SPATIALMUON_TEST' in os.environ:
+        random_indices = reproducible_random_choice(n, n - 1)
+    else:
+        random_indices = reproducible_random_choice(n, 10000)
 
 ##
 if e_():
     MODEL_CHECKPOINT = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_3"
+        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_{version}"
         "/checkpoints/last.ckpt"
     )
 #

@@ -15,7 +15,7 @@ from torch_geometric.data import Data, InMemoryDataset
 from tqdm.auto import tqdm
 
 from datasets.visium_data import get_smu_file, get_split_indices
-from utils import get_execute_function, file_path, get_bimap, reproducible_random_choice
+from utils import get_execute_function, file_path
 
 e_ = get_execute_function()
 
