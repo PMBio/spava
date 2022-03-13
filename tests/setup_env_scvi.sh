@@ -8,4 +8,4 @@ mamba create -n scvi_env python=3.8 -y
 echo ">>>>>>>>>> activating env <<<<<<<<<<"
 conda activate scvi_env
 echo ">>>>>>>>>> installing most of the packages <<<<<<<<<<"
-pip install scvi-tools scanpy anndata
+pip install scvi-tools scanpy anndata pytest
