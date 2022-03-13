@@ -10,9 +10,10 @@ import pathlib
 
 from utils import file_path
 
-assert len(sys.argv) == 2
+assert len(sys.argv) == 3
 f = sys.argv[1]
 print(f)
+env_name = sys.argv[2]
 import os
 
 os.environ["SPATIALMUON_NOTEBOOK"] = f
@@ -39,7 +40,7 @@ os.chdir('{enclosing_folder}')
     with open(dest_file, "w") as fp:
         fp.write(s)
     ##
-    activate_env = "source ~/.bashrc; conda activate ci_env"
+    activate_env = f"source ~/.bashrc; conda activate {env_name}"
     subprocess.check_output(
         f'bash -c "{activate_env}; jupytext --to notebook {shlex.quote(dest_file)}"',
         shell=True,

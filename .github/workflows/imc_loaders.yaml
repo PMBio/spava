@@ -1,9 +1,6 @@
 name: IMC loaders
 on: 
   workflow_dispatch
-#  workflow_dispatch:
-#   schedule:
-#    - cron: '0 23 * * *'
 jobs:
   test-data:
     runs-on: self-hosted
@@ -11,5 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          conda activate ci_env
-          python notebook_exporter.py datasets/loaders/imc_data_loaders.py
+          python notebook_exporter.py datasets/loaders/imc_data_loaders.py ci_env
