@@ -18,7 +18,7 @@ import os
 from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
-os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
 
 ##
 # re-train the best model but by perturbing the dataset
@@ -53,7 +53,7 @@ if e_():
 ##
 if e_():
     MODEL_CHECKPOINT = (
-        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_2"
+        "/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_3"
         "/checkpoints/last.ckpt"
     )
 #

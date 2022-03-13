@@ -29,7 +29,7 @@ class ImageSampler(pl.Callback):
         self.num_preds = 16
 
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
-        if pl_module.ppp.LOG_PER_CHANNEL_VALUES:
+        if pl_module._hparams['LOG_PER_CHANNEL_VALUES']:
             trainer.logger.experiment.add_scalars(
                 "c",
                 {
@@ -53,8 +53,8 @@ class ImageSampler(pl.Callback):
         #                                         trainer.global_step)
 
 
-def get_detect_anomaly_cm(ppp):
-    if ppp.DETECT_ANOMALY:
+def get_detect_anomaly_cm(DETECT_ANOMALY):
+    if DETECT_ANOMALY:
         cm = autograd.detect_anomaly()
     else:
         cm = contextlib.nullcontext()
@@ -66,12 +66,11 @@ class VAE(pl.LightningModule):
         self,
         optuna_parameters,
         in_channels,
-        ppp,
         mask_loss: bool = None,
+        **kwargs
     ):
         super().__init__()
-        self.ppp = ppp
-        self.save_hyperparameters(ppp.__dict__)
+        self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
@@ -109,11 +108,11 @@ class VAE(pl.LightningModule):
         z = F.relu(self.decoder2(z))
         decoded_a = self.decoder3_a(z)
         decoded_b = self.decoder3_b(z)
-        if self.ppp.NOISE_MODEL in ["gamma", "zi_gamma", "nb"]:
+        if self._hparams['NOISE_MODEL'] in ["gamma", "zi_gamma", "nb"]:
             decoded_a = self.softplus(decoded_a) + 2
-        elif self.ppp.NOISE_MODEL == "zip":
+        elif self._hparams['NOISE_MODEL'] == "zip":
             decoded_a = self.softplus(decoded_a)
-        if self.ppp.NOISE_MODEL in ["zip", "zig", "zi_gamma"]:
+        if self._hparams['NOISE_MODEL'] in ["zip", "zig", "zi_gamma"]:
             decoded_b = self.sigmoid(decoded_b)
         return decoded_a, decoded_b
 
@@ -145,19 +144,19 @@ class VAE(pl.LightningModule):
         return mse_loss
 
     def get_dist(self, a, b):
-        if self.ppp.NOISE_MODEL == "gaussian":
+        if self._hparams['NOISE_MODEL'] == "gaussian":
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
-        elif self.ppp.NOISE_MODEL == "zin":
+        elif self._hparams['NOISE_MODEL'] == "zin":
             dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
-        elif self.ppp.NOISE_MODEL == "gamma":
+        elif self._hparams['NOISE_MODEL'] == "gamma":
             dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
-        elif self.ppp.NOISE_MODEL == "zi_gamma":
+        elif self._hparams['NOISE_MODEL'] == "zi_gamma":
             dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=b)
-        elif self.ppp.NOISE_MODEL == "nb":
+        elif self._hparams['NOISE_MODEL'] == "nb":
             dist = pyro.distributions.GammaPoisson(a, torch.exp(self.log_c))
-        elif self.ppp.NOISE_MODEL == "zip":
+        elif self._hparams['NOISE_MODEL'] == "zip":
             dist = pyro.distributions.ZeroInflatedPoisson(a, gate=b)
-        elif self.ppp.NOISE_MODEL == "log_normal":
+        elif self._hparams['NOISE_MODEL'] == "log_normal":
             dist = pyro.distributions.LogNormal(a, torch.exp(self.log_c))
         else:
             raise RuntimeError()
@@ -174,7 +173,7 @@ class VAE(pl.LightningModule):
         if torch.any(dist.log_prob(zero).isnan()):
             print("nan value detected")
             raise RuntimeError("manual abort")
-        if self.ppp.NOISE_MODEL in ["gamma, zi_gamma", "log_normal"]:
+        if self._hparams['NOISE_MODEL'] in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
         else:
             offset = 0.0
@@ -217,9 +216,9 @@ class VAE(pl.LightningModule):
     def loss_function(self, x, a, b, mu, std, z, corrupted_entries):
         # reconstruction loss
         # print(x_hat.shape)
-        cm = get_detect_anomaly_cm(self.ppp)
+        cm = get_detect_anomaly_cm(self._hparams['DETECT_ANOMALY'])
         with cm:
-            if self.ppp.MONTE_CARLO:
+            if self._hparams['MONTE_CARLO']:
                 if (
                     torch.isnan(a).any()
                     or torch.isnan(b).any()
@@ -250,7 +249,7 @@ class VAE(pl.LightningModule):
             return elbo, kl, recon_loss
 
     def forward(self, x):
-        cm = get_detect_anomaly_cm(self.ppp)
+        cm = get_detect_anomaly_cm(self._hparams['DETECT_ANOMALY'])
         with cm:
             # x_encoded = self.encoder(x)
             # mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)

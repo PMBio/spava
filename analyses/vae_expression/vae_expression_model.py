@@ -186,7 +186,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         optuna_parameters=optuna_parameters,
         in_channels=39,
         mask_loss=ppp.MASK_LOSS,
-        ppp=ppp,
+        **ppp.__dict__,
     )
 
     ppp.PERTURB = ppp.PERTURB or False
