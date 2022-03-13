@@ -159,7 +159,6 @@ def all_processed_smu():
 def all_raw_smu():
     return u(raw=True, read_only=False)
 
-
 ##
 if e_():
     print(
@@ -181,10 +180,10 @@ if e_():
     print(f"{colorama.Fore.MAGENTA}feature accumulation:{colorama.Fore.RESET}")
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
-        k = "mean"
-        if k in s["imc"]:
-            del s["imc"][k]
-        s["imc"][k] = accumulated[k]
+        for k in ['mean', 'sum']:
+            if k in s["imc"]:
+                del s["imc"][k]
+            s["imc"][k] = accumulated[k]
         # for k in accumulated.keys():
         #     del s["imc"][k]
 ##
@@ -247,14 +246,20 @@ if e_():
 
         old_masks = s["imc"]["masks"]
         old_mean = s["imc"]["mean"]
+        old_sum = s['imc']['sum']
         new_masks = new_regions_obj(old_masks)
         new_mean = new_regions_obj(old_mean)
+        new_sum = new_regions_obj(old_sum)
         if "filtered_masks" in s["imc"]:
             del s["imc"]["filtered_masks"]
         if "filtered_mean" in s["imc"]:
             del s["imc"]["filtered_mean"]
+        if "filtered_sum" in s["imc"]:
+            del s["imc"]["filtered_sum"]
         s["imc"]["filtered_masks"] = new_masks
         s["imc"]["filtered_mean"] = new_mean
+        s["imc"]["filtered_sum"] = new_sum
+        s.backing.close()
 
 ##
 if e_():

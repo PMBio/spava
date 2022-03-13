@@ -12,3 +12,4 @@ jobs:
           python -m pytest tests/test_preprocess_data.py
           python -m pytest tests/test_data_loaders.py 
           python -m pytest tests/test_train_models.py
+          python -m pytest tests/test_scvi.py

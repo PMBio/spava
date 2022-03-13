@@ -36,6 +36,5 @@ dependencies:
   - trimesh
   - geopandas
   - pip
-  - pip:
-      - matplotlib-scalebar
+#  - pip:
 #      - git+https://github.com/ilia-kats/spatialmuon.git@202112_regions

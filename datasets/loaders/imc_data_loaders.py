@@ -143,7 +143,8 @@ if e_():
         expressions = torch.cat(list_of_expression, dim=0)
         s = get_smu_file(split="train", index=0, read_only=True)
         n_channels = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
-        f = file_path(f'imc_merged_expressions_{split}.hdf5')
+        os.makedirs(file_path('imc/'), exist_ok=True)
+        f = file_path(f'imc/imc_merged_expressions_{split}.hdf5')
         with h5py.File(f, 'w') as f5:
             f5['expressions'] = expressions.numpy()
 
@@ -151,7 +152,7 @@ if e_():
 class CellsDatasetOnlyExpression(Dataset):
     def __init__(self, split: str):
         self.split = split
-        f = file_path(f'imc_merged_expressions_{split}.hdf5')
+        f = file_path(f'imc/imc_merged_expressions_{split}.hdf5')
         with h5py.File(f, 'r') as f5:
             self.expressions = f5['expressions'][...]
         s = get_smu_file(split="train", index=0, read_only=True)

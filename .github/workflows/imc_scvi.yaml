@@ -1,0 +1,12 @@
+name: IMC loaders
+on: 
+  workflow_dispatch
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          conda activate scvi_env
+          python notebook_exporter.py analyses/scvi_analyses/imc_data_scvi.py

@@ -1,8 +1,12 @@
-# Actions
+# Envs
+| name                                                                                                                                                         | type |
+|--------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| [![Setup env](https://github.com/PMBio/a/actions/workflows/setup_env.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_env.yaml)           | on demand |
+| [![Setup env](https://github.com/PMBio/a/actions/workflows/setup_scvi_env.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_scvi_env.yaml) | on demand |
+# Tests
 | name | type |
 |-------------|---------|
-| [![Setup env](https://github.com/PMBio/a/actions/workflows/_setup_env.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/_setup_env.yaml)   | on demand |
-|[![Run tests](https://github.com/PMBio/a/actions/workflows/_run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/_run_tests.yaml)| on push |
+|[![Run tests](https://github.com/PMBio/a/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests.yaml)| on push |
 
 # Analyses
 ## IMC Jackson-Fischer dataset
