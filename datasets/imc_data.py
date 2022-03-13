@@ -316,4 +316,36 @@ if e_():
     )
 
 ##
+if e_():
+    d = {}
+    from splits import train, validation, test
+
+    if "SPATIALMUON_TEST" not in os.environ:
+        lengths = [len(train), len(validation), len(test)]
+    else:
+        lengths = [1, 1, 1]
+    for j, split in enumerate(
+        tqdm(["train", "validation", "test"], desc="splits", position=0, leave=True)
+    ):
+        l = []
+        for i in tqdm(range(lengths[j]), desc="cell areas", position=0, leave=True):
+            s = get_smu_file(split=split, index=i, read_only=True)
+            x = s["imc"]["transformed_mean"].obs["count"].to_numpy()
+            l.append(x)
+        areas = np.concatenate(l, axis=0)
+        d[split] = areas
+        f = file_path("imc/merged_areas_per_split.pickle")
+        pickle.dump(d, open(f, "wb"))
+
+
+def get_merged_areas_per_split():
+    f = file_path("imc/merged_areas_per_split.pickle")
+    d = pickle.load(open(f, "rb"))
+    return d
+
+
+if e_():
+    areas_per_split = get_merged_areas_per_split()
+##
+
 print("done")

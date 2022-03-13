@@ -12,8 +12,8 @@ import anndata as ad
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-from utils import get_execute_function, file_path, memory, eproducible_random_choice
-from datasets.imc_data import all_processed_smu
+from utils import get_execute_function, file_path, memory, reproducible_random_choice
+from datasets.imc_data import all_processed_smu, get_merged_areas_per_split
 
 e_ = get_execute_function()
 
@@ -40,8 +40,7 @@ if e_() and False:
 
 ##
 if e_() or True:
-    from datasets.imc_data_transform_utils import joblib_get_merged_areas_per_split
-    areas = joblib_get_merged_areas_per_split(ignore=e_())
+    areas = get_merged_areas_per_split()
 
     # TODO: train, validation and test
     @memory.cache

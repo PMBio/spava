@@ -2,41 +2,22 @@ from __future__ import annotations
 
 import os
 
-from utils import memory
+from typing import Union
+from utils import memory, get_execute_function, file_path
 import numpy as np
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
+import pickle
 
 
-from datasets.imc_data import get_smu_file
-##
-s = get_smu_file('train', 0, read_only=True)
-quantiles_for_normalization = s['imc']['transformed_mean'].uns['scaling_factors'][...]
+from datasets.imc_data import get_smu_file, get_merged_areas_per_split
+
+s = get_smu_file("train", 0, read_only=True)
+quantiles_for_normalization = s["imc"]["transformed_mean"].uns["scaling_factors"][
+    ...
+]
 print(quantiles_for_normalization)
 s.backing.close()
-
-# if True:
-# if e_():
-@memory.cache(ignore=['ignore'])
-def joblib_get_merged_areas_per_split(ignore: bool):
-    d = {}
-    from splits import train, validation, test
-    if 'SPATIALMUON_TEST' not in os.environ:
-        lengths = [len(train), len(validation), len(test)]
-    else:
-        lengths = [1, 1, 1]
-    for j, split in enumerate(tqdm(["train", "validation", "test"], desc='splits', position=0, leave=True)):
-        l = []
-        for i in tqdm(range(lengths[j]), desc='cell areas', position=0, leave=True):
-            s = get_smu_file(split=split, index=i, read_only=True)
-            x = s['imc']['transformed_mean'].obs['count'].to_numpy()
-            l.append(x)
-        areas = np.concatenate(l, axis=0)
-        d[split] = areas
-    return d
-
-# areas_per_split = joblib_get_merged_areas_per_split(ignore=e_())
-areas_per_split = joblib_get_merged_areas_per_split(ignore=False)
 
 ##
 from enum import IntEnum
@@ -100,7 +81,7 @@ def transform(
     # a = areas[split]
     # end old code
     # new code
-    a = areas_per_split[split]
+    a = get_merged_areas_per_split()[split]
     a = np.tile(a.reshape(-1, 1), (1, x.shape[1]))
     # end new code
     assert len(a) == len(x)
@@ -314,6 +295,8 @@ class Prediction:
         try:
             k = gaussian_kde(data)
         except ValueError as e:
+            if str(e) == "array must not contain infs or NaNs":
+                return
             print(data)
             print(data.shape)
             print(data.min())
@@ -590,6 +573,7 @@ class Prediction:
         plt.tight_layout()
         plt.show()
         plt.style.use("default")
+
 
 ##
 def compare_predictions(p0: Prediction, p1: Prediction, target_space: Space):

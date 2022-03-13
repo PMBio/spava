@@ -18,7 +18,7 @@ import os
 from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
-# os.environ['SPATIALMUON_NOTEBOOK'] = 'analyses/vae_expression/vae_expression_analysis.py'
+os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
 
 ##
 if e_():
@@ -32,9 +32,9 @@ if e_():
         study_name=study_name,
         storage="sqlite:///" + file_path("optuna_vae_expression.sqlite"),
     )
-    print('best trial:')
+    print("best trial:")
     print(study.best_trial)
-    print(study.best_trial.user_attrs['version'])
+    print(study.best_trial.user_attrs["version"])
 
     # re-train the best model but by perturbing the dataset
     if False:
@@ -45,7 +45,7 @@ if e_():
             # manually update version from the just trained perturbed model
             version = -1
     else:
-        version = study.best_trial.user_attrs['version']
+        version = study.best_trial.user_attrs["version"]
 
 ##
 if e_():
@@ -56,16 +56,15 @@ if e_():
 ##
 if e_():
     n = len(loader_non_perturbed.dataset)
-    if 'SPATIALMUON_TEST' in os.environ:
+    if "SPATIALMUON_TEST" in os.environ:
         random_indices = reproducible_random_choice(n, n - 1)
     else:
         random_indices = reproducible_random_choice(n, 10000)
 
 ##
 if e_():
-    MODEL_CHECKPOINT = (
-        f"/data/l989o/deployed/a/data/spatial_uzh_processed/a/checkpoints/expression_vae/version_{version}"
-        "/checkpoints/last.ckpt"
+    MODEL_CHECKPOINT = file_path(
+        f"checkpoints/expression_vae/version_{version}/checkpoints/last.ckpt"
     )
 #
 def precompute(loader, expression_model_checkpoint, random_indices):
@@ -130,7 +129,9 @@ if e_():
     print(data[0][i0, i1])
     print(data_non_perturbed[0][i0, i1])
     # just a hash
-    h = np.sum(np.concatenate(np.where(loader_perturbed.dataset.corrupted_entries == 1)))
+    h = np.sum(
+        np.concatenate(np.where(loader_perturbed.dataset.corrupted_entries == 1))
+    )
     print(
         "corrupted entries hash:",
         h,
@@ -204,7 +205,7 @@ if True:
     )
     vae_predictions = Prediction(**kwargs)
 
-    plt.style.use('default')
+    plt.style.use("default")
     vae_predictions.plot_reconstruction()
     # vae_predictions.plot_scores()
     vae_predictions.plot_summary()
