@@ -88,6 +88,7 @@ if e_():
 ##
 if e_():
     d["imc"]["masks"].plot()
+    d.backing.close()
 
 ## md
 # channels subsetting and hot pixel filtering
@@ -172,6 +173,7 @@ if e_():
     s = get_smu_file(split="train", index=0, read_only=True, raw=False)
     s["imc"]["ome"].plot(preprocessing=np.arcsinh)
     s["imc"]["ome"].plot(channels="DNA1", preprocessing=np.arcsinh)
+    s.backing.close()
 
 ## md
 # accumulate features
@@ -270,6 +272,7 @@ if e_():
     s["imc"]["filtered_mean"].plot(0, ax=ax)
     plt.suptitle("cells filtered because too small shown in red")
     plt.show()
+    s.backing.close()
 
 ##
 def compute_scaling_factors():
@@ -283,6 +286,7 @@ def compute_scaling_factors():
         s = get_smu_file(split="train", index=index, read_only=True)
         e = s["imc"]["mean"].X[...]
         all_expressions.append(e)
+        s.backing.close()
     expressions = np.concatenate(all_expressions, axis=0)
     transformed = np.arcsinh(expressions)
     quantile = 0.9

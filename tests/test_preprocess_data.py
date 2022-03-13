@@ -51,4 +51,4 @@ if __name__ == "__main__":
 
         test_preprocess_imc_jeongbin_data()
     else:
-        test_preprocess_visium_data()
+        test_preprocess_imc_data()
