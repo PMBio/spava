@@ -15,7 +15,6 @@ import skimage.io
 import torch
 import cv2
 import torchvision.transforms
-import vigra
 import os
 
 from torch import nn

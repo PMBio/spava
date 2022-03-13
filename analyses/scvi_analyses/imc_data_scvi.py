@@ -26,7 +26,7 @@ N_EPOCHS = 10
 
 
 ##
-if e_():
+if e_() and False:
     # proxy for the DKFZ network
     # https://stackoverflow.com/questions/34576665/setting-proxy-to-urllib-request-python3
     os.environ["HTTP_PROXY"] = "http://193.174.53.86:80"

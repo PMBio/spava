@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from utils import memory
 import numpy as np
 from tqdm.auto import tqdm
@@ -8,13 +10,21 @@ import matplotlib.pyplot as plt
 
 from datasets.imc_data import get_smu_file
 ##
+s = get_smu_file('train', 0, read_only=True)
+quantiles_for_normalization = s['imc']['transformed_mean'].uns['scaling_factors'][...]
+print(quantiles_for_normalization)
+s.backing.close()
+
 # if True:
 # if e_():
 @memory.cache(ignore=['ignore'])
 def joblib_get_merged_areas_per_split(ignore: bool):
     d = {}
     from splits import train, validation, test
-    lengths = [len(train), len(validation), len(test)]
+    if 'SPATIALMUON_TEST' not in os.environ:
+        lengths = [len(train), len(validation), len(test)]
+    else:
+        lengths = [1, 1, 1]
     for j, split in enumerate(tqdm(["train", "validation", "test"], desc='splits', position=0, leave=True)):
         l = []
         for i in tqdm(range(lengths[j]), desc='cell areas', position=0, leave=True):
@@ -31,7 +41,6 @@ areas_per_split = joblib_get_merged_areas_per_split(ignore=False)
 ##
 from enum import IntEnum
 from typing import Callable
-from old_code.data2 import quantiles_for_normalization
 
 Space = IntEnum("Space", "raw_sum raw_mean asinh_sum asinh_mean scaled_mean", start=0)
 
