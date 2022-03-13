@@ -31,7 +31,7 @@ from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/imc_data_scvi.py"
-os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/imc_data_scvi.py"
+# os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/imc_data_scvi.py"
 
 if e_():
     N_EPOCHS_KL_WARMUP = 3
