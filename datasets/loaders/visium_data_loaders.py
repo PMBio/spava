@@ -17,7 +17,7 @@ from datasets.visium_data import get_smu_file, get_split_indices
 from utils import get_execute_function, file_path, get_bimap
 
 e_ = get_execute_function()
-os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/visium_data_loaders.py'
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/visium_data_loaders.py'
 
 plt.style.use("dark_background")
 
