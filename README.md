@@ -12,6 +12,7 @@
 | [![Tiler](https://github.com/PMBio/a/actions/workflows/imc_tiler.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_tiler.yaml) | on demand (no Juptyer)|
 | [![Preprocess graphs](https://github.com/PMBio/a/actions/workflows/imc_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_graphs.yaml) | on demand |
 | [![IMC test loaders](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml) | on demand |
+| [![IMC analyze expression model](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml) | on demand |
 
 ## IMC Jeongbin dataset
 | name | type |
