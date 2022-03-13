@@ -9,3 +9,9 @@ echo ">>>>>>>>>> activating env <<<<<<<<<<"
 conda activate scvi_env
 echo ">>>>>>>>>> installing most of the packages <<<<<<<<<<"
 pip install scvi-tools scanpy anndata pytest
+pushd .
+cd ../../spatialmuon
+python setup.py develop
+popd
+pip install matplotlib-scalebar
+
