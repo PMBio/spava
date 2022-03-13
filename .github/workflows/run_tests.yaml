@@ -8,10 +8,16 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
+          
           conda activate ci_env
-          python -m pytest tests/test_preprocess_data.py
-          python -m pytest tests/test_data_loaders.py 
-          python -m pytest tests/test_train_models.py
+          python -m pytest tests/test_imc.py
           conda deactivate
+          
           conda activate scvi_env
-          python -m pytest tests/test_scvi.py
+          python -m pytest tests/test_scvi.py 
+          conda deactivate
+          
+          conda activate ci_env
+          python -m pytest tests/test_imc_jeongbin.py
+          python -m pytest tests/test_visium_mousebrain.py
+          conda deactivate
