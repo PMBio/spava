@@ -1,4 +1,4 @@
-name: IMC loaders
+name: IMC scvi
 on: 
   workflow_dispatch
 jobs:
