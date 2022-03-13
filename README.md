@@ -22,7 +22,7 @@
 ### scvi
 | name | type |
 |-----------------------------------------------------------------------|---------|
-| [![IMC scvi](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml) | on demand |
+| [![IMC scvi](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml) | on demand (model trained manually) |
 
 ## IMC Jeongbin dataset
 | name | type |
