@@ -18,6 +18,11 @@
 | [![IMC test loaders](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml) | on demand |
 | [![IMC analyze expression model](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml) | on demand |
 
+### scvi
+| name | type |
+|-----------------------------------------------------------------------|---------|
+| [![IMC scvi](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml) | on demand |
+
 ## IMC Jeongbin dataset
 | name | type |
 |-----------------------------------------------------------------------|---------|
