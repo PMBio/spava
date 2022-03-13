@@ -19,11 +19,6 @@
 | `IMC train expression model` | no workflow |
 | [![IMC analyze expression model](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_model.yaml) | on demand |
 
-### scvi
-| name | type |
-|-----------------------------------------------------------------------|---------|
-| [![IMC scvi](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml) | on demand (model trained manually) |
-
 ## IMC Jeongbin dataset
 | name | type |
 |-----------------------------------------------------------------------|---------|
@@ -35,6 +30,12 @@
 | [![Preprocess](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_preprocess.yaml)                                                 | on demand |
 | [![Visium tiler](https://github.com/PMBio/a/actions/workflows/visium_tiler.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_tiler.yaml) | on demand |
 | [![Visium preprocess graphs](https://github.com/PMBio/a/actions/workflows/visium_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_graphs.yaml) | on demand |
+
+### scvi
+| name                                                                                                                                                     | type |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| [![IMC scvi](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_scvi.yaml)          | on demand (model trained manually) |
+| [![Visium scvi](https://github.com/PMBio/a/actions/workflows/visium_scvi.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_scvi.yaml) | on demand (model trained manually) |
 
 ## Visium endometrium dataset
 | name | type |

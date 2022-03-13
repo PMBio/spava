@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch_geometric.loader import DataLoader as GeometricDataLoader
 
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
@@ -87,28 +86,3 @@ def get_cells_data_loader(split, batch_size, perturb=False, only_expression=Fals
 if e_():
     loader = get_cells_data_loader(split='train', batch_size=128, perturb=True, only_expression=True)
     loader.__iter__().__next__()
-
-##
-def get_graphs_data_loader(split, subgraph_name, batch_size):
-    from datasets.graphs.visium_data_graphs import CellGraphsDataset
-
-    ds = CellGraphsDataset(split=split, name=subgraph_name)
-    ##
-    loader = GeometricDataLoader(
-        ds,
-        batch_size=batch_size,
-        num_workers=16,
-        pin_memory=True,
-        shuffle=True,
-    )
-    return loader
-
-
-if e_():
-    loader = get_graphs_data_loader(
-        split="train", subgraph_name="contact_200", batch_size=64
-    )
-    for x in tqdm(loader, desc="iterating graph data loader"):
-        pass
-
-##

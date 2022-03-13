@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch_geometric.loader import DataLoader as GeometricDataLoader
 
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
@@ -182,28 +181,3 @@ if e_():
     loader = get_cells_data_loader("train", 1024)
     for x in tqdm(loader, desc="iterating cells data loader"):
         pass
-
-##
-def get_graphs_data_loader(split, subgraph_name, batch_size):
-    from datasets.graphs.imc_data_graphs import CellGraphsDataset
-
-    ds = CellGraphsDataset(split=split, name=subgraph_name)
-    ##
-    loader = GeometricDataLoader(
-        ds,
-        batch_size=batch_size,
-        num_workers=16,
-        pin_memory=True,
-        shuffle=True,
-    )
-    return loader
-
-
-if e_():
-    loader = get_graphs_data_loader(
-        split="train", subgraph_name="knn_10_max_distance_in_units_50", batch_size=64
-    )
-    for x in tqdm(loader, desc="iterating graph data loader"):
-        pass
-
-##

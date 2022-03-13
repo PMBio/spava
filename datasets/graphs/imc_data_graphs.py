@@ -14,6 +14,7 @@ from tqdm.auto import tqdm
 
 from datasets.imc_data import get_smu_file, get_split, all_processed_smu
 from utils import get_execute_function, file_path, get_bimap
+from torch_geometric.loader import DataLoader as GeometricDataLoader
 
 # os.environ['SPATIALMUON_TEST'] = 'aaa'
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'aaa'
@@ -169,4 +170,28 @@ if e_():
 
 if e_():
     ds = CellGraphsDataset(split="test", name=CURRENT_SUBGRAPH_NAME)
+##
+##
+def get_graphs_data_loader(split, subgraph_name, batch_size):
+    from datasets.graphs.imc_data_graphs import CellGraphsDataset
+
+    ds = CellGraphsDataset(split=split, name=subgraph_name)
+    ##
+    loader = GeometricDataLoader(
+        ds,
+        batch_size=batch_size,
+        num_workers=16,
+        pin_memory=True,
+        shuffle=True,
+    )
+    return loader
+
+
+if e_():
+    loader = get_graphs_data_loader(
+        split="train", subgraph_name="knn_10_max_distance_in_units_50", batch_size=64
+    )
+    for x in tqdm(loader, desc="iterating graph data loader"):
+        pass
+
 ##

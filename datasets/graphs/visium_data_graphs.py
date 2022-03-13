@@ -16,6 +16,7 @@ from tqdm.auto import tqdm
 
 from datasets.visium_data import get_smu_file, get_split_indices
 from utils import get_execute_function, file_path
+from torch_geometric.loader import DataLoader as GeometricDataLoader
 
 e_ = get_execute_function()
 
@@ -174,3 +175,28 @@ if e_():
     xy = s["visium"]["processed"].transformed_centers[original_center_index]
     ax.scatter(xy[0], xy[1], c="g")
     plt.show()
+
+##
+def get_graphs_data_loader(split, subgraph_name, batch_size):
+    from datasets.graphs.visium_data_graphs import CellGraphsDataset
+
+    ds = CellGraphsDataset(split=split, name=subgraph_name)
+    ##
+    loader = GeometricDataLoader(
+        ds,
+        batch_size=batch_size,
+        num_workers=16,
+        pin_memory=True,
+        shuffle=True,
+    )
+    return loader
+
+
+if e_():
+    loader = get_graphs_data_loader(
+        split="train", subgraph_name="contact_200", batch_size=64
+    )
+    for x in tqdm(loader, desc="iterating graph data loader"):
+        pass
+
+##

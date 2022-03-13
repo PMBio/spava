@@ -10,14 +10,12 @@ jobs:
           source ~/.bashrc
           
           conda activate ci_env
-          python -m pytest tests/test_imc.py
+          python -m pytest tests/test_imc.py 
+          python -m pytest tests/test_imc_jeongbin.py
+          python -m pytest tests/test_visium_mousebrain.py
           conda deactivate
           
           conda activate scvi_env
           python -m pytest tests/test_scvi.py 
           conda deactivate
-          
-          conda activate ci_env
-          python -m pytest tests/test_imc_jeongbin.py
-          python -m pytest tests/test_visium_mousebrain.py
-          conda deactivate
+ 
