@@ -18,7 +18,7 @@ import os
 from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
-os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
+# os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
 
 ##
 if e_():
