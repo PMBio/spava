@@ -25,12 +25,12 @@ plt.style.use("dark_background")
 ##
 def get_smu_file(read_only: bool, initialize=False):
     "/data/spatialmuon/datasets/visium_mousebrain/smu"
-    RAW_FOLDER = file_path('spatialmuon/visium_mousebrain')
+    RAW_FOLDER = file_path("spatialmuon/visium_mousebrain")
     PROCESSED_FOLDER = file_path("spatialmuon_processed/visium_mousebrain")
 
     os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
-    if 'SPATIALMUON_TEST' not in os.environ:
+    if "SPATIALMUON_TEST" not in os.environ:
         src_f = os.path.join(RAW_FOLDER, "visium.h5smu")
         des_f = os.path.join(PROCESSED_FOLDER, "visium.h5smu")
     else:
@@ -39,19 +39,20 @@ def get_smu_file(read_only: bool, initialize=False):
 
     if initialize:
         shutil.copy(src_f, des_f)
-        if 'SPATIALMUON_TEST' not in os.environ:
+        if "SPATIALMUON_TEST" not in os.environ:
             s = smu.SpatialMuData(des_f)
             name = "ST8059049"
             name_hne = name + "H&E"
             sm = smu.SpatialModality()
-            sm['expression'] = s['Visium'][name]
-            sm['image'] = s['Visium'][name_hne]
-            del s['Visium']
-            s['visium'] = sm
+            sm["expression"] = s["Visium"][name]
+            sm["image"] = s["Visium"][name_hne]
+            del s["Visium"]
+            s["visium"] = sm
             s.backing.close()
-    backingmode = 'r+' if not read_only else 'r'
+    backingmode = "r+" if not read_only else "r"
     s = smu.SpatialMuData(des_f, backingmode=backingmode)
     return s
+
 
 def get_split_indices(split):
     s = get_smu_file(read_only=True)
@@ -67,9 +68,7 @@ def get_split_indices(split):
         ].tolist()
     )
     test_indices = list(set(remaining).difference(validation_indices))
-    assert (
-        len(set(train_indices) | set(validation_indices) | set(test_indices)) == n
-    )
+    assert len(set(train_indices) | set(validation_indices) | set(test_indices)) == n
     indices = {
         "train": train_indices,
         "validation": validation_indices,
@@ -81,8 +80,8 @@ def get_split_indices(split):
 ##
 if e_():
     s = get_smu_file(initialize=True, read_only=False)
-    regions = s['visium']['expression']
-    raster = s['visium']['image']
+    regions = s["visium"]["expression"]
+    raster = s["visium"]["image"]
 ##
 if e_():
     _, ax = plt.subplots(1)
@@ -93,8 +92,8 @@ if e_():
 ##
 if e_():
     # biologically relevant channels
-    if 'SPATIALMUON_TEST' not in os.environ:
-        chosen_genes = ['Olfm1', 'Plp1', 'Itpka']
+    if "SPATIALMUON_TEST" not in os.environ:
+        chosen_genes = ["Olfm1", "Plp1", "Itpka"]
     else:
         chosen_genes = ["Prex2", "Atp6v1h", "Xkr4"]
     regions.plot(channels=chosen_genes)
@@ -120,7 +119,9 @@ if e_():
 ##
 if e_():
     plt.style.use("default")
-    sc.pl.violin(adata, ["n_genes_by_counts", "total_counts"], jitter=0.4, multi_panel=True)
+    sc.pl.violin(
+        adata, ["n_genes_by_counts", "total_counts"], jitter=0.4, multi_panel=True
+    )
     plt.style.use("dark_background")
     sc.pl.scatter(adata, x="total_counts", y="n_genes_by_counts")
 
@@ -129,6 +130,7 @@ if e_():
     # we need statsmodels 0.13.2 for regress_out
     # https://stackoverflow.com/questions/71106940/cannot-import-name-centered-from-scipy-signal-signaltools
     # sc.pp.regress_out(adata, ["total_counts"])
+    adata_non_scaled = adata.copy()
     sc.pp.scale(adata, max_value=10)
 
 ##
@@ -154,8 +156,8 @@ if e_():
     sc.tl.leiden(adata)
 
 if e_():
-    sc.pl.umap(adata, color=['leiden'])
-    sc.pl.spatial(adata, color=['leiden'], spot_size=20)
+    sc.pl.umap(adata, color=["leiden"])
+    sc.pl.spatial(adata, color=["leiden"], spot_size=20)
 
 ##
 if False:
@@ -173,47 +175,58 @@ if False:
 
 ##
 if e_():
-    processed_regions = smu.Regions(X=adata.X, var=adata.var, masks=regions.masks.clone(), anchor=regions.anchor)
+    processed_regions = smu.Regions(
+        X=adata.X, var=adata.var, masks=regions.masks.clone(), anchor=regions.anchor
+    )
     processed_regions.var.reset_index(inplace=True)
-    processed_regions.var.rename(columns={'index': 'channel_name'})
-    processed_regions.masks.obs['leiden'] = adata.obs['leiden'].to_numpy()
-    processed_regions.masks.obs['leiden'] = processed_regions.masks.obs['leiden'].astype('category')
+    processed_regions.var.rename(columns={"index": "channel_name"})
+    processed_regions.masks.obs["leiden"] = adata.obs["leiden"].to_numpy()
+    processed_regions.masks.obs["leiden"] = processed_regions.masks.obs[
+        "leiden"
+    ].astype("category")
     processed_regions.masks.set_all_has_changed(new_value=True)
     processed_regions.plot(chosen_genes)
-    processed_regions.masks.plot('leiden')
+    processed_regions.masks.plot("leiden")
 
-    if 'processed' in s['visium']:
-        del s['visium']['processed']
-    s['visium']['processed'] = processed_regions
+    if "processed" in s["visium"]:
+        del s["visium"]["processed"]
+    s["visium"]["processed"] = processed_regions
     s.commit_changes_on_disk()
-    t = get_smu_file(read_only=True)
-    print(t)
-    print('ooo')
+
+if e_():
+    non_scaled = processed_regions.clone()
+    non_scaled.X = adata_non_scaled.X
+
+    if "non_scaled" in s["visium"]:
+        del s["visium"]["non_scaled"]
+    s["visium"]["non_scaled"] = non_scaled
+    s.commit_changes_on_disk()
 
 ##
 if e_():
     s = get_smu_file(read_only=True)
-    m0 = s['visium']['expression'].masks
-    m1 = s['visium']['processed'].masks
+    m0 = s["visium"]["expression"].masks
+    m1 = s["visium"]["processed"].masks
     m0.plot()
     m1.plot()
 ##
 if e_():
     s = get_smu_file(read_only=True)
-    processed_regions = s['visium']['processed']
-    raster = s['visium']['image']
-    if 'SPATIALMUON_TEST' not in os.environ:
+    processed_regions = s["visium"]["processed"]
+    raster = s["visium"]["image"]
+    if "SPATIALMUON_TEST" not in os.environ:
         bb = smu.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
     else:
         transformed_bb = None
 
-
     plt.figure()
     ax = plt.gca()
-    processed_regions.masks.plot(fill_colors=None, outline_colors='leiden', ax=ax, bounding_box=transformed_bb)
+    processed_regions.masks.plot(
+        fill_colors=None, outline_colors="leiden", ax=ax, bounding_box=transformed_bb
+    )
     raster.plot(ax=ax, show_legend=False, bounding_box=transformed_bb)
     raster.set_lims_to_bounding_box(transformed_bb)
     plt.show()
 ##
-print('done')
+print("done")

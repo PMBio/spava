@@ -28,6 +28,7 @@ from analyses.analisys_utils import (
     nearest_neighbors,
 )
 from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
+from datasets.imc_data_transform_utils import IMCPrediction, Space
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/imc_data_scvi.py"
@@ -119,7 +120,7 @@ if e_():
     f_scvi_model = file_path("imc/scvi_model.scvi")
     # TRAIN = True
     TRAIN = False
-    if not os.path.isfile(f_scvi_model):
+    if not os.path.isdir(f_scvi_model):
         TRAIN = True
     print(f'{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}')
     if TRAIN:
@@ -157,7 +158,6 @@ if e_():
             max_epochs=N_EPOCHS,  ##, n_epochs_kl_warmup=N_EPOCHS_KL_WARMUP
         )
         if os.path.isdir(f_scvi_model):
-            print('who call this?')
             shutil.rmtree(f_scvi_model)
         model.save(f_scvi_model)
     else:
@@ -360,11 +360,10 @@ if e_():
 
 ##
 if e_():
-    from datasets.imc_data_transform_utils import Prediction, Space
-
     s = np.abs(uu0 - uu1)
     t = np.abs(vv0 - vv1)
-    Prediction.welch_t_test(s, t)
+    IMCPrediction.welch_t_test(s, t)
+    # reading this later: "mah"
     # the printed p-value is very close to 0
     # conclusion: the score for imputed data is worse than the one from non-perturbed data; this is expected and the
     # alternative case would have been a model whose scores are both bad because it is not properly trained
@@ -379,7 +378,7 @@ if e_():
         name="scVI",
         split="validation",
     )
-    scvi_predictions = Prediction(**kwargs)
+    scvi_predictions = IMCPrediction(**kwargs)
 
     scvi_predictions.plot_reconstruction()
     # scvi_predictions.plot_scores()

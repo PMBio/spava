@@ -16,6 +16,7 @@ import os
 import matplotlib.pyplot as plt
 from utils import get_execute_function, file_path, reproducible_random_choice
 from datasets.visium_data import get_smu_file, get_split_indices
+from analyses.imputation_score import Prediction
 
 from analyses.analisys_utils import (
     scanpy_compute,
@@ -27,77 +28,29 @@ from analyses.analisys_utils import (
 from datasets.loaders.visium_data_loaders import CellsDataset
 
 e_ = get_execute_function()
-# os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/imc_data_scvi.py"
-# os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/imc_data_scvi.py"
+os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/visium_data_scvi.py"
+# os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/visium_data_scvi.py"
 
 if e_():
     N_EPOCHS_KL_WARMUP = 3
-    N_EPOCHS = 10
+    N_EPOCHS = 50
     print(f"N_EPOCHS_KL_WARMUP = {N_EPOCHS_KL_WARMUP}, N_EPOCHS = {N_EPOCHS}")
-
-##
-if e_() and False:
-    # proxy for the DKFZ network
-    # https://stackoverflow.com/questions/34576665/setting-proxy-to-urllib-request-python3
-    os.environ["HTTP_PROXY"] = "http://193.174.53.86:80"
-    os.environ["HTTPS_PROXY"] = "https://193.174.53.86:80"
-
-    # to have a look at an existing dataset
-    import scvi.data
-
-    data = scvi.data.pbmc_dataset()
-    data
-
-##
-if e_():
-    d_sums = {}
-    d_donors = {}
-    from splits import train, validation, test
-
-    if "SPATIALMUON_TEST" not in os.environ:
-        lengths = [len(train), len(validation), len(test)]
-    else:
-        lengths = [1, 1, 1]
-    for j, split in enumerate(
-        tqdm(["train", "validation", "test"], desc="splits", position=0, leave=True)
-    ):
-        l0 = []
-        l1 = []
-        for i in tqdm(
-            range(lengths[j]), desc="sums and donors", position=0, leave=True
-        ):
-            s = get_smu_file(split=split, index=i, read_only=True)
-            x = s["imc"]["sum"].X
-            l0.append(x)
-            l1.extend([i] * len(x))
-        sums = np.concatenate(l0, axis=0)
-        sums = np.round(sums)
-        sums = sums.astype(int)
-        donor = np.array(l1)
-
-        d_sums[split] = sums
-        d_donors[split] = donor
-    f = file_path("imc/merged_data_scvi.pickle")
-    pickle.dump((d_sums, d_donors), open(f, "wb"))
-
-
-def get_merged_data_scvi():
-    f = file_path("imc/merged_data_scvi.pickle")
-    d_sums, d_donors = pickle.load(open(f, "rb"))
-    return d_sums, d_donors
-
 
 ##
 if e_():
     d_ad = {}
-    d_sums, d_donors = get_merged_data_scvi()
-    for split in ["train", "validation", "test"]:
-        sums = d_sums[split]
-        donors = d_donors[split]
-        a = ad.AnnData(sums)
-        s = pd.Series(donors, index=a.obs.index)
-        a.obs["batch"] = s
+    s = get_smu_file(read_only=True)
+
+    for j, split in enumerate(
+        tqdm(["train", "validation", "test"], desc="splits", position=0, leave=True)
+    ):
+        indices = get_split_indices(split)
+        x = s['visium']['non_scaled'].X[indices]
+        a = ad.AnnData(x)
         d_ad[split] = a
+    s.backing.close()
+##
+if e_():
     a_train, a_val, a_test = (
         d_ad["train"].copy(),
         d_ad["validation"].copy(),
@@ -113,40 +66,16 @@ if e_():
 
 ##
 if e_():
-    f_scvi_model = file_path("imc/scvi_model.scvi")
+    f_scvi_model = file_path("visium/scvi_model.scvi")
     # TRAIN = True
     TRAIN = False
-    if not os.path.isfile(f_scvi_model):
+    if not os.path.isdir(f_scvi_model):
         TRAIN = True
     print(f'{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}')
     if TRAIN:
-        # vae = VAE(gene_dataset.nb_genes)
-        # trainer = UnsupervisedTrainer(
-        #     vae,
-        #     gene_dataset,
-        #     train_size=0.90,
-        #     use_cuda=use_cuda,
-        #     frequency=5,
-        # )
-        # []:
-        # trainer.train(n_epochs=n_epochs, lr=lr)
         model = scvi.model.SCVI(a_train)
 
 ##
-
-# the following code, as it is, doesn't work
-#     logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name="scvi")
-#     BATCH_SIZE = 128
-#     indices = np.random.choice(len(a), BATCH_SIZE * 20, replace=False)
-#
-#     train_loader_batch = DataLoader(
-#         a.X[indices, :],
-#         batch_size=BATCH_SIZE,
-#         num_workers=4,
-#         pin_memory=True,
-#     )
-#     model.train(train_size=1., logger=logger, val_dataloaders=train_loader_batch)
-#     model.__dict__
 if e_():
     if TRAIN:
         model.train(
@@ -154,7 +83,6 @@ if e_():
             max_epochs=N_EPOCHS,  ##, n_epochs_kl_warmup=N_EPOCHS_KL_WARMUP
         )
         if os.path.isdir(f_scvi_model):
-            print('who call this?')
             shutil.rmtree(f_scvi_model)
         model.save(f_scvi_model)
     else:
@@ -166,34 +94,29 @@ if e_():
     z = model.get_latent_representation()
     assert len(z) == len(a_train)
     b = ad.AnnData(z)
-    if "SPATIALMUON_TEST" not in os.environ:
-        random_indices = reproducible_random_choice(len(a_train), 10000)
-    else:
-        random_indices = reproducible_random_choice(len(a_train), len(a_train) - 1)
-    aa = a_train[random_indices]
-    bb = b[random_indices]
+    aa = a_train
+    bb = b
 
-
-##
-if e_():
-    scanpy_compute(aa)
-    sc.pl.pca(aa, title="pca, raw data (sum)")
-    louvain_plot(aa, "UMAP with Louvain clusters, raw data (sum)")
-
+# ##
+# if e_():
+#     scanpy_compute(aa)
+#     sc.pl.pca(aa, title="pca, raw data")
+#     louvain_plot(aa, "UMAP with Louvain clusters, raw data")
 #
-if e_():
-    scanpy_compute(bb)
-    sc.pl.pca(bb, title="pca, scvi latent")
-    louvain_plot(bb, "UMAP with Louvain clusters, scvi latent")
-
-##
-if e_():
-    compare_clusters(aa, bb, description='"raw data (sum)" vs "scvi latent"')
-    compute_knn(aa)
-    compute_knn(bb)
-    nearest_neighbors(
-        nn_from=aa, plot_onto=bb, title='nn from "raw data (sum)" to "scvi latent"'
-    )
+# ##
+# if e_():
+#     scanpy_compute(bb)
+#     sc.pl.pca(bb, title="pca, scvi latent")
+#     louvain_plot(bb, "UMAP with Louvain clusters, scvi latent")
+#
+# ##
+# if e_():
+#     compare_clusters(aa, bb, description='"raw data" vs "scvi latent"')
+#     compute_knn(aa)
+#     compute_knn(bb)
+#     nearest_neighbors(
+#         nn_from=aa, plot_onto=bb, title='nn from "raw data" to "scvi latent"'
+#     )
 
 ##
 if e_():
@@ -204,44 +127,74 @@ if e_():
     )
     z_val = model.get_latent_representation(a_val)
     b_val = ad.AnnData(z_val)
-    if "SPATIALMUON_TEST" not in os.environ:
-        random_indices_val = reproducible_random_choice(len(a_val), 10000)
-    else:
-        random_indices_val = reproducible_random_choice(len(a_val), len(a_val) - 1)
-    aa_val = a_val[random_indices_val].copy()
-    bb_val = b_val[random_indices_val].copy()
+    aa_val = a_val.copy()
+    bb_val = b_val.copy()
 
-##
-if e_():
-    scanpy_compute(aa_val)
-    scanpy_compute(bb_val)
+# ##
+# if e_():
+#     scanpy_compute(aa_val)
+#     scanpy_compute(bb_val)
+#
+# ##
+# if e_():
+#     sc.pl.pca(aa_val, title="pca, raw data; validation set")
+#     sc.pl.umap(
+#         aa_val,
+#         color="louvain",
+#         title="umap with louvain, raw data; valiation set",
+#     )
+#     sc.pl.pca(bb_val, title="pca, scvi latent; valiation set")
+#     sc.pl.umap(
+#         bb_val,
+#         color="louvain",
+#         title="umap with louvain, scvi latent; valiation set",
+#     )
+#
+# ##
+# if e_():
+#     merged = ad.AnnData.concatenate(
+#         bb, bb_val, batch_categories=["train", "validation"]
+#     )
+#     scanpy_compute(merged)
+#     plt.figure()
+#     ax = plt.gca()
+#     sc.pl.umap(merged, color="batch", ax=ax, show=False)
+#     plt.tight_layout()
+#     plt.show()
 
-##
 if e_():
-    sc.pl.pca(aa_val, title="pca, raw data (sum); validation set")
-    sc.pl.umap(
-        aa_val,
-        color="louvain",
-        title="umap with louvain, raw data (sum); valiation set",
+    scvi.model.SCVI.setup_anndata(
+        a_test,
     )
-    sc.pl.pca(bb_val, title="pca, scvi latent; valiation set")
-    sc.pl.umap(
-        bb_val,
-        color="louvain",
-        title="umap with louvain, scvi latent; valiation set",
-    )
-
-##
-if e_():
-    merged = ad.AnnData.concatenate(
-        bb, bb_val, batch_categories=["train", "validation"]
-    )
+    z_test = model.get_latent_representation(a_test)
+    b_test = ad.AnnData(z_test)
+    bb_test = b_test
+    merged = ad.AnnData.concatenate(bb, bb_val, bb_test, batch_categories=['train', 'validation', 'test'])
     scanpy_compute(merged)
-    plt.figure()
-    ax = plt.gca()
-    sc.pl.umap(merged, color="batch", ax=ax, show=False)
-    plt.tight_layout()
-    plt.show()
+    lou = merged.obs['louvain']
+    train_indices = get_split_indices('train')
+    val_indices = get_split_indices('validation')
+    test_indices = get_split_indices('test')
+    louvain_train = lou.iloc[:len(train_indices)]
+    louvain_val = lou.iloc[len(train_indices):len(lou) - len(test_indices)]
+    louvain_test = lou.iloc[len(lou) - len(test_indices): ]
+    categories = lou.cat.categories.tolist() + ['Nein']
+    assert len(louvain_train) + len(louvain_val) + len(louvain_test) == len(lou)
+    assert all([s.endswith('-train') for s in louvain_train.index.tolist()])
+    assert all([s.endswith('-validation') for s in louvain_val.index.tolist()])
+    assert all([s.endswith('-test') for s in louvain_test.index.tolist()])
+    ordered_lou = pd.Categorical(['Nein'] * len(lou), categories=categories)
+    ordered_lou[train_indices] = louvain_train.to_numpy()
+    ordered_lou[val_indices] = louvain_val.to_numpy()
+    ordered_lou[test_indices] = louvain_test.to_numpy()
+    assert ordered_lou.value_counts()['Nein'] == 0
+    ordered_lou.remove_categories('Nein', inplace=True)
+    lou_for_smu = ordered_lou.astype('category')
+    s = get_smu_file(read_only=False)
+    s['visium']['processed'].obs['scvi'] = lou_for_smu
+    s.commit_changes_on_disk()
+
+    print('ooo')
 
 ##
 if e_():
@@ -250,26 +203,17 @@ if e_():
 
 ##
 if e_():
-    areas = get_merged_areas_per_split()["validation"]
-    assert size_factors.shape == areas.shape
-    assert len(size_factors.shape) == 1
-
-##
-if e_():
-    from scipy.stats import pearsonr
-
-    r, p = pearsonr(size_factors, areas)
     plt.figure()
-    plt.scatter(size_factors, areas, s=0.5)
+    plt.hist(size_factors)
     plt.xlabel("latent size factors")
-    plt.ylabel("cell area")
-    plt.title(f"r: {r:0.2f} (p: {p:0.2f})")
+    plt.ylabel("count")
+    plt.title(f"distribution of latent size factors")
     plt.show()
 
 ##
 # imputation benchmark
 def get_corrupted_entries(split: str):
-    ds = CellsDatasetOnlyExpression(split=split)
+    ds = CellsDataset(split=split)
     ds.perturb()
     corrupted_entries = ds.corrupted_entries
     return corrupted_entries
@@ -292,29 +236,8 @@ if e_():
     a_test_perturbed.X[ce_test] = 0.
 
 ##
-if e_() and False:
-    scvi.model.SCVI.setup_anndata(a_train_perturbed)
-    # TRAIN_PERTURBED = True
-    TRAIN_PERTURBED = False
-    if TRAIN_PERTURBED:
-        # to navigate there with PyCharm and set a breakpoint on a warning (haven't done yet)
-        import scvi.core.distributions
-
-        model = scvi.model.SCVI(a_train_perturbed)
-    if TRAIN_PERTURBED:
-        model.train(
-            train_size=1.0, n_epochs=N_EPOCHS, n_epochs_kl_warmup=N_EPOCHS_KL_WARMUP
-        )
-        f = file_path("imc/scvi_model_perturbed.scvi")
-        if os.path.isdir(f):
-            shutil.rmtree(f)
-        model.save(f)
-    else:
-        model = scvi.model.SCVI.load(file_path("imc/scvi_model_perturbed.scvi"), adata=a_train_perturbed)
-    print(model.get_elbo())
-
-##
 if e_():
+    scvi.model.SCVI.setup_anndata(a_val_perturbed)
     p = model.get_likelihood_parameters(a_val_perturbed)
     from scvi.distributions import ZeroInflatedNegativeBinomial
 
@@ -331,10 +254,11 @@ if e_():
     ne_val = np.logical_not(ce_val)
 
     uu0 = x_val_perturbed_pred[ce_val]
-    uu1 = a_val.X[ce_val]
+    uu1 = a_val.X[ce_val].A1
 
     vv0 = x_val_perturbed_pred[ne_val]
-    vv1 = a_val.X[ne_val]
+    vv1 = a_val.X[ne_val].A1
+
 ##
 if e_():
     # the two subplots should show a similar distribution
@@ -357,53 +281,70 @@ if e_():
 
 ##
 if e_():
-    from datasets.imc_data_transform_utils import Prediction, Space
+    ss = np.abs(uu0 - uu1)
+    tt = np.abs(vv0 - vv1)
+    Prediction.welch_t_test(ss, tt)
+    # for interpretation of the p-value see imc_data_scvi.py
 
-    s = np.abs(uu0 - uu1)
-    t = np.abs(vv0 - vv1)
-    Prediction.welch_t_test(s, t)
-    # the printed p-value is very close to 0
-    # conclusion: the score for imputed data is worse than the one from non-perturbed data; this is expected and the
-    # alternative case would have been a model whose scores are both bad because it is not properly trained
 ##
+if e_():
+    s = get_smu_file(read_only=True)
+    before = s['visium']['non_scaled'].X[...].todense().A
+    after = s['visium']['processed'].X[...]
+    mean = np.mean(before, axis=0)
+    std = np.std(before, axis=0)
+    scaled_back = np.round(after * std + mean)
+    np.sum(np.logical_not(scaled_back == before))
+    np.prod(scaled_back.shape)
+    np.abs(scaled_back - before).max()
+    # the error is too big, let's scale in the other direction. It is because of max_value being not None!
 
+    std[std == 0.] = 1.
+    manually_scaled = (before - mean) / std
+    max_value = 10
+    manually_scaled[manually_scaled > max_value] = max_value
+    assert np.abs(manually_scaled - after).max() < 0.002
+    # not super small but ok
+
+    def scale(x):
+        x = (x - mean) / std
+        x[x > max_value] = max_value
+        return x
+    s.backing.close()
+
+##
 if e_():
     kwargs = dict(
-        original=a_val.X,
+        original=a_val.X.A,
         corrupted_entries=ce_val,
         predictions_from_perturbed=x_val_perturbed_pred,
-        space=Space.raw_sum.value,
-        name="scVI",
-        split="validation",
+        name="scVI (sum)",
     )
     scvi_predictions = Prediction(**kwargs)
-
-    scvi_predictions.plot_reconstruction()
-    # scvi_predictions.plot_scores()
+    scvi_predictions.plot_scores(hist=True)
+    scvi_predictions.plot_summary()
 
 ##
 if e_():
-    p = scvi_predictions.transform_to(Space.scaled_mean)
-    p.name = "scVI scaled"
-    p.plot_reconstruction()
-    p.plot_scores()
-    p.plot_summary()
+    scvi_predictions_scaled = Prediction(
+        original=scale(a_val.X.A),
+        corrupted_entries=ce_val,
+        predictions_from_perturbed=scale(x_val_perturbed_pred),
+        name='scVI (processed)'
+    )
+    scvi_predictions_scaled.plot_scores(hist=True)
+    scvi_predictions_scaled.plot_summary()
 
 ##
 import dill
 
 if e_():
-    f = file_path('imc/imputation_scores')
+    f = file_path('visium/imputation_scores')
     os.makedirs(f, exist_ok=True)
 
 ##
 if e_():
     d = {"scVI": kwargs}
-    dill.dump(d, open(file_path("imc/imputation_scores/scvi_scores.pickle"), "wb"))
+    dill.dump(d, open(file_path("visium/imputation_scores/scvi_scores.pickle"), "wb"))
 
 ##
-if e_():
-    pickle.dump(
-        {"input": aa_val, "latent": bb_val},
-        open(file_path("imc/imputation_scores/latent_anndata_from_scvi.pickle"), "wb"),
-    )
