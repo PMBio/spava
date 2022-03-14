@@ -2,19 +2,19 @@ import os
 from tests.testing_utils import is_debug
 
 
-def test_preprocess_visium_data():
-    os.environ["SPATIALMUON_TEST"] = "datasets/visium_data.py"
-    import datasets.visium_data
+def test_preprocess_visium_mousebrain():
+    os.environ["SPATIALMUON_TEST"] = "datasets/visium_mousebrain.py"
+    import datasets.visium_mousebrain
 
 
-def test_preprocess_visium_data_tiler():
-    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_data_tiler.py"
-    import datasets.tilers.visium_data_tiler
+def test_preprocess_visium_mousebrain_tiler():
+    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_mousebrain_tiler.py"
+    import datasets.tilers.visium_mousebrain_tiler
 
 
-def test_preprocess_visium_data_graphs():
-    os.environ["SPATIALMUON_TEST"] = "datasets/visium_data_graphs.py"
-    import datasets.graphs.visium_data_graphs
+def test_preprocess_visium_mousebrain_graphs():
+    os.environ["SPATIALMUON_TEST"] = "datasets/visium_mousebrain_graphs.py"
+    import datasets.graphs.visium_mousebrain_graphs
 
 
 def test_train_vae_expression():

@@ -5,9 +5,6 @@ jobs:
   test-envs:
     runs-on: self-hosted
     steps:
-#      - run: python -c "import os; print(os.getcwd())";
-#      - run: python tests/test_envs.py
-#      - run: python /data/l989o/deployed/a/tests/no_test_envs.py
       - uses: actions/checkout@v2
       - run: | 
           cd tests

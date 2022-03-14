@@ -1,5 +1,5 @@
-name: Visium scvi
-on: 
+name: Visium tiler
+on:
   workflow_dispatch
 jobs:
   test-data:
@@ -8,4 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          python notebook_exporter.py analyses/scvi_analyses/visium_data_scvi.py scvi_env
+          python notebook_exporter.py datasets/tilers/visium_mousebrain_tiler.py ci_env

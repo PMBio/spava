@@ -1,4 +1,4 @@
-name: IMC preprocess data
+name: Visium preprocess graphs
 on: 
   workflow_dispatch
 jobs:
@@ -8,4 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          python notebook_exporter.py datasets/imc.py ci_env
+          python notebook_exporter.py datasets/graphs/visium_mousebrain_graphs.py ci_env

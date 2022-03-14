@@ -1,9 +1,6 @@
 name: IMC preprocess graphs
 on: 
   workflow_dispatch
-#  workflow_dispatch:
-#   schedule:
-#    - cron: '0 23 * * *'
 jobs:
   test-data:
     runs-on: self-hosted
@@ -11,4 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          python notebook_exporter.py datasets/graphs/imc_data_graphs.py ci_env
+          python notebook_exporter.py datasets/graphs/imc_graphs.py ci_env

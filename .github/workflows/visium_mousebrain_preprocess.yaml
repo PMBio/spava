@@ -8,4 +8,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          python notebook_exporter.py datasets/visium_data.py ci_env
+          python notebook_exporter.py datasets/visium_mousebrain.py ci_env
