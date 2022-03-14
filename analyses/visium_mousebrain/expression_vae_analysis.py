@@ -7,7 +7,7 @@ import optuna
 import torch
 from tqdm.auto import tqdm
 from typing import Union
-from datasets.loaders.visium_data_loaders import get_cells_data_loader
+from datasets.loaders.visium_mousebrain_loaders import get_cells_data_loader
 from models.expression_vae import VAE
 import anndata as ad
 import scanpy as sc
@@ -164,7 +164,7 @@ if e_():
     scanpy_compute(merged)
     lou = merged.obs["louvain"]
 
-    from datasets.visium_data import get_split_indices, get_smu_file
+    from datasets.visium_mousebrain import get_split_indices, get_smu_file
 
     train_indices = get_split_indices("train")
     val_indices = get_split_indices("validation")

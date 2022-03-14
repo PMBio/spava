@@ -15,7 +15,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from utils import get_execute_function, file_path, reproducible_random_choice
-from datasets.imc_data import (
+from datasets.imc import (
     all_processed_smu,
     get_merged_areas_per_split,
     get_smu_file,
@@ -27,12 +27,12 @@ from analyses.analisys_utils import (
     compute_knn,
     nearest_neighbors,
 )
-from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
-from datasets.imc_data_transform_utils import IMCPrediction, Space
+from datasets.loaders.imc_loaders import CellsDatasetOnlyExpression
+from datasets.imc_transform_utils import IMCPrediction, Space
 
 e_ = get_execute_function()
-# os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/imc_data_scvi.py"
-# os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/imc_data_scvi.py"
+# os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/imc_scvi.py"
+# os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/imc_scvi.py"
 
 if e_():
     N_EPOCHS_KL_WARMUP = 3

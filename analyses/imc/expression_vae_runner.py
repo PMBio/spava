@@ -58,12 +58,12 @@ from torch.utils.data import DataLoader, Subset, Dataset
 from tqdm.auto import tqdm
 import copy
 
-from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
+from datasets.loaders.imc_loaders import CellsDatasetOnlyExpression
 
 pl.seed_everything(1234)
 
 from utils import file_path, get_execute_function
-from datasets.imc_data import get_smu_file
+from datasets.imc import get_smu_file
 
 e_ = get_execute_function()
 

@@ -14,7 +14,7 @@ import torch
 from torch_geometric.data import Data, InMemoryDataset
 from tqdm.auto import tqdm
 
-from datasets.visium_data import get_smu_file, get_split_indices
+from datasets.visium_mousebrain import get_smu_file, get_split_indices
 from utils import get_execute_function, file_path
 from torch_geometric.loader import DataLoader as GeometricDataLoader
 
@@ -179,8 +179,6 @@ if e_():
 
 ##
 def get_graphs_data_loader(split, subgraph_name, batch_size):
-    from datasets.graphs.visium_data_graphs import CellGraphsDataset
-
     ds = CellGraphsDataset(split=split, name=subgraph_name)
     ##
     loader = GeometricDataLoader(

@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
-from datasets.imc_data import get_smu_file, get_split
+from datasets.imc import get_smu_file, get_split
 from utils import (
     get_execute_function,
     file_path,
@@ -21,7 +21,7 @@ from utils import (
 )
 
 e_ = get_execute_function()
-# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/imc_data_loaders.py'
+# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/imc_loaders.py'
 
 plt.style.use("dark_background")
 

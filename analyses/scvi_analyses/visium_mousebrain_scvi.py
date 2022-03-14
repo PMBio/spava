@@ -17,7 +17,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from utils import get_execute_function, file_path, reproducible_random_choice
-from datasets.visium_data import get_smu_file, get_split_indices
+from datasets.visium_mousebrain import get_smu_file, get_split_indices
 from analyses.imputation_score import Prediction
 
 from analyses.analisys_utils import (
@@ -27,7 +27,7 @@ from analyses.analisys_utils import (
     compute_knn,
     nearest_neighbors,
 )
-from datasets.loaders.visium_data_loaders import CellsDataset
+from datasets.loaders.visium_mousebrain_loaders import CellsDataset
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/visium_data_scvi.py"
@@ -353,7 +353,7 @@ if e_():
     ss = np.abs(uu0 - uu1)
     tt = np.abs(vv0 - vv1)
     Prediction.welch_t_test(ss, tt)
-    # for interpretation of the p-value see imc_data_scvi.py
+    # for interpretation of the p-value see imc_scvi.py
 
 ##
 if e_():

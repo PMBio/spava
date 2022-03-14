@@ -7,12 +7,12 @@ import optuna
 import torch
 from tqdm.auto import tqdm
 from typing import Union
-from datasets.loaders.imc_data_loaders import get_cells_data_loader
+from datasets.loaders.imc_loaders import get_cells_data_loader
 from models.expression_vae import VAE
 import anndata as ad
 import scanpy as sc
 from analyses.analisys_utils import compute_knn, louvain_plot
-from datasets.imc_data_transform_utils import IMCPrediction, Space
+from datasets.imc_transform_utils import IMCPrediction, Space
 
 import os
 from utils import reproducible_random_choice, get_execute_function, memory

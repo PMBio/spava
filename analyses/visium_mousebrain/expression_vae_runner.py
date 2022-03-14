@@ -63,12 +63,12 @@ from torch.utils.data import DataLoader, Subset, Dataset
 from tqdm.auto import tqdm
 import copy
 
-from datasets.loaders.visium_data_loaders import CellsDataset
+from datasets.loaders.visium_mousebrain_loaders import CellsDataset
 
 pl.seed_everything(1234)
 
 from utils import file_path, get_execute_function
-from datasets.visium_data import get_smu_file
+from datasets.visium_mousebrain import get_smu_file
 
 s = get_smu_file(read_only=True)
 n_channels = len(s["visium"]["processed"].var)

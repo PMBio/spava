@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
-from datasets.visium_data import get_smu_file, get_split_indices
+from datasets.visium_mousebrain import get_smu_file, get_split_indices
 from utils import (
     get_execute_function,
     file_path,

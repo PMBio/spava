@@ -12,7 +12,7 @@ import torch
 from torch_geometric.data import Data, InMemoryDataset
 from tqdm.auto import tqdm
 
-from datasets.imc_data import get_smu_file, get_split, all_processed_smu
+from datasets.imc import get_smu_file, get_split, all_processed_smu
 from utils import get_execute_function, file_path, get_bimap
 from torch_geometric.loader import DataLoader as GeometricDataLoader
 
@@ -173,7 +173,7 @@ if e_():
 ##
 ##
 def get_graphs_data_loader(split, subgraph_name, batch_size):
-    from datasets.graphs.imc_data_graphs import CellGraphsDataset
+    from datasets.graphs.imc_graphs import CellGraphsDataset
 
     ds = CellGraphsDataset(split=split, name=subgraph_name)
     ##

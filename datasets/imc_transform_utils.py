@@ -11,7 +11,7 @@ import pickle
 from analyses.imputation_score import Prediction
 
 
-from datasets.imc_data import get_smu_file, get_merged_areas_per_split
+from datasets.imc import get_smu_file, get_merged_areas_per_split
 
 s = get_smu_file("train", 0, read_only=True)
 quantiles_for_normalization = s["imc"]["transformed_mean"].uns["scaling_factors"][...]

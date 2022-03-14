@@ -19,7 +19,7 @@ from analyses.torch_boilerplate import (
 pl.seed_everything(1234)
 
 from utils import get_execute_function
-from datasets.imc_data import get_smu_file
+from datasets.imc import get_smu_file
 
 e_ = get_execute_function()
 
