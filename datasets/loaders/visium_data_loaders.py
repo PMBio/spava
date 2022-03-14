@@ -13,7 +13,12 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from datasets.visium_data import get_smu_file, get_split_indices
-from utils import get_execute_function, file_path, get_bimap, print_corrupted_entries_hash
+from utils import (
+    get_execute_function,
+    file_path,
+    get_bimap,
+    print_corrupted_entries_hash,
+)
 
 e_ = get_execute_function()
 # os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/visium_data_loaders.py'
@@ -22,16 +27,20 @@ plt.style.use("dark_background")
 
 ##
 class CellsDataset(Dataset):
-    def __init__(self, split, only_expression=False):
+    def __init__(self, split, only_expression=False, raw_counts=False):
         self.split = split
         self.only_expression = only_expression
         self.indices = get_split_indices(self.split)
+        self.raw_counts = raw_counts
         if not self.only_expression:
             self.tiles_file = file_path("visium_mousebrain/tiles.hdf5")
             self.f5 = h5py.File(self.tiles_file, "r")[self.split]
             assert len(self.indices) == len(self.f5)
         s = get_smu_file(read_only=True)
-        self.expressions = s["visium"]["processed"].X[self.indices, :]
+        if not self.raw_counts:
+            self.expressions = s["visium"]["processed"].X[self.indices, :]
+        else:
+            self.expressions = s["visium"]["non_scaled"].X[self.indices, :].todense().A
         s.backing.close()
         self.seed = None
         self.corrupted_entries = np.zeros(
@@ -64,7 +73,6 @@ class CellsDataset(Dataset):
             return expression, is_corrupted
 
 
-
 ##
 if e_():
     ds = CellsDataset(split="test")
@@ -83,6 +91,9 @@ def get_cells_data_loader(split, batch_size, perturb=False, only_expression=Fals
     )
     return loader
 
+
 if e_():
-    loader = get_cells_data_loader(split='train', batch_size=128, perturb=True, only_expression=True)
+    loader = get_cells_data_loader(
+        split="train", batch_size=128, perturb=True, only_expression=True
+    )
     loader.__iter__().__next__()

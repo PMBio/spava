@@ -220,9 +220,11 @@ if e_():
     # p.plot_scores()
 
 ##
-# from old_code.data2 import file_path
-# import pickle
-#
-# if m:
-#     d = {"vanilla VAE": kwargs}
-#     pickle.dump(d, open(file_path("ah_scores.pickle"), "wb"))
+import pickle
+
+if e_():
+    f = file_path('imc/imputation_scores')
+    os.makedirs(f, exist_ok=True)
+
+    d = {"vanilla VAE": kwargs}
+    pickle.dump(d, open(file_path("imc/imputation_scores/expression_vae.pickle"), "wb"))

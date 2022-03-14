@@ -1,6 +1,10 @@
 ##
 import os
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:1024"
+import colorama
+
 from analyses.torch_boilerplate import (
     optuna_nan_workaround,
     ZeroInflatedGamma,
@@ -21,7 +25,7 @@ if "SPATIALMUON_TEST" not in os.environ:
     ppp.MAX_EPOCHS = 15
 else:
     ppp.MAX_EPOCHS = 2
-ppp.BATCH_SIZE = 1024
+ppp.BATCH_SIZE = 256
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
 ppp.PERTURB = None
@@ -34,13 +38,14 @@ else:
     ppp.NUM_WORKERS = 10
     # ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = False
-ppp.NOISE_MODEL = "gaussian"
+# ppp.NOISE_MODEL = "gaussian"
 # ppp.NOISE_MODEL = 'gamma'
 # ppp.NOISE_MODEL = 'zip'
 # ppp.NOISE_MODEL = 'zin'
 # ppp.NOISE_MODEL = 'log_normal'
 # ppp.NOISE_MODEL = 'zi_gamma'
 # ppp.NOISE_MODEL = 'nb'
+ppp.NOISE_MODEL = 'zinb'
 
 import contextlib
 from pprint import pprint
@@ -58,27 +63,27 @@ from torch.utils.data import DataLoader, Subset, Dataset
 from tqdm.auto import tqdm
 import copy
 
-from datasets.loaders.imc_data_loaders import CellsDatasetOnlyExpression
+from datasets.loaders.visium_data_loaders import CellsDataset
 
 pl.seed_everything(1234)
 
 from utils import file_path, get_execute_function
-from datasets.imc_data import get_smu_file
+from datasets.visium_data import get_smu_file
+
+s = get_smu_file(read_only=True)
+n_channels = len(s["visium"]["processed"].var)
+s.backing.close()
 
 e_ = get_execute_function()
-
-s = get_smu_file(split="train", index=0, read_only=True)
-scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
-s.backing.close()
 
 
 def get_loaders(
     perturb: bool = False,
     shuffle_train=False,
 ):
-    train_ds = CellsDatasetOnlyExpression("train")
-    train_ds_validation = CellsDatasetOnlyExpression("train")
-    val_ds = CellsDatasetOnlyExpression("validation")
+    train_ds = CellsDataset("train", only_expression=True, raw_counts=True)
+    train_ds_validation = CellsDataset("train", only_expression=True, raw_counts=True)
+    val_ds = CellsDataset("validation", only_expression=True, raw_counts=True)
     if perturb:
         train_ds = train_ds.perturb()
         train_ds_validation = train_ds_validation.perturb()
@@ -151,18 +156,25 @@ def objective(trial: optuna.trial.Trial) -> float:
     from analyses.torch_boilerplate import training_boilerplate
 
     from models.expression_vae import ImageSampler, LogComputationalGraph
-    val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 300
+
+    val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 10
+    if 'MAX_EPOCHS' in trial.user_attrs:
+        ppp.MAX_EPOCHS = trial.user_attrs['MAX_EPOCHS']
+        print(f'{colorama.Fore.MAGENTA}found attribute in trial.user_attrs{colorama.Fore.RESET}')
+    print(f'ppp.MAX_EPOCHS = {ppp.MAX_EPOCHS}')
     trainer, logger = training_boilerplate(
         trial=trial,
         extra_callbacks=[ImageSampler(), LogComputationalGraph()],
         max_epochs=ppp.MAX_EPOCHS,
-        log_every_n_steps=30 if not ppp.DEBUG else 1,
+        log_every_n_steps=10 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
-        model_name="expression_vae",
+        model_name="visium_mousebrain_expression_vae",
+        early_stopping_patience=4,
+        early_stopping_min_delta=1e-5
     )
 
     # hyperparameters
-    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
+    vae_latent_dims = trial.suggest_int("vae_latent_dims", 8, 20)
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
@@ -186,7 +198,7 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     vae = VAE(
         optuna_parameters=optuna_parameters,
-        in_channels=39,
+        in_channels=n_channels,
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
     )
@@ -220,15 +232,15 @@ def objective(trial: optuna.trial.Trial) -> float:
 if e_() or __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "vae_expression"
-    if study_name == "vae_expression_perturbed":
+    study_name = "visium_mousebrain_expression"
+    if study_name == "visium_mousebrain_expression_perturbed":
         ppp.PERTURB = True
-    elif study_name == "vae_expression":
+    elif study_name == "visium_mousebrain_expression":
         ppp.PERTURB = False
     else:
         raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
-    storage = "sqlite:///" + file_path("optuna_vae_expression.sqlite")
+    storage = "sqlite:///" + file_path("optuna_visium_mousebrain_expression.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",
@@ -258,7 +270,7 @@ if e_() or __name__ == "__main__":
         if TRAIN:
             objective(study.best_trial)
         else:
-            print('best trial:')
+            print("best trial:")
             print(study.best_trial)
 
             df = study.trials_dataframe()

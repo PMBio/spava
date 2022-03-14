@@ -5,6 +5,9 @@ from optuna.integration import PyTorchLightningPruningCallback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
+from typing import List
+from torch import nn
+from collections import OrderedDict
 
 from utils import file_path
 
@@ -17,6 +20,8 @@ def training_boilerplate(
     val_check_interval: int,
     model_name: str,
     gpus: int = 1,
+    early_stopping_patience: int = 2,
+    early_stopping_min_delta: float = 0.0001,
 ):
     logger = TensorBoardLogger(save_dir=file_path("checkpoints"), name=model_name)
     print(f"logging in {logger.experiment.log_dir}")
@@ -31,8 +36,8 @@ def training_boilerplate(
     )
     early_stop_callback = EarlyStopping(
         monitor="batch_val_elbo",
-        min_delta=0.0001,
-        patience=2,
+        min_delta=early_stopping_min_delta,
+        patience=early_stopping_patience,
         verbose=True,
         mode="min",
         check_finite=True,
@@ -142,6 +147,25 @@ class ZeroInflatedGamma(ZeroInflatedDistribution):
     @property
     def rate(self):
         return self.base_dist.rate
+
+
+def get_fc_layers(dims: List[int], name: str, dropout_alpha: float):
+    return nn.Sequential(
+        OrderedDict(
+            [
+                (
+                    f"{name}_layer{i}",
+                    nn.Sequential(
+                        nn.Linear(n_in, n_out),
+                        nn.BatchNorm1d(n_out, momentum=0.01, eps=0.001),
+                        nn.ReLU(),
+                        nn.Dropout(p=dropout_alpha) if dropout_alpha != 0.0 else None,
+                    ),
+                )
+                for i, (n_in, n_out) in enumerate(zip(dims[:-1], dims[1:]))
+            ]
+        )
+    )
 
 
 # dist = Gamma(10, 10)

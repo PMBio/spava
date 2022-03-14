@@ -25,3 +25,5 @@ rsync -avh l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/s
 * run the job
 # relevant queues: gpu, gpu-short
 bsub -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10.7G -L /bin/bash -q gpu-short bash /dkfz/cluster/gpu/data/OE0540/l989o/code/a/cluster/gpu_cluster_runner.sh
+* TODO setup checkpoint folder
+ /dkfz/cluster/gpu/checkpoints/OE0540/l989o

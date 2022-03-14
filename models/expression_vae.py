@@ -1,5 +1,6 @@
 ##
 import contextlib
+import math
 
 import pyro
 import pyro.distributions
@@ -22,6 +23,7 @@ from datasets.imc_data import get_smu_file
 
 e_ = get_execute_function()
 
+
 class ImageSampler(pl.Callback):
     def __init__(self):
         super().__init__()
@@ -29,7 +31,8 @@ class ImageSampler(pl.Callback):
         self.num_preds = 16
 
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
-        if pl_module._hparams['LOG_PER_CHANNEL_VALUES']:
+        if pl_module._hparams["LOG_PER_CHANNEL_VALUES"]:
+            # this does not make sense for zinb since we should take sigmoid(log_c)
             trainer.logger.experiment.add_scalars(
                 "c",
                 {
@@ -63,11 +66,7 @@ def get_detect_anomaly_cm(DETECT_ANOMALY):
 
 class VAE(pl.LightningModule):
     def __init__(
-        self,
-        optuna_parameters,
-        in_channels,
-        mask_loss: bool = None,
-        **kwargs
+        self, optuna_parameters, in_channels, mask_loss: bool = None, **kwargs
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
@@ -77,43 +76,64 @@ class VAE(pl.LightningModule):
         self.out_channels = self.in_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
+        self.dropout_alpha = self.optuna_parameters["dropout_alpha"]
 
-        self.encoder0 = nn.Linear(self.in_channels, 30)
-        self.encoder1 = nn.Linear(30, 20)
-        self.encoder2 = nn.Linear(20, 15)
-        self.encoder3_mean = nn.Linear(15, self.latent_dim)
-        self.encoder3_log_var = nn.Linear(15, self.latent_dim)
-        self.decoder0 = nn.Linear(self.latent_dim, 15)
-        self.decoder1 = nn.Linear(15, 20)
-        self.decoder2 = nn.Linear(20, 30)
-        self.decoder3_a = nn.Linear(30, self.out_channels)
+        ##
+        def get_dims(n):
+            dims = []
+            max_d = 500
+            d = n
+            k = 0.75
+            for i in range(2):
+                d = math.ceil(d * k)
+                max_d = math.ceil(max_d * k)
+                dims.append(min(d, max_d))
+            return dims
+
+        dims = get_dims(self.in_channels)
+        ##
+
+        encoder_dims = [self.in_channels] + dims
+        decoder_dims = [self.latent_dim] + list(reversed(dims))
+        print(f'encoder_dims = {encoder_dims}, decoder_dims = {decoder_dims}')
+        from analyses.torch_boilerplate import get_fc_layers
+
+        self.encoder_fc = get_fc_layers(dims=encoder_dims, name='encoder_fc', dropout_alpha=self.dropout_alpha)
+        self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
+        self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
+        self.decoder_fc = get_fc_layers(dims=decoder_dims, name='decoder_fc', dropout_alpha=self.dropout_alpha)
+        self.decoder_a = nn.Linear(dims[0], self.out_channels)
         self.softplus = nn.Softplus()
-        self.decoder3_b = nn.Linear(30, self.out_channels)
+        self.decoder_b = nn.Linear(dims[0], self.out_channels)
         self.sigmoid = nn.Sigmoid()
 
-        self.log_c = nn.Parameter(torch.Tensor([self.optuna_parameters["log_c"]] * 39))
-        self.logit_d = nn.Parameter(torch.logit(torch.Tensor([0.001] * 39)))
+        self.log_c = nn.Parameter(
+            torch.Tensor([self.optuna_parameters["log_c"]] * self.in_channels)
+        )
+        self.logit_d = nn.Parameter(
+            torch.logit(torch.Tensor([0.001] * self.in_channels))
+        )
 
     def encoder(self, x):
-        x = F.relu(self.encoder0(x))
-        x = F.relu(self.encoder1(x))
-        x = F.relu(self.encoder2(x))
-        mean = self.encoder3_mean(x)
-        log_var = self.encoder3_log_var(x)
+        x = self.encoder_fc(x)
+        mean = self.encoder_mean(x)
+        log_var = self.encoder_log_var(x)
         return mean, log_var
 
     def decoder(self, z):
-        z = F.relu(self.decoder0(z))
-        z = F.relu(self.decoder1(z))
-        z = F.relu(self.decoder2(z))
-        decoded_a = self.decoder3_a(z)
-        decoded_b = self.decoder3_b(z)
-        if self._hparams['NOISE_MODEL'] in ["gamma", "zi_gamma", "nb"]:
-            decoded_a = self.softplus(decoded_a) + 2
-        elif self._hparams['NOISE_MODEL'] == "zip":
-            decoded_a = self.softplus(decoded_a)
-        if self._hparams['NOISE_MODEL'] in ["zip", "zig", "zi_gamma"]:
+        z = self.decoder_fc(z)
+        decoded_a = self.decoder_a(z)
+        decoded_b = self.decoder_b(z)
+        eps = 1e-4
+        if self._hparams["NOISE_MODEL"] in ["gamma", "zi_gamma", "nb"]:
+            decoded_a = self.softplus(decoded_a) + eps # + 2
+        elif self._hparams["NOISE_MODEL"] in ["zinb"]:
+            decoded_a = self.softplus(decoded_a) + eps # + 2
             decoded_b = self.sigmoid(decoded_b)
+        elif self._hparams["NOISE_MODEL"] == "zip":
+            decoded_a = self.softplus(decoded_a)
+        if self._hparams["NOISE_MODEL"] in ["zip", "zig", "zi_gamma"]:
+            decoded_b = self.sigmoid(decoded_b / (self.optuna_parameters['learning_rate'] * 10))
         return decoded_a, decoded_b
 
     def configure_optimizers(self):
@@ -144,20 +164,22 @@ class VAE(pl.LightningModule):
         return mse_loss
 
     def get_dist(self, a, b):
-        if self._hparams['NOISE_MODEL'] == "gaussian":
+        if self._hparams["NOISE_MODEL"] == "gaussian":
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
-        elif self._hparams['NOISE_MODEL'] == "zin":
+        elif self._hparams["NOISE_MODEL"] == "zin":
             dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
-        elif self._hparams['NOISE_MODEL'] == "gamma":
+        elif self._hparams["NOISE_MODEL"] == "gamma":
             dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
-        elif self._hparams['NOISE_MODEL'] == "zi_gamma":
+        elif self._hparams["NOISE_MODEL"] == "zi_gamma":
             dist = ZeroInflatedGamma(a, torch.exp(self.log_c), gate=b)
-        elif self._hparams['NOISE_MODEL'] == "nb":
+        elif self._hparams["NOISE_MODEL"] == "nb":
             dist = pyro.distributions.GammaPoisson(a, torch.exp(self.log_c))
-        elif self._hparams['NOISE_MODEL'] == "zip":
+        elif self._hparams["NOISE_MODEL"] == "zip":
             dist = pyro.distributions.ZeroInflatedPoisson(a, gate=b)
-        elif self._hparams['NOISE_MODEL'] == "log_normal":
+        elif self._hparams["NOISE_MODEL"] == "log_normal":
             dist = pyro.distributions.LogNormal(a, torch.exp(self.log_c))
+        elif self._hparams["NOISE_MODEL"] == "zinb":
+            dist = pyro.distributions.ZeroInflatedNegativeBinomial(a, probs=torch.sigmoid(self.log_c), gate=b)
         else:
             raise RuntimeError()
         return dist
@@ -173,7 +195,7 @@ class VAE(pl.LightningModule):
         if torch.any(dist.log_prob(zero).isnan()):
             print("nan value detected")
             raise RuntimeError("manual abort")
-        if self._hparams['NOISE_MODEL'] in ["gamma, zi_gamma", "log_normal"]:
+        if self._hparams["NOISE_MODEL"] in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
         else:
             offset = 0.0
@@ -216,9 +238,9 @@ class VAE(pl.LightningModule):
     def loss_function(self, x, a, b, mu, std, z, corrupted_entries):
         # reconstruction loss
         # print(x_hat.shape)
-        cm = get_detect_anomaly_cm(self._hparams['DETECT_ANOMALY'])
+        cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
-            if self._hparams['MONTE_CARLO']:
+            if self._hparams["MONTE_CARLO"]:
                 if (
                     torch.isnan(a).any()
                     or torch.isnan(b).any()
@@ -249,7 +271,7 @@ class VAE(pl.LightningModule):
             return elbo, kl, recon_loss
 
     def forward(self, x):
-        cm = get_detect_anomaly_cm(self._hparams['DETECT_ANOMALY'])
+        cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
             # x_encoded = self.encoder(x)
             # mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
