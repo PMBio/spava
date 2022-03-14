@@ -1,4 +1,4 @@
-name: IMC analyze expression model
+name: Visium mousebrain analyze expression VAE
 on: 
   workflow_dispatch
 jobs:

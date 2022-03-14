@@ -1,4 +1,4 @@
-name: Visium loaders
+name: Visium mousebrain loaders
 on: 
   workflow_dispatch
 jobs:

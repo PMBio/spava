@@ -1,4 +1,4 @@
-name: IMC analyze expression model
+name: IMC analyze expression VAE
 on: 
   workflow_dispatch
 jobs:

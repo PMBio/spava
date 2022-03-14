@@ -1,4 +1,4 @@
-name: Visium preprocess data
+name: Visium mousebrain preprocess data
 on: 
   workflow_dispatch
 jobs:

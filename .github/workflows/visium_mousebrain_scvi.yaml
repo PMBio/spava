@@ -1,4 +1,4 @@
-name: Visium scvi
+name: Visium mousebrain scvi
 on: 
   workflow_dispatch
 jobs:

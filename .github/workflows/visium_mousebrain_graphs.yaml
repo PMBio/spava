@@ -1,4 +1,4 @@
-name: Visium preprocess graphs
+name: Visium mousebrain graphs
 on: 
   workflow_dispatch
 jobs:

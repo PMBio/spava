@@ -1,4 +1,4 @@
-name: Visium tiler
+name: Visium mousebrain tiler
 on:
   workflow_dispatch
 jobs:
