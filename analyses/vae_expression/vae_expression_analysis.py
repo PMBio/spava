@@ -12,7 +12,7 @@ from analyses.vae_expression.vae_expression_model import VAE
 import anndata as ad
 import scanpy as sc
 from analyses.analisys_utils import compute_knn, louvain_plot
-from datasets.imc_data_transform_utils import Prediction, Space
+from datasets.imc_data_transform_utils import IMCPrediction, Space
 
 import os
 from utils import reproducible_random_choice, get_execute_function, memory
@@ -203,7 +203,7 @@ if True:
         name="expression vae",
         split="validation",
     )
-    vae_predictions = Prediction(**kwargs)
+    vae_predictions = IMCPrediction(**kwargs)
 
     plt.style.use("default")
     vae_predictions.plot_reconstruction()

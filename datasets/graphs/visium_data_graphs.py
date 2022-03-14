@@ -175,6 +175,7 @@ if e_():
     xy = s["visium"]["processed"].transformed_centers[original_center_index]
     ax.scatter(xy[0], xy[1], c="g")
     plt.show()
+    s.backing.close()
 
 ##
 def get_graphs_data_loader(split, subgraph_name, batch_size):

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import colorama
 import shutil
+
+import matplotlib.cm
 import scvi
 import scanpy as sc
 import torch
@@ -28,7 +30,7 @@ from analyses.analisys_utils import (
 from datasets.loaders.visium_data_loaders import CellsDataset
 
 e_ = get_execute_function()
-os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/visium_data_scvi.py"
+# os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/scvi_analyses/visium_data_scvi.py"
 # os.environ["SPATIALMUON_TEST"] = "analyses/scvi_analyses/visium_data_scvi.py"
 
 if e_():
@@ -162,6 +164,7 @@ if e_():
 #     plt.tight_layout()
 #     plt.show()
 
+##
 if e_():
     scvi.model.SCVI.setup_anndata(
         a_test,
@@ -172,29 +175,76 @@ if e_():
     merged = ad.AnnData.concatenate(bb, bb_val, bb_test, batch_categories=['train', 'validation', 'test'])
     scanpy_compute(merged)
     lou = merged.obs['louvain']
+
     train_indices = get_split_indices('train')
     val_indices = get_split_indices('validation')
     test_indices = get_split_indices('test')
+
     louvain_train = lou.iloc[:len(train_indices)]
     louvain_val = lou.iloc[len(train_indices):len(lou) - len(test_indices)]
     louvain_test = lou.iloc[len(lou) - len(test_indices): ]
+
     categories = lou.cat.categories.tolist() + ['Nein']
+
     assert len(louvain_train) + len(louvain_val) + len(louvain_test) == len(lou)
     assert all([s.endswith('-train') for s in louvain_train.index.tolist()])
     assert all([s.endswith('-validation') for s in louvain_val.index.tolist()])
     assert all([s.endswith('-test') for s in louvain_test.index.tolist()])
+
     ordered_lou = pd.Categorical(['Nein'] * len(lou), categories=categories)
+
     ordered_lou[train_indices] = louvain_train.to_numpy()
     ordered_lou[val_indices] = louvain_val.to_numpy()
     ordered_lou[test_indices] = louvain_test.to_numpy()
+
     assert ordered_lou.value_counts()['Nein'] == 0
     ordered_lou.remove_categories('Nein', inplace=True)
     lou_for_smu = ordered_lou.astype('category')
+
     s = get_smu_file(read_only=False)
     s['visium']['processed'].obs['scvi'] = lou_for_smu
+    s['visium']['processed'].masks.obj_has_changed('obs')
     s.commit_changes_on_disk()
+    s.backing.close()
 
-    print('ooo')
+##
+if e_():
+    s = get_smu_file(read_only=False)
+    _, ax = plt.subplots(1)
+    s['visium']['image'].plot(ax=ax)
+    s['visium']['processed'].masks.plot('scvi', ax=ax)
+    plt.show()
+    s.backing.close()
+
+##
+if e_():
+    s = get_smu_file(read_only=True)
+    processed_regions = s["visium"]["processed"]
+    raster = s["visium"]["image"]
+    import spatialmuon
+    if "SPATIALMUON_TEST" not in os.environ:
+        bb = spatialmuon.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
+        transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
+    else:
+        transformed_bb = None
+
+    import matplotlib.cm
+    _, axes = plt.subplots(1, 2, figsize=(20, 10))
+
+    processed_regions.masks.plot(
+        fill_colors="leiden", ax=axes[0], bounding_box=transformed_bb
+    )
+    raster.plot(0, ax=axes[0], show_legend=False, bounding_box=transformed_bb, cmap=matplotlib.cm.get_cmap('gray_r'))
+    raster.set_lims_to_bounding_box(transformed_bb, ax=axes[0])
+
+    processed_regions.masks.plot(
+        fill_colors="scvi", ax=axes[1], bounding_box=transformed_bb
+    )
+    raster.plot(0, ax=axes[1], show_legend=False, bounding_box=transformed_bb, cmap=matplotlib.cm.get_cmap('gray_r'))
+    raster.set_lims_to_bounding_box(transformed_bb, ax=axes[1])
+
+    plt.show()
+    s.backing.close()
 
 ##
 if e_():

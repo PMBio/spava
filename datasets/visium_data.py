@@ -57,6 +57,7 @@ def get_smu_file(read_only: bool, initialize=False):
 def get_split_indices(split):
     s = get_smu_file(read_only=True)
     n = len(s["visium"]["processed"].obs)
+    s.backing.close()
     ratios = [0.7, 0.15]
     ns = [math.floor(n * ratios[0]), math.ceil(n * ratios[1])]
     ns.append(n - np.sum(ns))
@@ -209,6 +210,7 @@ if e_():
     m1 = s["visium"]["processed"].masks
     m0.plot()
     m1.plot()
+    s.backing.close()
 ##
 if e_():
     s = get_smu_file(read_only=True)
@@ -228,5 +230,6 @@ if e_():
     raster.plot(ax=ax, show_legend=False, bounding_box=transformed_bb)
     raster.set_lims_to_bounding_box(transformed_bb)
     plt.show()
+    s.backing.close()
 ##
 print("done")

@@ -35,3 +35,4 @@ if e_():
             indices = get_split_indices(split)
             split_tiles = [tiles.tiles[i] for i in indices]
             f5[f"{split}"] = split_tiles
+    s.backing.close()
