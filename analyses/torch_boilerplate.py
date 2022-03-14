@@ -8,8 +8,18 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from typing import List
 from torch import nn
 from collections import OrderedDict
+from torch import autograd
+import contextlib
 
 from utils import file_path
+
+
+def get_detect_anomaly_cm(DETECT_ANOMALY):
+    if DETECT_ANOMALY:
+        cm = autograd.detect_anomaly()
+    else:
+        cm = contextlib.nullcontext()
+    return cm
 
 
 def training_boilerplate(

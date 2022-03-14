@@ -17,10 +17,20 @@ def test_preprocess_visium_data_graphs():
     import datasets.graphs.visium_data_graphs
 
 
+def test_train_vae_expression():
+    os.environ[
+        "SPATIALMUON_TEST"
+    ] = "analyses/visium_mousebrain/expression_vae_runner.py"
+    import analyses.visium_mousebrain.expression_vae_runner
+
+
+def test_analyze_expression_model():
+    os.environ[
+        "SPATIALMUON_TEST"
+    ] = "analyses/visium_mousebrain/expression_vae_analysis.py"
+    import analyses.visium_mousebrain.expression_vae_analysis
+
+
 if __name__ == "__main__":
-    if not is_debug():
-        test_preprocess_visium_data()
-        test_preprocess_visium_data_tiler()
-        test_preprocess_visium_data_graphs()
-    else:
+    if is_debug():
         pass

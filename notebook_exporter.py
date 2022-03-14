@@ -49,9 +49,9 @@ os.chdir('{enclosing_folder}')
     jupyter_file = dest_file.replace(".py", ".ipynb")
     DEBUG = True
     if DEBUG:
-        debug = '--debug'
+        debug = "--debug"
     else:
-        debug = ''
+        debug = ""
     cmd = (
         f'bash -c "{activate_env}; jupyter nbconvert --to notebook {debug} --ExecutePreprocessor.timeout=-1 '
         f'--execute {shlex.quote(jupyter_file)}"'

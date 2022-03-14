@@ -25,11 +25,13 @@ def louvain_plot(an: ad.AnnData, title: str):
     plt.title(title)
     plt.show()
 
+
 def compute_knn(b: ad.AnnData):
     nbrs = NearestNeighbors(n_neighbors=20, algorithm="ball_tree").fit(b.X)
     distances, indices = nbrs.kneighbors(b.X)
     b.obsm["nearest_neighbors"] = indices
     print("done")
+
 
 def scanpy_compute(an: ad.AnnData):
     sc.tl.pca(an)
@@ -42,6 +44,7 @@ def scanpy_compute(an: ad.AnnData):
     print("computing louvain... ", end="")
     sc.tl.louvain(an)
     print("done")
+
 
 ##
 def louvain_plot(an: ad.AnnData, title: str):
@@ -57,6 +60,7 @@ def louvain_plot(an: ad.AnnData, title: str):
     )
     plt.title(title)
     plt.show()
+
 
 ##
 def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
@@ -135,4 +139,3 @@ def nearest_neighbors(nn_from: ad.AnnData, plot_onto: ad.AnnData, title: str):
     plt.tight_layout()
     plt.show()
     plt.style.use("default")
-

@@ -151,6 +151,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     from analyses.torch_boilerplate import training_boilerplate
 
     from models.expression_vae import ImageSampler, LogComputationalGraph
+
     val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 300
     trainer, logger = training_boilerplate(
         trial=trial,
@@ -166,7 +167,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    dropout_alpha = trial.suggest_float("dropout_alpha", 0., 0.2)
+    dropout_alpha = trial.suggest_float("dropout_alpha", 0.0, 0.2)
 
     # # leading to nan values
     # vae_latent_dims = 5
@@ -179,7 +180,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,
-        dropout_alpha=dropout_alpha
+        dropout_alpha=dropout_alpha,
     )
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)
@@ -210,7 +211,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     except RuntimeError as e:
         if str(e) == "manual abort":
             elbo = optuna_nan_workaround(torch.tensor(float("nan")))
-            print('manual abort')
+            print("manual abort")
             torch.cuda.empty_cache()
             return elbo
         else:
@@ -244,7 +245,9 @@ if e_() or __name__ == "__main__":
             n_trials = 100
         else:
             n_trials = 1
-        study.optimize(objective, n_trials=n_trials, timeout=4 * 3600, gc_after_trial=True)
+        study.optimize(
+            objective, n_trials=n_trials, timeout=4 * 3600, gc_after_trial=True
+        )
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial
@@ -258,7 +261,7 @@ if e_() or __name__ == "__main__":
         if TRAIN:
             objective(study.best_trial)
         else:
-            print('best trial:')
+            print("best trial:")
             print(study.best_trial)
 
             df = study.trials_dataframe()

@@ -8,7 +8,12 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import skimage.measure
-from old_code.data2 import PerturbedRGBCells, PerturbedCellDataset, file_path, CHANNEL_NAMES
+from old_code.data2 import (
+    PerturbedRGBCells,
+    PerturbedCellDataset,
+    file_path,
+    CHANNEL_NAMES,
+)
 import scanpy as sc
 import anndata as ad
 from utils import reproducible_random_choice

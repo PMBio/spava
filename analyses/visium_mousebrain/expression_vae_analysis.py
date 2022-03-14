@@ -8,7 +8,7 @@ import torch
 from tqdm.auto import tqdm
 from typing import Union
 from datasets.loaders.visium_data_loaders import get_cells_data_loader
-from analyses.vae_expression.vae_expression_model import VAE
+from models.expression_vae import VAE
 import anndata as ad
 import scanpy as sc
 from analyses.analisys_utils import compute_knn, louvain_plot, scanpy_compute
@@ -38,13 +38,14 @@ if e_():
     print(study.best_trial.user_attrs["version"])
 
     # re-train the best model but by perturbing the dataset
-    # if False:
-    if True:
-        if False:
+    if False:
         # if True:
-            from analyses.visium_mousebrain.visium_mousebrain_model import objective
+        if False:
+            # if True:
+            from analyses.visium_mousebrain.expression_vae_runner import objective
+
             trial = study.best_trial
-            trial.set_user_attr('MAX_EPOCHS', 50)
+            trial.set_user_attr("MAX_EPOCHS", 50)
             objective(trial)
             sys.exit(0)
         else:
@@ -134,7 +135,12 @@ if e_():
         model=expression_vae,
     )
 
-    mus_test_non_perturbed, expression_test_non_perturbed, _, _ = get_latent_representation(
+    (
+        mus_test_non_perturbed,
+        expression_test_non_perturbed,
+        _,
+        _,
+    ) = get_latent_representation(
         loader=test_loader_non_perturbed,
         model=expression_vae,
     )
@@ -277,7 +283,7 @@ if e_():
 
 ##
 if e_():
-# if True:
+    # if True:
     kwargs = dict(
         original=expression_val_non_perturbed.X,
         corrupted_entries=val_are_perturbed.detach().cpu().numpy(),

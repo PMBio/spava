@@ -47,7 +47,7 @@ if e_():
         tqdm(["train", "validation", "test"], desc="splits", position=0, leave=True)
     ):
         indices = get_split_indices(split)
-        x = s['visium']['non_scaled'].X[indices]
+        x = s["visium"]["non_scaled"].X[indices]
         a = ad.AnnData(x)
         d_ad[split] = a
     s.backing.close()
@@ -68,12 +68,13 @@ if e_():
 
 ##
 if e_():
-    f_scvi_model = file_path("visium/scvi_model.scvi")
+    f_scvi_model = file_path("visium_mousebrain/scvi_model.scvi")
+    print(f'f_scvi_model = {f_scvi_model}')
     # TRAIN = True
     TRAIN = False
     if not os.path.isdir(f_scvi_model):
         TRAIN = True
-    print(f'{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}')
+    print(f"{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}")
     if TRAIN:
         model = scvi.model.SCVI(a_train)
 
@@ -174,38 +175,40 @@ if e_():
     z_test = model.get_latent_representation(a_test)
     b_test = ad.AnnData(z_test)
     bb_test = b_test
-    merged = ad.AnnData.concatenate(bb, bb_val, bb_test, batch_categories=['train', 'validation', 'test'])
+    merged = ad.AnnData.concatenate(
+        bb, bb_val, bb_test, batch_categories=["train", "validation", "test"]
+    )
     scanpy_compute(merged)
-    lou = merged.obs['louvain']
+    lou = merged.obs["louvain"]
 
-    train_indices = get_split_indices('train')
-    val_indices = get_split_indices('validation')
-    test_indices = get_split_indices('test')
+    train_indices = get_split_indices("train")
+    val_indices = get_split_indices("validation")
+    test_indices = get_split_indices("test")
 
-    louvain_train = lou.iloc[:len(train_indices)]
-    louvain_val = lou.iloc[len(train_indices):len(lou) - len(test_indices)]
-    louvain_test = lou.iloc[len(lou) - len(test_indices): ]
+    louvain_train = lou.iloc[: len(train_indices)]
+    louvain_val = lou.iloc[len(train_indices) : len(lou) - len(test_indices)]
+    louvain_test = lou.iloc[len(lou) - len(test_indices) :]
 
-    categories = lou.cat.categories.tolist() + ['Nein']
+    categories = lou.cat.categories.tolist() + ["Nein"]
 
     assert len(louvain_train) + len(louvain_val) + len(louvain_test) == len(lou)
-    assert all([s.endswith('-train') for s in louvain_train.index.tolist()])
-    assert all([s.endswith('-validation') for s in louvain_val.index.tolist()])
-    assert all([s.endswith('-test') for s in louvain_test.index.tolist()])
+    assert all([s.endswith("-train") for s in louvain_train.index.tolist()])
+    assert all([s.endswith("-validation") for s in louvain_val.index.tolist()])
+    assert all([s.endswith("-test") for s in louvain_test.index.tolist()])
 
-    ordered_lou = pd.Categorical(['Nein'] * len(lou), categories=categories)
+    ordered_lou = pd.Categorical(["Nein"] * len(lou), categories=categories)
 
     ordered_lou[train_indices] = louvain_train.to_numpy()
     ordered_lou[val_indices] = louvain_val.to_numpy()
     ordered_lou[test_indices] = louvain_test.to_numpy()
 
-    assert ordered_lou.value_counts()['Nein'] == 0
-    ordered_lou = ordered_lou.remove_categories('Nein')
-    lou_for_smu = ordered_lou.astype('category')
+    assert ordered_lou.value_counts()["Nein"] == 0
+    ordered_lou = ordered_lou.remove_categories("Nein")
+    lou_for_smu = ordered_lou.astype("category")
 
     s = get_smu_file(read_only=False)
-    s['visium']['processed'].obs['scvi'] = lou_for_smu
-    s['visium']['processed'].masks.obj_has_changed('obs')
+    s["visium"]["processed"].obs["scvi"] = lou_for_smu
+    s["visium"]["processed"].masks.obj_has_changed("obs")
     s.commit_changes_on_disk()
     s.backing.close()
 
@@ -213,8 +216,8 @@ if e_():
 if e_():
     s = get_smu_file(read_only=False)
     _, ax = plt.subplots(1)
-    s['visium']['image'].plot(ax=ax)
-    s['visium']['processed'].masks.plot('scvi', ax=ax)
+    s["visium"]["image"].plot(ax=ax)
+    s["visium"]["processed"].masks.plot("scvi", ax=ax)
     plt.show()
     s.backing.close()
 
@@ -224,6 +227,7 @@ if e_():
     processed_regions = s["visium"]["processed"]
     raster = s["visium"]["image"]
     import spatialmuon
+
     if "SPATIALMUON_TEST" not in os.environ:
         bb = spatialmuon.BoundingBox(x0=250, x1=1000, y0=250, y1=750)
         transformed_bb = processed_regions.anchor.transform_bounding_box(bb)
@@ -231,18 +235,31 @@ if e_():
         transformed_bb = None
 
     import matplotlib.cm
+
     _, axes = plt.subplots(1, 2, figsize=(20, 10))
 
     processed_regions.masks.plot(
         fill_colors="leiden", ax=axes[0], bounding_box=transformed_bb
     )
-    raster.plot(0, ax=axes[0], show_legend=False, bounding_box=transformed_bb, cmap=matplotlib.cm.get_cmap('gray_r'))
+    raster.plot(
+        0,
+        ax=axes[0],
+        show_legend=False,
+        bounding_box=transformed_bb,
+        cmap=matplotlib.cm.get_cmap("gray_r"),
+    )
     raster.set_lims_to_bounding_box(transformed_bb, ax=axes[0])
 
     processed_regions.masks.plot(
         fill_colors="scvi", ax=axes[1], bounding_box=transformed_bb
     )
-    raster.plot(0, ax=axes[1], show_legend=False, bounding_box=transformed_bb, cmap=matplotlib.cm.get_cmap('gray_r'))
+    raster.plot(
+        0,
+        ax=axes[1],
+        show_legend=False,
+        bounding_box=transformed_bb,
+        cmap=matplotlib.cm.get_cmap("gray_r"),
+    )
     raster.set_lims_to_bounding_box(transformed_bb, ax=axes[1])
 
     plt.show()
@@ -283,9 +300,9 @@ if e_():
         d_ad["validation"].copy(),
         d_ad["test"].copy(),
     )
-    a_train_perturbed.X[ce_train] = 0.
-    a_val_perturbed.X[ce_val] = 0.
-    a_test_perturbed.X[ce_test] = 0.
+    a_train_perturbed.X[ce_train] = 0.0
+    a_val_perturbed.X[ce_val] = 0.0
+    a_test_perturbed.X[ce_test] = 0.0
 
 ##
 if e_():
@@ -341,8 +358,8 @@ if e_():
 ##
 if e_():
     s = get_smu_file(read_only=True)
-    before = s['visium']['non_scaled'].X[...].todense().A
-    after = s['visium']['processed'].X[...]
+    before = s["visium"]["non_scaled"].X[...].todense().A
+    after = s["visium"]["processed"].X[...]
     mean = np.mean(before, axis=0)
     std = np.std(before, axis=0)
     scaled_back = np.round(after * std + mean)
@@ -351,7 +368,7 @@ if e_():
     np.abs(scaled_back - before).max()
     # the error is too big, let's scale in the other direction. It is because of max_value being not None!
 
-    std[std == 0.] = 1.
+    std[std == 0.0] = 1.0
     manually_scaled = (before - mean) / std
     max_value = 10
     manually_scaled[manually_scaled > max_value] = max_value
@@ -362,6 +379,7 @@ if e_():
         x = (x - mean) / std
         x[x > max_value] = max_value
         return x
+
     s.backing.close()
 
 ##
@@ -382,7 +400,7 @@ if e_():
         original=scale(a_val.X.A),
         corrupted_entries=ce_val,
         predictions_from_perturbed=scale(x_val_perturbed_pred),
-        name='scVI (processed)'
+        name="scVI (processed)",
     )
     scvi_predictions_scaled.plot_scores(hist=True)
     scvi_predictions_scaled.plot_summary()
@@ -391,12 +409,12 @@ if e_():
 import dill
 
 if e_():
-    f = file_path('visium/imputation_scores')
+    f = file_path("visium_mousebrain/imputation_scores")
     os.makedirs(f, exist_ok=True)
 
 ##
 if e_():
     d = {"scVI": kwargs}
-    dill.dump(d, open(file_path("visium/imputation_scores/scvi_scores.pickle"), "wb"))
+    dill.dump(d, open(file_path("visium_mousebrain/imputation_scores/scvi_scores.pickle"), "wb"))
 
 ##

@@ -375,7 +375,7 @@ class Prediction:
             plt.hist(np.array(scores), bins=50)
             plt.xlabel("score")
             plt.ylabel("count")
-            plt.yscale('log')
+            plt.yscale("log")
         else:
             plt.bar(np.arange(n_channels), np.array(scores))
             plt.xlabel("channel")
@@ -481,8 +481,13 @@ if __name__ == "__main__":
     x_perturbed = x.copy()
     eps = np.random.rand(np.sum(corrupted_entries)) / 10
     x_perturbed[corrupted_entries] = x[corrupted_entries] + eps
-    p = Prediction(original=x, corrupted_entries=corrupted_entries, predictions_from_perturbed=x_perturbed, name='test')
+    p = Prediction(
+        original=x,
+        corrupted_entries=corrupted_entries,
+        predictions_from_perturbed=x_perturbed,
+        name="test",
+    )
     p.plot_reconstruction()
     p.plot_scores()
     p.plot_summary()
-    print('ooo')
+    print("ooo")

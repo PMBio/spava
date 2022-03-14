@@ -8,7 +8,5 @@ def test_preprocess_imc_jeongbin_data():
 
 
 if __name__ == "__main__":
-    if not is_debug():
-        test_preprocess_imc_jeongbin_data()
-    else:
+    if is_debug():
         pass

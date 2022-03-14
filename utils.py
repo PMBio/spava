@@ -49,7 +49,7 @@ def get_execute_function():
                 or "SPATIALMUON_NOTEBOOK" in os.environ
                 and caller_filename.startswith("<ipython-input-")
                 or "SPATIALMUON_NOTEBOOK" in os.environ
-                and caller_filename.startswith('/tmp/ipykernel_')
+                and caller_filename.startswith("/tmp/ipykernel_")
             )
 
     return execute_

@@ -1,13 +1,10 @@
 ##
-import contextlib
 import math
 
 import pyro
 import pyro.distributions
 import pytorch_lightning as pl
 import torch
-import torch.nn.functional as F
-from torch import autograd
 from torch import nn
 
 from analyses.torch_boilerplate import (
@@ -19,54 +16,19 @@ from analyses.torch_boilerplate import (
 pl.seed_everything(1234)
 
 from utils import get_execute_function
-from datasets.imc_data import get_smu_file
+from analyses.torch_boilerplate import get_detect_anomaly_cm
 
 e_ = get_execute_function()
 
 
-class ImageSampler(pl.Callback):
-    def __init__(self):
-        super().__init__()
-        self.img_size = None
-        self.num_preds = 16
-
-    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
-        if pl_module._hparams["LOG_PER_CHANNEL_VALUES"]:
-            # this does not make sense for zinb since we should take sigmoid(log_c)
-            trainer.logger.experiment.add_scalars(
-                "c",
-                {
-                    f"channel{i}": torch.exp(pl_module.log_c[i])
-                    for i in range(len(pl_module.log_c))
-                },
-                trainer.global_step,
-            )
-        # trainer.logger.experiment.add_scalars('d', {f'channel{i}': torch.sigmoid(pl_module.logit_d[i]) for i in range(
-        #     len(
-        #         pl_module.logit_d))}, trainer.global_step)
-
-        # for dataloader_idx in [0, 1]:
-        # loader = trainer.val_dataloaders[dataloader_idx]
-        # dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
-        # trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
-        #                                     trainer.global_step)
-
-        # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
-        #                                         f'{c}/original', original_masked_c[0].flatten(),
-        #                                         trainer.global_step)
-
-
-def get_detect_anomaly_cm(DETECT_ANOMALY):
-    if DETECT_ANOMALY:
-        cm = autograd.detect_anomaly()
-    else:
-        cm = contextlib.nullcontext()
-    return cm
-
-
 class VAE(pl.LightningModule):
     def __init__(
-        self, optuna_parameters, in_channels, mask_loss: bool = None, **kwargs
+        self,
+        optuna_parameters,
+        in_channels,
+        out_channels,
+        mask_loss: bool = None,
+        **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
@@ -93,16 +55,32 @@ class VAE(pl.LightningModule):
         dims = get_dims(self.in_channels)
         ##
 
-        encoder_dims = [self.in_channels] + dims
         decoder_dims = [self.latent_dim] + list(reversed(dims))
-        print(f"encoder_dims = {encoder_dims}, decoder_dims = {decoder_dims}")
         from analyses.torch_boilerplate import get_fc_layers
 
-        self.encoder_fc = get_fc_layers(
-            dims=encoder_dims, name="encoder_fc", dropout_alpha=self.dropout_alpha
-        )
+        print(f"decoder_dims = {decoder_dims}")
+
+        # encoder stuff
+
+        # encoder image stuff
+        n = self.n_channels + 1
+        self.conv0 = nn.Conv2d(n, 2 * n, kernel_size=3)
+        self.conv1 = nn.Conv2d(2 * n, 4 * n, kernel_size=3)
+        self.conv2 = nn.Conv2d(4 * n, 4 * n, kernel_size=5)
+        m = self.conv2(self.conv1(self.conv0(torch.zeros(1, 1, n))))
+        self.linear0 = nn.Linear(m, 20)
+        self.linear1_0 = nn.Linear(20, self.latent_dim)
+        self.linear1_1 = nn.Linear(20, self.latent_dim)
+        self.bn0 = nn.BatchNorm2d(2 * n)
+        self.bn1 = nn.BatchNorm2d(4 * n)
+        self.relu = nn.ReLU()
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        # encoder expression stuff
         self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
         self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
+
+        # decoder stuff
         self.decoder_fc = get_fc_layers(
             dims=decoder_dims, name="decoder_fc", dropout_alpha=self.dropout_alpha
         )
@@ -119,10 +97,14 @@ class VAE(pl.LightningModule):
         )
 
     def encoder(self, x):
-        x = self.encoder_fc(x)
-        mean = self.encoder_mean(x)
-        log_var = self.encoder_log_var(x)
-        return mean, log_var
+        y = self.maxpool(self.relu(self.bn0(self.conv0(x))))
+        y = self.maxpool(self.relu(self.bn1(self.conv1(y))))
+        y = self.relu(self.conv2(y))
+        y = torch.flatten(y, start_dim=1)
+        y = self.relu(self.linear0(y))
+        mu = self.linear1_0(y)
+        log_var = self.linear1_1(y)
+        return mu, log_var
 
     def decoder(self, z):
         z = self.decoder_fc(z)

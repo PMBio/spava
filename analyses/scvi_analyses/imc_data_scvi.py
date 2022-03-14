@@ -122,7 +122,7 @@ if e_():
     TRAIN = False
     if not os.path.isdir(f_scvi_model):
         TRAIN = True
-    print(f'{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}')
+    print(f"{colorama.Fore.MAGENTA}TRAIN = {TRAIN}{colorama.Fore.RESET}")
     if TRAIN:
         # vae = VAE(gene_dataset.nb_genes)
         # trainer = UnsupervisedTrainer(
@@ -290,9 +290,9 @@ if e_():
         d_ad["validation"].copy(),
         d_ad["test"].copy(),
     )
-    a_train_perturbed.X[ce_train] = 0.
-    a_val_perturbed.X[ce_val] = 0.
-    a_test_perturbed.X[ce_test] = 0.
+    a_train_perturbed.X[ce_train] = 0.0
+    a_val_perturbed.X[ce_val] = 0.0
+    a_test_perturbed.X[ce_test] = 0.0
 
 ##
 if e_() and False:
@@ -313,7 +313,9 @@ if e_() and False:
             shutil.rmtree(f)
         model.save(f)
     else:
-        model = scvi.model.SCVI.load(file_path("imc/scvi_model_perturbed.scvi"), adata=a_train_perturbed)
+        model = scvi.model.SCVI.load(
+            file_path("imc/scvi_model_perturbed.scvi"), adata=a_train_perturbed
+        )
     print(model.get_elbo())
 
 ##
@@ -395,7 +397,7 @@ if e_():
 import dill
 
 if e_():
-    f = file_path('imc/imputation_scores')
+    f = file_path("imc/imputation_scores")
     os.makedirs(f, exist_ok=True)
 
 ##

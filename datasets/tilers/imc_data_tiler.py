@@ -20,10 +20,11 @@ plt.style.use("dark_background")
 
 ##
 if e_():
-    print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
-    scaling_factors = get_smu_file(split="train", index=0, read_only=True)["imc"]["transformed_mean"].uns[
-        "scaling_factors"][...]
-    d = file_path('imc/')
+    print(f"{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}")
+    scaling_factors = get_smu_file(split="train", index=0, read_only=True)["imc"][
+        "transformed_mean"
+    ].uns["scaling_factors"][...]
+    d = file_path("imc/")
     os.makedirs(d, exist_ok=True)
     f = file_path("imc/imc_tiles.hdf5")
     with h5py.File(f, "w") as f5:

@@ -161,6 +161,7 @@ def compare_predictions(p0: IMCPrediction, p1: IMCPrediction, target_space: Spac
 
 if __name__ == "__main__":
     from splits import validation
+
     x = np.random.rand(len(validation), 5)
     import torch
     from torch.distributions import Bernoulli
@@ -180,8 +181,8 @@ if __name__ == "__main__":
         corrupted_entries=corrupted_entries,
         predictions_from_perturbed=x_perturbed,
         name="test",
-        split='validation',
-        space=Space.scaled_mean
+        split="validation",
+        space=Space.scaled_mean,
     )
     p.plot_reconstruction()
     p.plot_scores()

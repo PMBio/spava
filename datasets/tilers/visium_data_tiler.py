@@ -17,13 +17,13 @@ plt.style.use("dark_background")
 
 ##
 if e_():
-    print(f'{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}')
-    d = file_path('visium_mousebrain')
+    print(f"{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}")
+    d = file_path("visium_mousebrain")
     os.makedirs(d, exist_ok=True)
     f = file_path("visium_mousebrain/tiles.hdf5")
     s = get_smu_file(read_only=True)
     tiles = smu.Tiles(
-        raster=s['visium']['image'],
+        raster=s["visium"]["image"],
         masks=s["visium"]["processed"].masks,
         tile_dim_in_pixels=32,
     )

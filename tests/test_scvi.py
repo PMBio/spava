@@ -1,4 +1,5 @@
 import os
+from tests.testing_utils import is_debug
 
 
 def test_imc_data_scvi():
@@ -12,5 +13,5 @@ def test_visium_data_scvi():
 
 
 if __name__ == "__main__":
-    test_imc_data_scvi()
-    test_visium_data_scvi()
+    if is_debug():
+        pass

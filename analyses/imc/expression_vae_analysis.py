@@ -8,7 +8,7 @@ import torch
 from tqdm.auto import tqdm
 from typing import Union
 from datasets.loaders.imc_data_loaders import get_cells_data_loader
-from analyses.vae_expression.vae_expression_model import VAE
+from models.expression_vae import VAE
 import anndata as ad
 import scanpy as sc
 from analyses.analisys_utils import compute_knn, louvain_plot
@@ -22,7 +22,7 @@ e_ = get_execute_function()
 
 ##
 if e_():
-    from analyses.vae_expression.vae_expression_model import objective, ppp
+    from analyses.imc.expression_vae_runner import objective, ppp
     from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
@@ -193,8 +193,8 @@ if e_():
 #         reconstructed_zero.append(x)
 
 ##
-# if e_():
-if True:
+if e_():
+    # if True:
     kwargs = dict(
         original=expressions_non_perturbed.cpu().numpy(),
         corrupted_entries=are_perturbed.cpu().numpy(),
@@ -223,7 +223,7 @@ if e_():
 import pickle
 
 if e_():
-    f = file_path('imc/imputation_scores')
+    f = file_path("imc/imputation_scores")
     os.makedirs(f, exist_ok=True)
 
     d = {"vanilla VAE": kwargs}

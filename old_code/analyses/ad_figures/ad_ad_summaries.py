@@ -255,7 +255,9 @@ louvain_plot(a_latent_ah, "vanilla VAE latent")
 ##
 import old_code.analyses.ab_images_vs_expression.ab_aa_expression_latent_samples
 
-importlib.reload(old_code.analyses.ab_images_vs_expression.ab_aa_expression_latent_samples)
+importlib.reload(
+    old_code.analyses.ab_images_vs_expression.ab_aa_expression_latent_samples
+)
 from old_code.analyses.ab_images_vs_expression.ab_aa_expression_latent_samples import (
     compare_clusters,
 )

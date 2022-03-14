@@ -45,7 +45,7 @@ else:
 # ppp.NOISE_MODEL = 'log_normal'
 # ppp.NOISE_MODEL = 'zi_gamma'
 # ppp.NOISE_MODEL = 'nb'
-ppp.NOISE_MODEL = 'zinb'
+ppp.NOISE_MODEL = "zinb"
 
 import contextlib
 from pprint import pprint
@@ -158,10 +158,12 @@ def objective(trial: optuna.trial.Trial) -> float:
     from models.expression_vae import ImageSampler, LogComputationalGraph
 
     val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 10
-    if 'MAX_EPOCHS' in trial.user_attrs:
-        ppp.MAX_EPOCHS = trial.user_attrs['MAX_EPOCHS']
-        print(f'{colorama.Fore.MAGENTA}found attribute in trial.user_attrs{colorama.Fore.RESET}')
-    print(f'ppp.MAX_EPOCHS = {ppp.MAX_EPOCHS}')
+    if "MAX_EPOCHS" in trial.user_attrs:
+        ppp.MAX_EPOCHS = trial.user_attrs["MAX_EPOCHS"]
+        print(
+            f"{colorama.Fore.MAGENTA}found attribute in trial.user_attrs{colorama.Fore.RESET}"
+        )
+    print(f"ppp.MAX_EPOCHS = {ppp.MAX_EPOCHS}")
     trainer, logger = training_boilerplate(
         trial=trial,
         extra_callbacks=[ImageSampler(), LogComputationalGraph()],
@@ -170,7 +172,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         val_check_interval=val_check_internal,
         model_name="visium_mousebrain_expression_vae",
         early_stopping_patience=4,
-        early_stopping_min_delta=1e-5
+        early_stopping_min_delta=1e-5,
     )
 
     # hyperparameters
@@ -178,7 +180,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    dropout_alpha = trial.suggest_float("dropout_alpah", 0., 0.2)
+    dropout_alpha = trial.suggest_float("dropout_alpah", 0.0, 0.2)
 
     # # leading to nan values
     # vae_latent_dims = 5
@@ -191,7 +193,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         vae_beta=vae_beta,
         log_c=log_c,
         learning_rate=learning_rate,
-        dropout_alpha=dropout_alpha
+        dropout_alpha=dropout_alpha,
     )
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)
@@ -222,7 +224,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     except RuntimeError as e:
         if str(e) == "manual abort":
             elbo = optuna_nan_workaround(torch.tensor(float("nan")))
-            print('manual abort')
+            print("manual abort")
             torch.cuda.empty_cache()
             return elbo
         else:
@@ -256,7 +258,9 @@ if e_() or __name__ == "__main__":
             n_trials = 100
         else:
             n_trials = 1
-        study.optimize(objective, n_trials=n_trials, timeout=4 * 3600, gc_after_trial=True)
+        study.optimize(
+            objective, n_trials=n_trials, timeout=4 * 3600, gc_after_trial=True
+        )
         print("Number of finished trials: {}".format(len(study.trials)))
         print("Best trial:")
         trial = study.best_trial

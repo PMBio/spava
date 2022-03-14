@@ -348,7 +348,10 @@ if m and BUG:
             ome_index, local_cell_index = get_ome(cell_index)
             print(f"ome_index = {ome_index}")
             data = cell_expression_ds[cell_index]
-            from old_code.data2 import ExpressionFilteredDataset, quantiles_for_normalization
+            from old_code.data2 import (
+                ExpressionFilteredDataset,
+                quantiles_for_normalization,
+            )
 
             expression_filtered_dataset = ExpressionFilteredDataset(split="validation")
             expression_for_ome = expression_filtered_dataset[ome_index]

@@ -49,7 +49,7 @@ PROCESSED_FOLDER = file_path("spatialmuon_processed/imc")
 
 def get_split(split):
     assert split in ["train", "validation", "test"]
-    ii = slice(0, 1) if 'SPATIALMUON_TEST' in os.environ else slice(None)
+    ii = slice(0, 1) if "SPATIALMUON_TEST" in os.environ else slice(None)
     if split == "train":
         return splits.train[ii]
     elif split == "validation":
@@ -67,7 +67,7 @@ def get_smu_file(split, index, read_only: bool, raw=False):
     f = l[index]
     ff = os.path.join(spatialmuon_files_dir, f)
     ff = ff.replace(".tiff", ".h5smu")
-    backingmode = 'r+' if not read_only else 'r'
+    backingmode = "r+" if not read_only else "r"
     d = smu.SpatialMuData(backing=ff, backingmode=backingmode)
     return d
 
@@ -159,6 +159,7 @@ def all_processed_smu():
 def all_raw_smu():
     return u(raw=True, read_only=False)
 
+
 ##
 if e_():
     print(
@@ -181,7 +182,7 @@ if e_():
     print(f"{colorama.Fore.MAGENTA}feature accumulation:{colorama.Fore.RESET}")
     for s in all_processed_smu():
         accumulated = s["imc"]["ome"].accumulate_features(s["imc"]["masks"].masks)
-        for k in ['mean', 'sum']:
+        for k in ["mean", "sum"]:
             if k in s["imc"]:
                 del s["imc"][k]
             s["imc"][k] = accumulated[k]
@@ -247,7 +248,7 @@ if e_():
 
         old_masks = s["imc"]["masks"]
         old_mean = s["imc"]["mean"]
-        old_sum = s['imc']['sum']
+        old_sum = s["imc"]["sum"]
         new_masks = new_regions_obj(old_masks)
         new_mean = new_regions_obj(old_mean)
         new_sum = new_regions_obj(old_sum)
@@ -309,10 +310,12 @@ if e_():
 ##
 if e_():
     assert np.alltrue(
-        get_smu_file(split="train", index=0, read_only=True)["imc"]["transformed_mean"].uns["scaling_factors"][...]
-        == get_smu_file(split="validation", index=0, read_only=True)["imc"]["transformed_mean"].uns["scaling_factors"][
-            ...
-        ]
+        get_smu_file(split="train", index=0, read_only=True)["imc"][
+            "transformed_mean"
+        ].uns["scaling_factors"][...]
+        == get_smu_file(split="validation", index=0, read_only=True)["imc"][
+            "transformed_mean"
+        ].uns["scaling_factors"][...]
     )
 
 ##
