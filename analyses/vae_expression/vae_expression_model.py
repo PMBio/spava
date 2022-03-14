@@ -166,7 +166,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
     log_c = trial.suggest_float("log_c", -3, 3)
     learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    dropout_alpha = trial.suggest_float("dropout_alpah", 0., 0.2)
+    dropout_alpha = trial.suggest_float("dropout_alpha", 0., 0.2)
 
     # # leading to nan values
     # vae_latent_dims = 5

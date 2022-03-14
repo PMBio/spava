@@ -32,10 +32,10 @@ def test_analyze_expression_model():
 if __name__ == "__main__":
     if not is_debug():
         test_preprocess_imc_data()
-        test_preprocess_imc_data_graphs()
         test_preprocess_imc_data_tiler()
-        test_train_vae_expression()
+        test_preprocess_imc_data_graphs()
         test_imc_data_loaders()
+        test_train_vae_expression()
         test_analyze_expression_model()
     else:
-        test_preprocess_imc_data()
+        pass
