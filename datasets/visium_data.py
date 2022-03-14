@@ -68,7 +68,7 @@ def get_split_indices(split):
             np.array(reproducible_random_choice(len(remaining), ns[1]))
         ].tolist()
     )
-    test_indices = list(set(remaining).difference(validation_indices))
+    test_indices = sorted(list(set(remaining).difference(validation_indices)))
     assert len(set(train_indices) | set(validation_indices) | set(test_indices)) == n
     indices = {
         "train": train_indices,

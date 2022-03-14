@@ -111,6 +111,8 @@ class Prediction:
         # y = y[zeros[all_index] == 0]
         #
         q = 0.9
+        if len(imputed) == 0:
+            return imputed, original, None
         cutoff = np.quantile(original, q) * 1.5
         # cutoff = max(original.max(), imputed.max())
 
@@ -153,6 +155,8 @@ class Prediction:
 
     @staticmethod
     def plot_imputation(imputed, original, ax):  # , zeros, i, j, ix, xtext):
+        if len(imputed) == 0:
+            return
         try:
             imputed, original, cutoff = Prediction.crop(imputed, original)
         except ValueError as e:
@@ -201,6 +205,8 @@ class Prediction:
 
     @staticmethod
     def plot_imputation2(imputed, original, ax):
+        if len(imputed) == 0:
+            return
         try:
             imputed, original, cutoff = Prediction.crop(imputed, original)
         except ValueError as e:
