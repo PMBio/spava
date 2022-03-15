@@ -1,4 +1,4 @@
-name: IMC tiler
+name: IMC PCA tiler
 on: 
   workflow_dispatch
 jobs:
