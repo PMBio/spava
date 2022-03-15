@@ -6,6 +6,7 @@
 # Tests
 | name | type |
 |-------------|---------|
+| [![Setup test data](https://github.com/PMBio/a/actions/workflows/setup_test_data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_test_data.yaml) | on demand |
 |[![Run tests](https://github.com/PMBio/a/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests.yaml)| on push |
 
 # Analyses
@@ -18,6 +19,8 @@
 | [![Loaders](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_loaders.yaml)                                                                                                                         | on demand |
 | `Train expression VAE`                                                                                                         <br/>                                                                                                                                         | no workflow |
 | [![Analyze expression VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_vae.yaml) | on demand |
+| `Train image expression VAE`                                                                                                         <br/>                                                                                                                                         | no workflow |
+| [![Analyze image expression VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_vae.yaml) | on demand |
 
 ## IMC Jeongbin dataset
 | name | type |
