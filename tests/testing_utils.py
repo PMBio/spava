@@ -6,3 +6,4 @@ def is_debug():
         return True
     else:
         return False
+

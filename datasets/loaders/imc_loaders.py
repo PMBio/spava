@@ -99,6 +99,7 @@ class CellsDataset(Dataset):
         raster *= np.logical_not(is_corrupted)
         mask = self.f5[f"{self.split}/{filename}/masks"][j, ...]
         expression = self.recompute_expression(raster, mask)
+        raster = np.arcsinh(raster) / self.scaling_factors
         return raster, mask, expression, is_corrupted
 
 
@@ -109,14 +110,14 @@ if e_():
 
 
 ##
-def get_cells_data_loader(split, batch_size, perturb=False):
+def get_cells_data_loader(split, batch_size, perturb=False, num_workers=10):
     ds = CellsDataset(split)
     if perturb:
         ds.perturb()
     loader = DataLoader(
         ds,
         batch_size=batch_size,
-        num_workers=16,
+        num_workers=num_workers,
     )
     return loader
 

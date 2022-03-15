@@ -12,6 +12,13 @@ from analyses.torch_boilerplate import (
 )
 
 from models.expression_vae import VAE
+from utils import file_path, get_execute_function
+from datasets.visium_mousebrain import get_smu_file
+e_ = get_execute_function()
+
+s = get_smu_file(read_only=True)
+n_channels = len(s["visium"]["processed"].var)
+s.backing.close()
 
 
 class Ppp:
@@ -66,15 +73,6 @@ import copy
 from datasets.loaders.visium_mousebrain_loaders import CellsDataset
 
 pl.seed_everything(1234)
-
-from utils import file_path, get_execute_function
-from datasets.visium_mousebrain import get_smu_file
-
-s = get_smu_file(read_only=True)
-n_channels = len(s["visium"]["processed"].var)
-s.backing.close()
-
-e_ = get_execute_function()
 
 
 def get_loaders(
@@ -234,15 +232,15 @@ def objective(trial: optuna.trial.Trial) -> float:
 if e_() or __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "visium_mousebrain_expression"
-    if study_name == "visium_mousebrain_expression_perturbed":
+    study_name = "visium_mousebrain_expression_vae"
+    if study_name == "visium_mousebrain_expression_vae_perturbed":
         ppp.PERTURB = True
-    elif study_name == "visium_mousebrain_expression":
+    elif study_name == "visium_mousebrain_expression_vae":
         ppp.PERTURB = False
     else:
         raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
-    storage = "sqlite:///" + file_path("optuna_visium_mousebrain_expression.sqlite")
+    storage = "sqlite:///" + file_path("optuna_visium_mousebrain_expression_vae.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",

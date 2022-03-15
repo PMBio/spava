@@ -8,29 +8,64 @@ import torch
 from tqdm.auto import tqdm
 from typing import Union
 from datasets.loaders.imc_loaders import get_cells_data_loader
-from models.expression_vae import VAE
 import anndata as ad
 import scanpy as sc
 from analyses.analisys_utils import compute_knn, louvain_plot
 from datasets.imc_transform_utils import IMCPrediction, Space
+import colorama
 
 import os
 from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
-# os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
+# os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
+os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/imc/expression_vae_analysis.py"
 
+if "SPATIALMUON_FLAGS" in os.environ:
+    SPATIALMUON_FLAGS = os.environ["SPATIALMUON_FLAGS"]
+else:
+    # SPATIALMUON_FLAGS = "expression_vae"
+    SPATIALMUON_FLAGS = "image_expression_vae"
+
+print(f'{colorama.Fore.MAGENTA}SPATIALMUON_FLAGS = {SPATIALMUON_FLAGS}{colorama.Fore.RESET}')
+
+
+def is_expression_vae():
+    return SPATIALMUON_FLAGS == "expression_vae"
+
+
+def is_image_expression_vae():
+    return SPATIALMUON_FLAGS == "image_expression_vae"
+
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
+assert np.sum([is_expression_vae(), is_image_expression_vae()]) == 1
+if is_expression_vae():
+    MODEL_NAME = 'expression_vae'
+elif is_image_expression_vae():
+    MODEL_NAME = 'image_expression_vae'
+else:
+    assert False
+##
+if is_expression_vae():
+    from models.expression_vae import VAE
+elif is_image_expression_vae():
+    from models.image_expression_vae import VAE
+else:
+    assert False
 ##
 if e_():
     from analyses.imc.expression_vae_runner import objective, ppp
     from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "vae_expression"
-    ppp.PERTURB = True
+    study_name = f"imc_{MODEL_NAME}"
+
+    # ppp.PERTURB = True
     study = optuna.load_study(
         study_name=study_name,
-        storage="sqlite:///" + file_path("optuna_vae_expression.sqlite"),
+        storage="sqlite:///" + file_path(f"optuna_{study_name}.sqlite"),
     )
     print("best trial:")
     print(study.best_trial)
@@ -43,6 +78,12 @@ if e_():
             sys.exit(0)
         else:
             # manually update version from the just trained perturbed model
+            if is_expression_vae():
+                pass
+            elif is_image_expression_vae():
+                pass
+            else:
+                assert False
             version = -1
     else:
         version = study.best_trial.user_attrs["version"]
@@ -50,8 +91,16 @@ if e_():
 ##
 if e_():
     SPLIT = "validation"
-    loader_non_perturbed = get_cells_data_loader(split=SPLIT, batch_size=1024)
-    loader_perturbed = get_cells_data_loader(split=SPLIT, batch_size=1024, perturb=True)
+    if is_expression_vae():
+        batch_size = 1024
+        num_workers = 10
+    elif is_image_expression_vae():
+        batch_size = 128
+        num_workers = 10
+    else:
+        assert False
+    loader_non_perturbed = get_cells_data_loader(split=SPLIT, batch_size=batch_size, num_workers=num_workers)
+    loader_perturbed = get_cells_data_loader(split=SPLIT, batch_size=batch_size, perturb=True, num_workers=num_workers)
 
 ##
 if e_():
@@ -64,7 +113,7 @@ if e_():
 ##
 if e_():
     MODEL_CHECKPOINT = file_path(
-        f"checkpoints/expression_vae/version_{version}/checkpoints/last.ckpt"
+        f"checkpoints/{study_name}/version_{version}/checkpoints/last.ckpt"
     )
 #
 def precompute(loader, expression_model_checkpoint, random_indices):
@@ -72,11 +121,17 @@ def precompute(loader, expression_model_checkpoint, random_indices):
     print("merging expressions and computing embeddings... ", end="")
     all_mu = []
     all_expression = []
-    for data in tqdm(loader, desc="embedding expression"):
-        raster, mask, expression, is_corrupted = data
-        a, b, mu, std, z = expression_vae(expression)
-        all_mu.append(mu)
-        all_expression.append(expression)
+    for data in tqdm(loader, 'embedding'):
+        if is_expression_vae():
+            raster, mask, expression, is_corrupted = data
+            a, b, mu, std, z = expression_vae(expression)
+        elif is_image_expression_vae():
+            image_input, expression, is_corrupted = expression_vae.unfold_batch(data)
+            a, b, mu, std, z = expression_vae(image_input)
+        else:
+            assert False
+        all_mu.append(mu.detach())
+        all_expression.append(expression.detach())
     mus = torch.cat(all_mu, dim=0)
     expressions = torch.cat(all_expression, dim=0)
     print("done")
@@ -122,25 +177,7 @@ if e_():
 
 ##
 if e_():
-    data = loader_non_perturbed.__iter__().__next__()
-    data_non_perturbed = loader_non_perturbed.__iter__().__next__()
-    i0, i1 = torch.where(data[-1] == 1)
-    # perturbed data are zero, non perturbed data are ok
-    print(data[0][i0, i1])
-    print(data_non_perturbed[0][i0, i1])
-    # just a hash
-    h = np.sum(
-        np.concatenate(np.where(loader_perturbed.dataset.corrupted_entries == 1))
-    )
-    print(
-        "corrupted entries hash:",
-        h,
-    )
-
-##
-if e_():
     expression_vae = VAE.load_from_checkpoint(MODEL_CHECKPOINT)
-
     debug_i = 0
     print("merging expressions and computing embeddings... ", end="")
     all_mu = []
@@ -154,13 +191,20 @@ if e_():
         desc="embedding expression",
         total=len(loader_perturbed),
     ):
-        _, _, expression, is_perturbed = data
-        _, _, expression_non_perturbed, _ = data_non_perturbed
-        a, b, mu, std, z = expression_vae(expression)
-        all_mu.append(mu)
+        if is_expression_vae():
+            _, _, expression, is_perturbed = data
+            _, _, expression_non_perturbed, _ = data_non_perturbed
+            a, b, mu, std, z = expression_vae(expression)
+        elif is_image_expression_vae():
+            image_input, expression, is_perturbed = expression_vae.unfold_batch(data)
+            _, expression_non_perturbed, _ = expression_vae.unfold_batch(data_non_perturbed)
+            a, b, mu, std, z = expression_vae(image_input)
+        else:
+            assert False
+        all_mu.append(mu.detach().numpy())
         all_expression.append(expression)
-        all_a.append(a)
-        all_b.append(b)
+        all_a.append(a.detach().numpy())
+        all_b.append(b.detach().numpy())
         all_is_perturbed.append(is_perturbed)
         all_expression_non_perturbed.append(expression_non_perturbed)
         if debug_i < 5:
@@ -172,13 +216,13 @@ if e_():
             assert torch.all(expression[j0, j1] == expression_non_perturbed[j0, j1])
         debug_i += 1
 
-    mus = torch.cat(all_mu, dim=0)
-    expressions = torch.cat(all_expression, dim=0)
-    expressions_non_perturbed = torch.cat(all_expression_non_perturbed, dim=0)
-    a_s = torch.cat(all_a, dim=0)
-    b_s = torch.cat(all_b, dim=0)
-    are_perturbed = torch.cat(all_is_perturbed, dim=0)
-    reconstructed = expression_vae.expected_value(a_s, b_s)
+    mus = np.concatenate(all_mu, axis=0)
+    expressions = np.concatenate(all_expression, axis=0)
+    expressions_non_perturbed = np.concatenate(all_expression_non_perturbed, axis=0)
+    a_s = np.concatenate(all_a, axis=0)
+    b_s = np.concatenate(all_b, axis=0)
+    are_perturbed = np.concatenate(all_is_perturbed, axis=0)
+    reconstructed = expression_vae.expected_value(torch.tensor(a_s), torch.tensor(b_s)).numpy()
 
 ##
 # if m:
@@ -196,11 +240,11 @@ if e_():
 if e_():
     # if True:
     kwargs = dict(
-        original=expressions_non_perturbed.cpu().numpy(),
-        corrupted_entries=are_perturbed.cpu().numpy(),
-        predictions_from_perturbed=reconstructed.detach().cpu().numpy(),
+        original=expressions_non_perturbed,
+        corrupted_entries=are_perturbed,
+        predictions_from_perturbed=reconstructed,
         space=Space.scaled_mean.value,
-        name="expression vae",
+        name=f"{MODEL_NAME} expression vae",
         split="validation",
     )
     vae_predictions = IMCPrediction(**kwargs)
@@ -215,7 +259,7 @@ if e_():
 if e_():
     # this seems to be broken
     p = vae_predictions.transform_to(Space.raw_sum)
-    p.name = "expression vae raw"
+    p.name = f"{MODEL_NAME} expression vae raw"
     p.plot_reconstruction()
     # p.plot_scores()
 
@@ -227,4 +271,4 @@ if e_():
     os.makedirs(f, exist_ok=True)
 
     d = {"vanilla VAE": kwargs}
-    pickle.dump(d, open(file_path("imc/imputation_scores/expression_vae.pickle"), "wb"))
+    pickle.dump(d, open(file_path(f"imc/imputation_scores/expression_vae_{MODEL_NAME}.pickle"), "wb"))

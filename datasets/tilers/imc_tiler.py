@@ -38,14 +38,9 @@ if e_():
                 filename = os.path.basename(s.backing.filename)
                 raster = s["imc"]["ome"]
                 x = raster.X[...]
-                new_x = np.arcsinh(x) / scaling_factors
-                new_x = new_x.astype(np.float32)
-                transformed_raster = smu.Raster(
-                    X=new_x, var=raster.var, coordinate_unit="um"
-                )
                 ##
                 tiles = smu.Tiles(
-                    raster=transformed_raster,
+                    raster=raster,
                     masks=s["imc"]["masks"].masks,
                     tile_dim_in_pixels=32,
                 )

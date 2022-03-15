@@ -1,4 +1,5 @@
 ##
+import sklearn.preprocessing
 import spatialmuon as smu
 
 import random
@@ -349,6 +350,96 @@ def get_merged_areas_per_split():
 
 if e_():
     areas_per_split = get_merged_areas_per_split()
+
+##
+print(f"{colorama.Fore.MAGENTA}preprocessing images for conv nets{colorama.Fore.RESET}")
+# if True:
+if e_():
+    from splits import train, validation, test
+
+    all_x = []
+    for i in tqdm(range(len(train)), desc='merging expressions'):
+        s = get_smu_file('train', i, read_only=True)
+        x = s['imc']['transformed_mean'].X[...]
+        all_x.append(x)
+        s.backing.close()
+    merged_x = np.concatenate(all_x, axis=0)
+    ##
+    from sklearn.decomposition import PCA
+    reducer = PCA(n_components=x.shape[1])
+    pca_fit = reducer.fit(merged_x)
+    ##
+    pc = np.arange(reducer.n_components_) + 1
+    plt.figure()
+    plt.plot(pc, reducer.explained_variance_ratio_, 'o-', linewidth=2)
+    plt.title(f'Scree Plot')
+    plt.xlabel('Principal Component')
+    plt.ylabel('Variance Explained')
+    plt.show()
+    ##
+    s = get_smu_file('train', 0, read_only=True)
+    scaling_factors = s['imc']['transformed_mean'].uns['scaling_factors'][...]
+    s.backing.close()
+    ##
+    import sklearn.preprocessing
+    scaler = sklearn.preprocessing.StandardScaler()
+    n = 6
+    # d = {'train': train[:5]}
+    d = {'train': train, 'validation': validation, 'test': test}
+    for k, v in tqdm(d.items(), desc='split', position=0, leave=True):
+        for i in tqdm(range(len(v)), desc='computing pca', position=0, leave=True):
+            s = get_smu_file(k, i, read_only=False)
+            ome = s['imc']['ome'].X[...]
+            ome = np.arcsinh(ome)
+            ome /= scaling_factors
+            reshaped = ome.reshape(-1, len(scaling_factors))
+            components = reducer.transform(reshaped)[:, :n]
+            scaler.partial_fit(components)
+            ome_pc = components.reshape(ome.shape[0], ome.shape[1], n)
+            if 'ome_pc' in s['imc']:
+                del s['imc']['ome_pc']
+            s['imc']['ome_pc'] = smu.Raster(X=ome_pc, anchor=s['imc']['ome'].anchor)
+            s.backing.close()
+
+    print(f'scaler.mean_ = {scaler.mean_}, scaler.var_ = {scaler.var_}')
+    ##
+    minimum = np.array([sys.float_info.max] * n)
+    maximum = np.array([sys.float_info.min] * n)
+    for k, v in tqdm(d.items(), desc='split', position=0, leave=True):
+        for i in tqdm(range(len(v)), desc='standardization', position=0, leave=True):
+            s = get_smu_file(k, i, read_only=False)
+            x = s['imc']['ome_pc'].X
+            x = (x - scaler.mean_) / np.sqrt(scaler.var_)
+            a = np.amin(x, axis=(0, 1))
+            b = np.amax(x, axis=(0, 1))
+            minimum = np.minimum(minimum, a)
+            maximum = np.maximum(maximum, b)
+            s['imc']['ome_pc'].X = x
+            s.commit_changes_on_disk()
+            s.backing.close()
+    ##
+    assert np.all(maximum - minimum > 1e-3)
+    ##
+    for k, v in tqdm(d.items(), desc='split', position=0, leave=True):
+        for i in tqdm(range(len(v)), desc='affine transform to [0, 1]', position=0, leave=True):
+            s = get_smu_file(k, i, read_only=False)
+            x = s['imc']['ome_pc'].X
+            x = (x - minimum) / (maximum - minimum)
+            s['imc']['ome_pc'].X = x
+            s.commit_changes_on_disk()
+            s.backing.close()
+    ##
+    s = get_smu_file('train', 0, read_only=True)
+    x = s['imc']['ome_pc'].X[...]
+    assert np.min(x) >= 0.
+    assert np.max(x) <= 1.
+    _, axes = plt.subplots(2, 1)
+    channels = slice(0, 3)
+    axes[0].imshow(x[:, :, channels])
+    axes[1].hist(x[:, :, channels].flatten(), bins=50)
+    plt.show()
+    s.backing.close()
+
 ##
 
 print("done")

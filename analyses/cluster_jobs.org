@@ -6,8 +6,9 @@ interactive
 ** copy data
 ssh l989o@odcf-worker01.dkfz.de "mkdir -p /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/"
 rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/spatialmuon_processed/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/spatialmuon_processed/
-rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc/
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/imc/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/imc/
 rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/visium_mousebrain/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/visium_mousebrain/
+rsync -avh /data/l989o/data/basel_zurich/spatial_uzh_processed/a/optuna_* l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/
 ** copy code
 # the wiki says to put the code on the home folder
 *** spatialmuon
@@ -17,6 +18,9 @@ ssh l989o@odcf-worker01.dkfz.de "mkdir -p /dkfz/cluster/gpu/data/OE0540/l989o/co
 rsync -avh --stats --exclude=.git --exclude=.idea --exclude=__pycache__ /data/l989o/deployed/a/ l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/code/a/
 ssh l989o@odcf-worker01.dkfz.de "rm /dkfz/cluster/gpu/data/OE0540/l989o/code/a/data"
 ssh l989o@odcf-worker01.dkfz.de "ln -s /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/ /dkfz/cluster/gpu/data/OE0540/l989o/code/a/data"
+** transfer optuna data and setup checkpoint folder
+ssh l989o@odcf-worker01.dkfz.de "rm /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/checkpoints"
+ssh l989o@odcf-worker01.dkfz.de "ln -s /dkfz/cluster/gpu/checkpoints/OE0540/l989o/a/ /dkfz/cluster/gpu/data/OE0540/l989o/raw/spatial_uzh/spatial_uzh_processed/a/checkpoints"
 * conda
 cd /dkfz/cluster/gpu/data/OE0540/l989o/code/a/tests
 bash setup_env.sh
@@ -25,5 +29,3 @@ rsync -avh l989o@odcf-worker01.dkfz.de:/dkfz/cluster/gpu/data/OE0540/l989o/raw/s
 * run the job
 # relevant queues: gpu, gpu-short
 bsub -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10.7G -L /bin/bash -q gpu-short bash /dkfz/cluster/gpu/data/OE0540/l989o/code/a/cluster/gpu_cluster_runner.sh
-* TODO setup checkpoint folder
- /dkfz/cluster/gpu/checkpoints/OE0540/l989o

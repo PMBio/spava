@@ -177,6 +177,25 @@ def get_fc_layers(dims: List[int], name: str, dropout_alpha: float):
         )
     )
 
+def get_conv_layers(dims: List[int], kernel_sizes: List[int], name: str):
+    assert len(dims) == len(kernel_sizes) + 1
+    return nn.Sequential(
+        OrderedDict(
+            [
+                (
+                    f'{name}_layer{i}',
+                    nn.Sequential(
+                        nn.Conv2d(n_in, n_out, kernel_size=ks),
+                        nn.BatchNorm2d(n_out),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=3, stride=2)
+                    )
+                )
+                for i, (n_in, n_out, ks) in enumerate(zip(dims[:-1], dims[1:], kernel_sizes))
+            ]
+        )
+    )
+
 
 # dist = Gamma(10, 10)
 # dist = ZeroInflatedGamma(10, 10, gate=torch.tensor([0.1]))

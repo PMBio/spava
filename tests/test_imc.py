@@ -22,14 +22,30 @@ def test_imc_loaders():
     import datasets.loaders.imc_loaders
 
 
-def test_train_vae_expression():
+def test_train_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_runner.py"
     import analyses.imc.expression_vae_runner
 
 
-def test_analyze_expression_model():
+def test_analyze_vae_expression_vae_model():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
+    os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
     import analyses.imc.expression_vae_analysis
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_train_image_expression_vae():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/image_expression_vae_runner.py"
+    import analyses.imc.image_expression_vae_runner
+
+
+def test_analyze_image_expression_vae_model():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
+    os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
+    import analyses.imc.expression_vae_analysis
+
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
 if __name__ == "__main__":

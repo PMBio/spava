@@ -7,20 +7,35 @@ import re
 import subprocess
 import shlex
 import pathlib
+import json
 
 from utils import file_path
 
-assert len(sys.argv) == 3
+assert len(sys.argv) in 3
+# assert len(sys.argv) in [3, 4]
 f = sys.argv[1]
 print(f)
 env_name = sys.argv[2]
+# if len(sys.argv) == 4:
+#     flags = sys.argv[3]
+# else:
+#     flags = None
 import os
-
-os.environ["SPATIALMUON_NOTEBOOK"] = f
+#
+# os.environ["SPATIALMUON_NOTEBOOK"] = f
+# if flags is not None:
+#     os.environ['SPATIALMUON_FLAGS'] = flags
 
 with tempfile.TemporaryDirectory() as tempdir:
     assert os.path.isfile(f)
-    dest_file = os.path.join(tempdir, os.path.basename(f))
+    basename = os.path.basename(f)
+    assert basename.endswith('.py')
+    basename = basename[:len('.py')]
+    if 'SPATIALMUON_FLAGS' in os.environ:
+        basename += f'_{os.environ["SPATIALMUON_FLAGS"]}'
+    basename += '.py'
+
+    dest_file = os.path.join(tempdir, basename)
     shutil.copyfile(f, dest_file)
     with open(dest_file, "r") as fp:
         s = fp.read()

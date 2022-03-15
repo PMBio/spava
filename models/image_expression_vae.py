@@ -52,35 +52,23 @@ class VAE(pl.LightningModule):
                 dims.append(min(d, max_d))
             return dims
 
-        dims = get_dims(self.in_channels)
-        ##
-
-        decoder_dims = [self.latent_dim] + list(reversed(dims))
-        from analyses.torch_boilerplate import get_fc_layers
-
-        print(f"decoder_dims = {decoder_dims}")
+        from analyses.torch_boilerplate import get_fc_layers, get_conv_layers
 
         # encoder stuff
+        n = self.in_channels + 1
+        dims = [n, 2 * n, 4 * n, 4 * n]
+        self.conv_encoder = get_conv_layers(dims=dims, kernel_sizes=[5, 3, 3], name='conv_encoder')
+        m = self.conv_encoder(torch.zeros(1, n, 32, 32))
+        d = 20
+        self.encoder_fc = get_fc_layers(dims=[m.numel(), d], name='encoder_fc', dropout_alpha=self.dropout_alpha)
 
-        # encoder image stuff
-        n = self.n_channels + 1
-        self.conv0 = nn.Conv2d(n, 2 * n, kernel_size=3)
-        self.conv1 = nn.Conv2d(2 * n, 4 * n, kernel_size=3)
-        self.conv2 = nn.Conv2d(4 * n, 4 * n, kernel_size=5)
-        m = self.conv2(self.conv1(self.conv0(torch.zeros(1, 1, n))))
-        self.linear0 = nn.Linear(m, 20)
-        self.linear1_0 = nn.Linear(20, self.latent_dim)
-        self.linear1_1 = nn.Linear(20, self.latent_dim)
-        self.bn0 = nn.BatchNorm2d(2 * n)
-        self.bn1 = nn.BatchNorm2d(4 * n)
-        self.relu = nn.ReLU()
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        # encoder expression stuff
-        self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
-        self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
+        self.encoder_mean = nn.Linear(d, self.latent_dim)
+        self.encoder_log_var = nn.Linear(d, self.latent_dim)
 
         # decoder stuff
+        dims = get_dims(self.in_channels)
+        decoder_dims = [self.latent_dim] + list(reversed(dims))
+        print(f"decoder_dims = {decoder_dims}")
         self.decoder_fc = get_fc_layers(
             dims=decoder_dims, name="decoder_fc", dropout_alpha=self.dropout_alpha
         )
@@ -97,13 +85,11 @@ class VAE(pl.LightningModule):
         )
 
     def encoder(self, x):
-        y = self.maxpool(self.relu(self.bn0(self.conv0(x))))
-        y = self.maxpool(self.relu(self.bn1(self.conv1(y))))
-        y = self.relu(self.conv2(y))
-        y = torch.flatten(y, start_dim=1)
-        y = self.relu(self.linear0(y))
-        mu = self.linear1_0(y)
-        log_var = self.linear1_1(y)
+        x = self.conv_encoder(x)
+        x = torch.flatten(x, start_dim=1)
+        x = self.encoder_fc(x)
+        mu = self.encoder_mean(x)
+        log_var = self.encoder_log_var(x)
         return mu, log_var
 
     def decoder(self, z):
@@ -298,12 +284,18 @@ class VAE(pl.LightningModule):
             # print('so far so good')
             return a, b, mu, std, z
 
+    def unfold_batch(self, batch):
+        raster, mask, expression, is_corrupted = batch
+        assert len(expression.shape) == 2
+        image_input = torch.cat((raster, mask), dim=-1)
+        image_input = image_input.permute((0, 3, 1, 2))
+        return image_input, expression, is_corrupted
+
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        expression, is_corrupted = batch
-        assert len(expression.shape) == 2
-        # encode x to get the mu and variance parameters
-        a, b, mu, std, z = self.forward(expression)
+        image_input, expression, is_corrupted = self.unfold_batch(batch)
+
+        a, b, mu, std, z = self.forward(image_input)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
@@ -326,9 +318,9 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        expression, is_corrupted = batch
-        assert len(expression.shape) == 2
-        a, b, mu, std, z = self.forward(expression)
+        image_input, expression, is_corrupted = self.unfold_batch(batch)
+
+        a, b, mu, std, z = self.forward(image_input)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
