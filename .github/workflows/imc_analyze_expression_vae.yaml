@@ -9,5 +9,5 @@ jobs:
       - run: |
           source ~/.bashrc
           export SPATIALMUON_FLAGS="expression_vae"
-          python notebook_exporter.py analyses/imc/expression_vae_runner.py ci_env
+          python notebook_exporter.py analyses/imc/expression_vae_analysis.py ci_env
           unset SPATIALMUON_FLAGS
