@@ -11,6 +11,9 @@ jobs:
           
           conda activate ci_env
           python -m tests.setup_test_data
+          conda deactivate
+          
+          conda activate ci_env
           python -m pytest tests/test_imc.py 
           python -m pytest tests/test_imc_jeongbin.py
           python -m pytest tests/test_visium_mousebrain.py

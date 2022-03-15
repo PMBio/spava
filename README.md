@@ -6,7 +6,6 @@
 # Tests
 | name | type |
 |-------------|---------|
-| [![Setup test data](https://github.com/PMBio/a/actions/workflows/setup_test_data.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/setup_test_data.yaml) | on demand |
 |[![Run tests](https://github.com/PMBio/a/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests.yaml)| on push |
 
 # Analyses
