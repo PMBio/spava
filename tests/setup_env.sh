@@ -16,4 +16,4 @@ pushd .
 cd ../../spatialmuon
 python setup.py develop
 popd
-pip install matplotlib-scalebar louvain
+pip install matplotlib-scalebar louvain pytest-randomly
