@@ -1,0 +1,12 @@
+name: Setup test data
+on:
+  workflow_dispatch
+jobs:
+  test-envs:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: | 
+          source ~/.bashrc
+          conda activate ci_env
+          python -m tests.setup_test_data

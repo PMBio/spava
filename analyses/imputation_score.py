@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import t as t_dist
 from tqdm.auto import tqdm
+import warnings
 
 
 class Prediction:
@@ -190,14 +191,26 @@ class Prediction:
             raise e
         except np.linalg.LinAlgError as e:
             if e.args == ("singular matrix",):
-                print("warning: singular matrix when calling kde.gaussian_kde()")
+                warnings.warn("singular matrix when calling kde.gaussian_kde()")
+                return
+            elif str(e) == '2-th leading minor of the array is not positive definite':
+                warnings.warn(str(e))
                 return
             else:
+                print(str(e))
                 raise e
         xi, yi = np.mgrid[0 : cutoff : nbins * 1j, 0 : cutoff : nbins * 1j]
 
         start = time.time()
-        zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+        try:
+            zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+        except np.linalg.LinAlgError as e:
+            if str(e) == "Matrix is not positive definite":
+                warnings.warn(str(e))
+                return
+            else:
+                print(str(e))
+                raise e
         # print(f"evaluating the kernel on the mesh: {time.time() - start}")
 
         ax.pcolormesh(yi, xi, zi.reshape(xi.shape), cmap="Reds", shading="gouraud")

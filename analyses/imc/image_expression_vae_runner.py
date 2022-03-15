@@ -184,12 +184,18 @@ def objective(trial: optuna.trial.Trial) -> float:
     )
 
     # hyperparameters
-    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
-    vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
-    log_c = trial.suggest_float("log_c", -3, 3)
-    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    dropout_alpha = trial.suggest_float("dropout_alpha", 0.0, 0.2)
-
+    if 'SPATIALMUON_TEST' not in os.environ:
+        vae_latent_dims = trial.suggest_int("vae_latent_dims", 5, 10)
+        vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
+        log_c = trial.suggest_float("log_c", -3, 3)
+        learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
+        dropout_alpha = trial.suggest_float("dropout_alpha", 0.0, 0.2)
+    else:
+        vae_latent_dims = 8
+        vae_beta = 0.0024083933418794995
+        log_c = 1.0933988249091398
+        learning_rate = 1.4318526389739989e-06
+        dropout_alpha = 0.199187922039097
     # # leading to nan values
     # vae_latent_dims = 5
     # vae_beta = 1.231490907826831e-7

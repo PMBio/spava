@@ -28,10 +28,10 @@ if e_():
     from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "visium_mousebrain_expression"
+    study_name = "visium_mousebrain_expression_vae"
     study = optuna.load_study(
         study_name=study_name,
-        storage="sqlite:///" + file_path("optuna_visium_mousebrain_expression.sqlite"),
+        storage="sqlite:///" + file_path("optuna_visium_mousebrain_expression_vae.sqlite"),
     )
     print("best trial:")
     print(study.best_trial)

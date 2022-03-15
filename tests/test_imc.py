@@ -1,4 +1,5 @@
 import os
+import importlib
 from tests.testing_utils import is_debug
 
 
@@ -42,12 +43,16 @@ def test_train_image_expression_vae():
 
 def test_analyze_image_expression_vae_model():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
+    os.environ["SPATIALMUON_FLAGS"] = "image_expression_vae"
     import analyses.imc.expression_vae_analysis
+
+    importlib.reload(analyses.imc.expression_vae_analysis)
 
     del os.environ["SPATIALMUON_FLAGS"]
 
 
-if __name__ == "__main__":
-    if is_debug():
-        pass
+# if __name__ == "__main__":
+# if is_debug():
+# pass
+# test_analyze_vae_expression_vae_model()
+# test_analyze_image_expression_vae_model()

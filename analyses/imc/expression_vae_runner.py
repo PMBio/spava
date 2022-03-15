@@ -164,11 +164,18 @@ def objective(trial: optuna.trial.Trial) -> float:
     )
 
     # hyperparameters
-    vae_latent_dims = trial.suggest_int("vae_latent_dims", 2, 10)
-    vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
-    log_c = trial.suggest_float("log_c", -3, 3)
-    learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
-    dropout_alpha = trial.suggest_float("dropout_alpha", 0.0, 0.2)
+    if 'SPATIALMUON_TEST' not in os.environ:
+        vae_latent_dims = trial.suggest_int("vae_latent_dims", 5, 10)
+        vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
+        log_c = trial.suggest_float("log_c", -3, 3)
+        learning_rate = trial.suggest_float("learning_rate", 1e-8, 1e1, log=True)
+        dropout_alpha = trial.suggest_float("dropout_alpha", 0.0, 0.2)
+    else:
+        vae_latent_dims = 9
+        vae_beta = 2.943177503143898e-06
+        log_c = 2.3091161395176645
+        learning_rate = 0.027764695241385414
+        dropout_alpha = 0.07045799749386027
 
     # # leading to nan values
     # vae_latent_dims = 5
@@ -188,7 +195,7 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     vae = VAE(
         optuna_parameters=optuna_parameters,
-        in_channels=39,
+        in_channels=len(scaling_factors),
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
     )

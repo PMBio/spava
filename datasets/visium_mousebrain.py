@@ -30,12 +30,8 @@ def get_smu_file(read_only: bool, initialize=False):
 
     os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
-    if "SPATIALMUON_TEST" not in os.environ:
-        src_f = os.path.join(RAW_FOLDER, "visium.h5smu")
-        des_f = os.path.join(PROCESSED_FOLDER, "visium.h5smu")
-    else:
-        src_f = os.path.join(RAW_FOLDER, "small_visium.h5smu")
-        des_f = os.path.join(PROCESSED_FOLDER, "small_visium.h5smu")
+    src_f = os.path.join(RAW_FOLDER, "visium.h5smu")
+    des_f = os.path.join(PROCESSED_FOLDER, "visium.h5smu")
 
     if initialize:
         shutil.copy(src_f, des_f)

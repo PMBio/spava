@@ -100,6 +100,7 @@ class CellsDataset(Dataset):
         mask = self.f5[f"{self.split}/{filename}/masks"][j, ...]
         expression = self.recompute_expression(raster, mask)
         raster = np.arcsinh(raster) / self.scaling_factors
+        raster = raster.astype(np.float32)
         return raster, mask, expression, is_corrupted
 
 

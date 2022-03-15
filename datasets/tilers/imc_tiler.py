@@ -56,3 +56,4 @@ if e_():
                 #     masks_tiles._example_plot()
                 ##
                 f5[f"{split}/{filename}/masks"] = masks_tiles.tiles
+                s.backing.close()

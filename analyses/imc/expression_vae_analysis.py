@@ -19,7 +19,7 @@ from utils import reproducible_random_choice, get_execute_function, memory
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
-os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/imc/expression_vae_analysis.py"
+# os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/imc/expression_vae_analysis.py"
 
 if "SPATIALMUON_FLAGS" in os.environ:
     SPATIALMUON_FLAGS = os.environ["SPATIALMUON_FLAGS"]

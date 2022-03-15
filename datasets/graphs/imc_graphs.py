@@ -34,9 +34,11 @@ if e_():
         if "graph" in s["imc"]["transformed_mean"]:
             del s["imc"]["transformed_mean"]["graph"]
         s["imc"]["transformed_mean"].graph = g
+        s.backing.close()
 ##
 
 if e_():
+    s = get_smu_file('train', 0, read_only=True)
     _, ax = plt.subplots(figsize=(10, 10))
     s["imc"]["ome"].plot(
         0, ax=ax, preprocessing=np.arcsinh, cmap=matplotlib.cm.get_cmap("gray")
@@ -69,6 +71,8 @@ if e_():
     )
     ax.set(xlim=(1, 100), ylim=(1, 100))
     plt.show()
+    s.backing.close()
+
 ##
 class CellGraphsDataset(InMemoryDataset):
     def __init__(self, split: str, name: str):
