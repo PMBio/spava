@@ -44,8 +44,6 @@ e_ = get_execute_function()
 plt.style.use("dark_background")
 
 ##
-RAW_FOLDER = file_path("spatialmuon/imc")
-PROCESSED_FOLDER = file_path("spatialmuon_processed/imc")
 os.makedirs(file_path("imc"), exist_ok=True)
 
 
@@ -62,9 +60,9 @@ def get_split(split):
 
 def get_smu_file(split, index, read_only: bool, raw=False):
     if raw:
-        spatialmuon_files_dir = RAW_FOLDER
+        spatialmuon_files_dir = file_path("spatialmuon/imc")
     else:
-        spatialmuon_files_dir = PROCESSED_FOLDER
+        spatialmuon_files_dir = file_path("spatialmuon_processed/imc")
     l = get_split(split)
     f = l[index]
     ff = os.path.join(spatialmuon_files_dir, f)
@@ -95,6 +93,7 @@ if e_():
 # channels subsetting and hot pixel filtering
 ##
 def channels_subsetting_and_hot_pixel_filtering(s):
+    PROCESSED_FOLDER = file_path("spatialmuon_processed/imc")
     os.makedirs(PROCESSED_FOLDER, exist_ok=True)
     name = os.path.basename(s.backing.file.filename)
     processed_file = os.path.join(PROCESSED_FOLDER, name)
@@ -365,7 +364,9 @@ if e_():
 ##
 # if True:
 if e_():
-    print(f"{colorama.Fore.MAGENTA}preprocessing images for conv nets{colorama.Fore.RESET}")
+    print(
+        f"{colorama.Fore.MAGENTA}preprocessing images for conv nets{colorama.Fore.RESET}"
+    )
     all_x = []
     for i in tqdm(range(len(get_split("train"))), desc="merging expressions"):
         s = get_smu_file("train", i, read_only=True)
@@ -395,7 +396,11 @@ if e_():
 
     scaler = sklearn.preprocessing.StandardScaler()
     n = 6
-    d = {"train": get_split("train")}
+    d = {
+        "train": get_split("train"),
+        "validation": get_split("validation"),
+        "test": get_split("test"),
+    }
     for k, v in tqdm(d.items(), desc="split", position=0, leave=True):
         for i in tqdm(range(len(v)), desc="computing pca", position=0, leave=True):
             s = get_smu_file(k, i, read_only=False)

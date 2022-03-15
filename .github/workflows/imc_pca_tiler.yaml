@@ -1,0 +1,13 @@
+name: IMC tiler
+on: 
+  workflow_dispatch
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          conda activate ci_env
+          export SPATIALMUON_NOTEBOOK="datasets/tilers/imc_pca_tiler.py"
+          python -m datasets.tilers.imc_pca_tiler

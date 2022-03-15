@@ -15,7 +15,7 @@ from datasets.imc_transform_utils import IMCPrediction, Space
 import colorama
 
 import os
-from utils import reproducible_random_choice, get_execute_function, memory
+from utils import reproducible_random_choice, get_execute_function
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"

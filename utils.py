@@ -1,9 +1,9 @@
 import os
-from joblib import Memory
 import numpy as np
 import matplotlib
 import sys
 import pathlib
+import colorama
 import inspect
 
 
@@ -55,6 +55,25 @@ def get_execute_function():
     return execute_
 
 
+path_debug = None
+
+
+def print_and_return(f):
+    color = colorama.Fore.GREEN if "/a_test/" in f else colorama.Fore.CYAN
+    # a "color change" means that there is a bug and somewhere get_execute_function() is called both before and
+    # after 'SPATIALMUON_TEST' or 'SPATIALMUON_NOTEBOOK' are set, leading to mixing test and default paths
+    global path_debug
+    if path_debug is None:
+        path_debug = color
+    else:
+        assert path_debug == color
+    PRINT = False
+    # PRINT = True
+    if PRINT:
+        print(f"{color}{f}{colorama.Fore.RESET}")
+    return f
+
+
 try:
     current_file_path = pathlib.Path(__file__).parent.absolute()
     if not os.path.exists("data"):
@@ -62,10 +81,12 @@ try:
 
     def file_path(f):
         if "SPATIALMUON_TEST" not in os.environ:
-            return os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+            return print_and_return(
+                os.path.join(current_file_path, "data/spatial_uzh_processed/a", f)
+            )
         else:
-            return os.path.join(
-                current_file_path, "data/spatial_uzh_processed/a_test", f
+            return print_and_return(
+                os.path.join(current_file_path, "data/spatial_uzh_processed/a_test", f)
             )
 
 except NameError:
@@ -73,18 +94,15 @@ except NameError:
 
     def file_path(f):
         if "SPATIALMUON_TEST" not in os.environ:
-            return os.path.join(
-                "/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f
+            return print_and_return(
+                os.path.join("/data/l989o/data/basel_zurich/spatial_uzh_processed/a", f)
             )
         else:
-            return os.path.join(
-                "/data/l989o/data/basel_zurich/spatial_uzh_processed/a_test", f
+            return print_and_return(
+                os.path.join(
+                    "/data/l989o/data/basel_zurich/spatial_uzh_processed/a_test", f
+                )
             )
-
-
-f = file_path("joblib_cache_dir")
-os.makedirs(f, exist_ok=True)
-memory = Memory(location=f)
 
 
 def get_bimap(names_length_map):

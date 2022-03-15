@@ -13,6 +13,11 @@ def test_preprocess_imc_tiler():
     import datasets.tilers.imc_tiler
 
 
+def test_preprocess_imc_pca_tiler():
+    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/imc_pca_tiler.py"
+    import datasets.tilers.imc_pca_tiler
+
+
 def test_preprocess_imc_graphs():
     os.environ["SPATIALMUON_TEST"] = "datasets/graphs/imc_graphs.py"
     import datasets.graphs.imc_graphs

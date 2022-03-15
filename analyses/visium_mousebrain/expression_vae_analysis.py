@@ -1,21 +1,16 @@
 ##
-import sys
 
+import anndata as ad
 import matplotlib.pyplot as plt
-import numpy as np
 import optuna
 import torch
 from tqdm.auto import tqdm
-from typing import Union
+
+from analyses.analisys_utils import louvain_plot, scanpy_compute
+from analyses.imputation_score import Prediction
 from datasets.loaders.visium_mousebrain_loaders import get_cells_data_loader
 from models.expression_vae import VAE
-import anndata as ad
-import scanpy as sc
-from analyses.analisys_utils import compute_knn, louvain_plot, scanpy_compute
-from analyses.imputation_score import Prediction
-
-import os
-from utils import reproducible_random_choice, get_execute_function, memory
+from utils import get_execute_function
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
