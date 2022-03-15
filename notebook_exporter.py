@@ -11,7 +11,7 @@ import json
 
 from utils import file_path
 
-assert len(sys.argv) in 3
+assert len(sys.argv) == 3
 # assert len(sys.argv) in [3, 4]
 f = sys.argv[1]
 print(f)

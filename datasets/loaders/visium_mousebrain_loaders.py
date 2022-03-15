@@ -21,7 +21,7 @@ from utils import (
 )
 
 e_ = get_execute_function()
-os.environ['SPATIALMUON_TEST'] = 'datasets/loaders/visium_mousebrain_loaders.py'
+# os.environ['SPATIALMUON_TEST'] = 'datasets/loaders/visium_mousebrain_loaders.py'
 
 plt.style.use("dark_background")
 
