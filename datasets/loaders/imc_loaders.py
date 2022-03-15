@@ -28,10 +28,14 @@ plt.style.use("dark_background")
 
 ##
 class CellsDataset(Dataset):
-    def __init__(self, split):
+    def __init__(self, split, tile_dim=32, pca_tiles=False):
         self.split = split
-        self.tiles_file = file_path("imc/imc_tiles.hdf5")
+        self.pca_tiles = pca_tiles
+        self.tiles_file = file_path(f"imc/tiles_{tile_dim}.hdf5")
         self.f5 = h5py.File(self.tiles_file, "r")
+        if self.pca_tiles:
+            self.pca_tiles_file = file_path(f"imc/pca_tiles_{tile_dim}.hdf5")
+            self.f5_pca = h5py.File(self.pca_tiles_file, "r")
         self.filenames = get_split(self.split)
         names_length_map = {}
         for filename in self.filenames:
@@ -43,26 +47,34 @@ class CellsDataset(Dataset):
             names_length_map[filename] = n
         self.map_left, self.map_right = get_bimap(names_length_map)
 
-        # with h5py.File(self.tiles_file, 'r') as f5:
-        i = 0
-        for filename in self.filenames:
-            filename = filename.replace(".tiff", ".h5smu")
-            rasters = self.f5[f"{self.split}/{filename}/raster"]
-            masks = self.f5[f"{self.split}/{filename}/masks"]
-            assert len(rasters) == len(masks)
-            n = len(rasters)
-            for j in range(n):
-                self.map_left[i] = (filename, j)
-                self.map_right[(filename, j)] = i
-                i += 1
-
         s = get_smu_file(split="train", index=0, read_only=True)
         self.scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
         s.backing.close()
+
+        assert self.tile_dim == tile_dim
+
         self.seed = None
         self.corrupted_entries = np.zeros(
             (len(self), len(self.scaling_factors)), dtype=np.bool
         )
+
+    @property
+    def n_image_channels(self):
+        if not self.pca_tiles:
+            return self.f5[f"{self.split}/{self.map_left[0][0]}/raster"].shape[-1]
+        else:
+            return self.f5_pca[f"{self.split}/{self.map_left[0][0]}/raster"].shape[-1]
+
+    @property
+    def n_expression_channels(self):
+        return self.f5[f"{self.split}/{self.map_left[0][0]}/raster"].shape[-1]
+
+    @property
+    def tile_dim(self):
+        if not self.pca_tiles:
+            return self.f5[f"{self.split}/{self.map_left[0][0]}/raster"].shape[1]
+        else:
+            return self.f5_pca[f"{self.split}/{self.map_left[0][0]}/raster"].shape[1]
 
     def perturb(self, seed=0):
         self.seed = seed
@@ -100,19 +112,40 @@ class CellsDataset(Dataset):
         mask = self.f5[f"{self.split}/{filename}/masks"][j, ...]
         expression = self.recompute_expression(raster, mask)
         raster = np.arcsinh(raster) / self.scaling_factors
-        raster = raster.astype(np.float32)
-        return raster, mask, expression, is_corrupted
+        if not raster.dtype == np.float32:
+            raster = raster.astype(np.float32)
+
+        if not self.pca_tiles:
+            return raster, mask, expression, is_corrupted
+        else:
+            pca_raster = self.f5_pca[f"{self.split}/{filename}/raster"][j, ...]
+            if not pca_raster.dtype == np.float32:
+                pca_raster = pca_raster.astype(np.float32)
+            return pca_raster, mask, expression, is_corrupted
 
 
 ##
 if e_():
     train_ds = CellsDataset(split="train")
     raster, mask, expression, is_corrupted = train_ds[0]
+    print(train_ds[0])
+    print(f"train_ds.tile_dim = {train_ds.tile_dim}")
+    print(
+        f"train_ds.n_expression_channels = {train_ds.n_expression_channels}, train_ds.n_image_chann"
+        f"els = {train_ds.n_image_channels}"
+    )
+
+##
+if e_():
+    train_ds = CellsDataset(split="train", pca_tiles=True)
+    raster, mask, expression, is_corrupted = train_ds[0]
 
 
 ##
-def get_cells_data_loader(split, batch_size, perturb=False, num_workers=10):
-    ds = CellsDataset(split)
+def get_cells_data_loader(
+    split, batch_size, perturb=False, num_workers=10, pca_tiles=False
+):
+    ds = CellsDataset(split, pca_tiles=pca_tiles)
     if perturb:
         ds.perturb()
     loader = DataLoader(

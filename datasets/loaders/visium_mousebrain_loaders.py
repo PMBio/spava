@@ -21,19 +21,21 @@ from utils import (
 )
 
 e_ = get_execute_function()
-# os.environ['SPATIALMUON_NOTEBOOK'] = 'datasets/loaders/visium_data_loaders.py'
+os.environ['SPATIALMUON_TEST'] = 'datasets/loaders/visium_mousebrain_loaders.py'
 
 plt.style.use("dark_background")
 
 ##
 class CellsDataset(Dataset):
-    def __init__(self, split, only_expression=False, raw_counts=False):
+    def __init__(
+        self, split, only_expression=False, raw_counts=False, tile_dim: int = 32
+    ):
         self.split = split
         self.only_expression = only_expression
         self.indices = get_split_indices(self.split)
         self.raw_counts = raw_counts
         if not self.only_expression:
-            self.tiles_file = file_path("visium_mousebrain/tiles.hdf5")
+            self.tiles_file = file_path(f"visium_mousebrain/tiles_{tile_dim}.hdf5")
             self.f5 = h5py.File(self.tiles_file, "r")[self.split]
             assert len(self.indices) == len(self.f5)
         s = get_smu_file(read_only=True)
@@ -42,10 +44,26 @@ class CellsDataset(Dataset):
         else:
             self.expressions = s["visium"]["non_scaled"].X[self.indices, :].todense().A
         s.backing.close()
+
+        if not self.only_expression:
+            assert self.tile_dim == tile_dim
+
         self.seed = None
         self.corrupted_entries = np.zeros(
             (len(self), self.expressions.shape[1]), dtype=np.bool
         )
+
+    @property
+    def n_image_channels(self):
+        return self.f5[0].shape[-1]
+
+    @property
+    def n_expression_channels(self):
+        return self.expressions.shape[-1]
+
+    @property
+    def tile_dim(self):
+        return self.f5[0].shape[0]
 
     def perturb(self, seed=0):
         self.seed = seed
@@ -78,6 +96,8 @@ if e_():
     ds = CellsDataset(split="test")
     ds.perturb()
     print(ds[0])
+    print(f'ds.tile_dim = {ds.tile_dim}')
+    print(f'ds.n_expression_channels = {ds.n_expression_channels}, ds.n_image_channels = {ds.n_image_channels}')
 
 ##
 def get_cells_data_loader(split, batch_size, perturb=False, only_expression=False):

@@ -56,7 +56,9 @@ def test_analyze_image_expression_vae_model():
     del os.environ["SPATIALMUON_FLAGS"]
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    # test_preprocess_imc_tiler()
+    test_imc_loaders()
 # if is_debug():
 # pass
 # test_analyze_vae_expression_vae_model()

@@ -17,6 +17,11 @@ def test_preprocess_visium_mousebrain_graphs():
     import datasets.graphs.visium_mousebrain_graphs
 
 
+def test_visium_mousebrain_loaders():
+    os.environ["SPATIALMUON_TEST"] = "datasets/loaders/visium_mousebrain_loaders.py"
+    import datasets.loaders.visium_mousebrain_loaders
+
+
 def test_train_vae_expression():
     os.environ[
         "SPATIALMUON_TEST"
@@ -32,5 +37,5 @@ def test_analyze_expression_model():
 
 
 if __name__ == "__main__":
-    if is_debug():
-        pass
+    # if is_debug():
+    test_visium_mousebrain_loaders()

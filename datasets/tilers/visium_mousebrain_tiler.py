@@ -20,7 +20,7 @@ if e_():
     print(f"{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}")
     d = file_path("visium_mousebrain")
     os.makedirs(d, exist_ok=True)
-    f = file_path("visium_mousebrain/tiles.hdf5")
+    f = file_path("visium_mousebrain/tiles_32.hdf5")
     s = get_smu_file(read_only=True)
     tiles = smu.Tiles(
         raster=s["visium"]["image"],

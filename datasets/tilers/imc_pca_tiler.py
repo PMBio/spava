@@ -21,7 +21,7 @@ if e_():
     print(f"{colorama.Fore.MAGENTA}extracting tiles{colorama.Fore.RESET}")
     d = file_path("imc/")
     os.makedirs(d, exist_ok=True)
-    f = file_path("imc/imc_pca_tiles_32.hdf5")
+    f = file_path("imc/pca_tiles_32.hdf5")
     with h5py.File(f, "w") as f5:
         for split in tqdm(
             ["train", "validation", "test"], desc="split", position=0, leave=True
