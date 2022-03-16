@@ -93,9 +93,9 @@ class VAE(pl.LightningModule):
         dims = get_dims(self.in_channels)
         ##
 
+        # encoder stuff
         encoder_dims = [self.in_channels] + dims
-        decoder_dims = [self.latent_dim] + list(reversed(dims))
-        print(f"encoder_dims = {encoder_dims}, decoder_dims = {decoder_dims}")
+        print(f'encoder_dims = {encoder_dims}')
         from analyses.torch_boilerplate import get_fc_layers
 
         self.encoder_fc = get_fc_layers(
@@ -103,6 +103,10 @@ class VAE(pl.LightningModule):
         )
         self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
         self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
+
+        # decoder stuff
+        decoder_dims = [self.latent_dim] + list(reversed(dims))
+        print(f"decoder_dims = {decoder_dims}")
         self.decoder_fc = get_fc_layers(
             dims=decoder_dims, name="decoder_fc", dropout_alpha=self.dropout_alpha
         )

@@ -39,6 +39,7 @@ u, v = ppp.SUBSET_FRACTION_FOR_VALIDATION, ppp.FRACTION_FOR_VALIDATION_CHECK
 print(f"{colorama.Fore.MAGENTA}{1 / v:.01f} validation checks per epoch ->")
 print(f"+{round(100 * 2 * u * 1 / v)}% penality in training time{colorama.Fore.RESET}")
 if ppp.DEBUG:
+    # ppp.NUM_WORKERS = 10
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
 else:
@@ -176,8 +177,8 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     vae = VAE(
         optuna_parameters=optuna_parameters,
-        in_channels=n_image_channels,
-        out_channels=n_expression_channels,
+        in_channels=n_expression_channels,
+        cond_channels=n_image_channels + 1,  # + 1 because of the mask
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
     )
@@ -213,7 +214,8 @@ if e_() or __name__ == "__main__":
     else:
         raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
-    storage = "sqlite:///" + file_path("optuna_imc_image_expression_conv_vae.sqlite")
+    debug_string = '_debug' if ppp.DEBUG else ''
+    storage = "sqlite:///" + file_path(f"optuna_imc_image_expression_conv_vae{debug_string}.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",

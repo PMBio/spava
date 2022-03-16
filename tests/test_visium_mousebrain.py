@@ -1,3 +1,4 @@
+import importlib
 import os
 from tests.testing_utils import is_debug
 
@@ -26,17 +27,17 @@ def test_train_expression_vae():
     os.environ[
         "SPATIALMUON_TEST"
     ] = "analyses/visium_mousebrain/expression_vae_runner.py"
-    os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
     import analyses.visium_mousebrain.expression_vae_runner
-
-    del os.environ["SPATIALMUON_FLAGS"]
 
 
 def test_analyze_expression_vae():
     os.environ[
         "SPATIALMUON_TEST"
     ] = "analyses/visium_mousebrain/expression_vae_analysis.py"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=expression_vae"
     import analyses.visium_mousebrain.expression_vae_analysis
+
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
 def test_train_image_expression_conv_vae():
@@ -50,8 +51,10 @@ def test_analyze_image_expression_conv_vae():
     os.environ[
         "SPATIALMUON_TEST"
     ] = "analyses/visium_mousebrain/expression_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "image_expression_conv_vae"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_conv_vae"
     import analyses.visium_mousebrain.expression_vae_analysis
+
+    importlib.reload(analyses.visium_mousebrain.expression_vae_analysis)
 
     del os.environ["SPATIALMUON_FLAGS"]
 

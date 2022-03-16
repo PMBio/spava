@@ -20,6 +20,8 @@
 | [![Analyze expression VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_expression_vae.yaml)                                       | on demand |
 | `Train image expression VAE`                                                                                                                                                                                                       | no workflow |
 | [![Analyze image expression VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_vae.yaml)                     | on demand |
+| `Train image expression PCA VAE`                                                                                                                                                                                                       | no workflow |
+| [![Analyze image expression PCA VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_pca_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_pca_vae.yaml)                     | on demand |
 | `Train image expression conv VAE`                                                                                                                                                                                             | no workflow |
 | [![Analyze image expression conv VAE](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_conv_vae.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/imc_analyze_image_expression_conv_vae.yaml) | on demand |
 

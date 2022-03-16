@@ -1,5 +1,6 @@
 ##
 
+import os
 import anndata as ad
 import matplotlib.pyplot as plt
 import optuna
@@ -9,8 +10,7 @@ from tqdm.auto import tqdm
 from analyses.analisys_utils import louvain_plot, scanpy_compute
 from analyses.imputation_score import Prediction
 from datasets.loaders.visium_mousebrain_loaders import get_cells_data_loader
-from models.expression_vae import VAE
-from utils import get_execute_function
+from utils import get_execute_function, parse_flags
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
@@ -19,14 +19,28 @@ e_ = get_execute_function()
 # ] = "analyses/visium_mousebrain/visium_mousebrain_analysis.py"
 
 ##
+flags = parse_flags(default={"MODEL_NAME": "expression_vae"})
+MODEL_NAME = flags["MODEL_NAME"]
+is_expression_vae = MODEL_NAME == "expression_vae"
+is_image_expression_conv_vae = MODEL_NAME == "image_expression_conv_vae"
+
+##
+if is_expression_vae:
+    from models.expression_vae import VAE
+elif is_image_expression_conv_vae:
+    from models.image_expression_conv_vae import VAE
+else:
+    assert False
+
+##
 if e_():
     from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "visium_mousebrain_expression_vae"
+    study_name = f"visium_mousebrain_{MODEL_NAME}"
     study = optuna.load_study(
         study_name=study_name,
-        storage="sqlite:///" + file_path("optuna_visium_mousebrain_expression_vae.sqlite"),
+        storage="sqlite:///" + file_path(f"optuna_{study_name}.sqlite"),
     )
     print("best trial:")
     print(study.best_trial)
@@ -45,14 +59,19 @@ if e_():
             sys.exit(0)
         else:
             # manually update version from the just trained perturbed model
-            version = 15
+            if is_expression_vae:
+                pass
+            elif is_image_expression_conv_vae:
+                pass
+            else:
+                assert False
     else:
         version = study.best_trial.user_attrs["version"]
 
 ##
 if e_():
     MODEL_CHECKPOINT = file_path(
-        f"checkpoints/visium_mousebrain_expression_vae/version_{version}/checkpoints/last.ckpt"
+        f"checkpoints/{study_name}/version_{version}/checkpoints/last.ckpt"
     )
     expression_vae = VAE.load_from_checkpoint(MODEL_CHECKPOINT)
 
@@ -65,12 +84,19 @@ def get_latent_representation(loader, model):
     all_b = []
     all_is_corrupted = []
     for data in tqdm(loader, desc="embedding expression"):
-        expression, is_corrupted = data
-        a, b, mu, std, z = model(expression)
-        all_mu.append(mu)
+        if is_expression_vae:
+            expression, is_corrupted = data
+            a, b, mu, std, z = model(expression)
+        elif is_image_expression_conv_vae:
+            image_input, expression, is_corrupted = model.unfold_batch(data)
+            raise NotImplementedError()
+            # a, b, mu, std, z = model()
+        else:
+            assert False
+        all_mu.append(mu.detach())
         all_expression.append(expression)
-        all_a.append(a)
-        all_b.append(b)
+        all_a.append(a.detach())
+        all_b.append(b.detach())
         all_is_corrupted.append(is_corrupted)
     mus = torch.cat(all_mu, dim=0)
     expressions = torch.cat(all_expression, dim=0)
@@ -86,19 +112,26 @@ def get_latent_representation(loader, model):
 
 
 if e_():
+    if is_expression_vae:
+        batch_size = 1024
+    elif is_image_expression_conv_vae:
+        batch_size = 128
+    else:
+        assert False
+
     train_loader_non_perturbed = get_cells_data_loader(
-        split="train", batch_size=1024, only_expression=True
+        split="train", batch_size=batch_size, only_expression=True
     )
 
     val_loader_non_perturbed = get_cells_data_loader(
-        split="validation", batch_size=1024, only_expression=True
+        split="validation", batch_size=batch_size, only_expression=True
     )
     val_loader_perturbed = get_cells_data_loader(
-        split="validation", batch_size=1024, perturb=True, only_expression=True
+        split="validation", batch_size=batch_size, perturb=True, only_expression=True
     )
 
     test_loader_non_perturbed = get_cells_data_loader(
-        split="test", batch_size=1024, only_expression=True
+        split="test", batch_size=batch_size, only_expression=True
     )
 
     (
@@ -204,78 +237,6 @@ if e_():
     plt.show()
     s.backing.close()
 
-# ##
-# if e_():
-#     data = loader_non_perturbed.__iter__().__next__()
-#     data_non_perturbed = loader_non_perturbed.__iter__().__next__()
-#     i0, i1 = torch.where(data[-1] == 1)
-#     # perturbed data are zero, non perturbed data are ok
-#     print(data[0][i0, i1])
-#     print(data_non_perturbed[0][i0, i1])
-#     # just a hash
-#     h = np.sum(
-#         np.concatenate(np.where(loader_perturbed.dataset.corrupted_entries == 1))
-#     )
-#     print(
-#         "corrupted entries hash:",
-#         h,
-#     )
-#
-# ##
-# if e_():
-#     expression_vae = VAE.load_from_checkpoint(MODEL_CHECKPOINT)
-#
-#     debug_i = 0
-#     print("merging expressions and computing embeddings... ", end="")
-#     all_mu = []
-#     all_expression = []
-#     all_a = []
-#     all_b = []
-#     all_is_perturbed = []
-#     all_expression_non_perturbed = []
-#     for data, data_non_perturbed in tqdm(
-#         zip(loader_perturbed, loader_non_perturbed),
-#         desc="embedding expression",
-#         total=len(loader_perturbed),
-#     ):
-#         expression, is_perturbed = data
-#         expression_non_perturbed, _ = data_non_perturbed
-#         a, b, mu, std, z = expression_vae(expression)
-#         all_mu.append(mu)
-#         all_expression.append(expression)
-#         all_a.append(a)
-#         all_b.append(b)
-#         all_is_perturbed.append(is_perturbed)
-#         all_expression_non_perturbed.append(expression_non_perturbed)
-#         if debug_i < 5:
-#             # perturbed entries
-#             i0, i1 = torch.where(data[-1] == 1)
-#             # non perturbed entries
-#             j0, j1 = torch.where(data[-1] == 0)
-#             assert torch.isclose(torch.sum(expression[i0, i1]), torch.tensor([0.0]))
-#             assert torch.all(expression[j0, j1] == expression_non_perturbed[j0, j1])
-#         debug_i += 1
-#
-#     mus = torch.cat(all_mu, dim=0)
-#     expressions = torch.cat(all_expression, dim=0)
-#     expressions_non_perturbed = torch.cat(all_expression_non_perturbed, dim=0)
-#     a_s = torch.cat(all_a, dim=0)
-#     b_s = torch.cat(all_b, dim=0)
-#     are_perturbed = torch.cat(all_is_perturbed, dim=0)
-#     reconstructed = expression_vae.expected_value(a_s, b_s)
-
-##
-# if m:
-#     n_channels = expressions.shape[1]
-#
-#     original_non_perturbed = []
-#     reconstructed_zero = []
-#     for i in range(n_channels):
-#         x = expressions_non_perturbed[:, i][are_perturbed[:, i]]
-#         original_non_perturbed.append(x)
-#         x = reconstructed[:, i][are_perturbed[:, i]]
-#         reconstructed_zero.append(x)
-
 ##
 if e_():
     # if True:
@@ -283,7 +244,7 @@ if e_():
         original=expression_val_non_perturbed.X,
         corrupted_entries=val_are_perturbed.detach().cpu().numpy(),
         predictions_from_perturbed=val_perturbed_reconstructed.detach().cpu().numpy(),
-        name="visium mousebrain\nexpression vae (val)",
+        name=f"{study_name} (val)",
     )
     vae_predictions = Prediction(**kwargs)
 
@@ -294,9 +255,12 @@ if e_():
 
 
 ##
-# from old_code.data2 import file_path
-# import pickle
+import pickle
+
 #
-# if m:
-#     d = {"vanilla VAE": kwargs}
-#     pickle.dump(d, open(file_path("ah_scores.pickle"), "wb"))
+if e_():
+    f = file_path("visium_mousebrain/imputation_scores")
+    os.makedirs(f, exist_ok=True)
+
+    d = {"vanilla VAE": kwargs}
+    pickle.dump(d, open(file_path(f"{f}/{MODEL_NAME}.pickle"), "wb"))

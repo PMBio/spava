@@ -26,7 +26,7 @@ class VAE(pl.LightningModule):
         self,
         optuna_parameters,
         in_channels,
-        out_channels,
+        cond_channels,
         mask_loss: bool = None,
         **kwargs,
     ):
@@ -35,10 +35,12 @@ class VAE(pl.LightningModule):
         self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.out_channels = self.in_channels
+        self.cond_channels = cond_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
         self.dropout_alpha = self.optuna_parameters["dropout_alpha"]
+        self.image_features_dim = 50
 
         ##
         def get_dims(n):
@@ -54,20 +56,35 @@ class VAE(pl.LightningModule):
 
         from analyses.torch_boilerplate import get_fc_layers, get_conv_layers
 
-        # encoder stuff
-        n = self.in_channels + 1
-        dims = [n, 2 * n, 4 * n, 4 * n]
-        self.conv_encoder = get_conv_layers(dims=dims, kernel_sizes=[5, 3, 3], name='conv_encoder')
-        m = self.conv_encoder(torch.zeros(1, n, 32, 32))
-        d = 20
-        self.encoder_fc = get_fc_layers(dims=[m.numel(), d], name='encoder_fc', dropout_alpha=self.dropout_alpha)
+        dims = get_dims(self.in_channels)
 
-        self.encoder_mean = nn.Linear(d, self.latent_dim)
-        self.encoder_log_var = nn.Linear(d, self.latent_dim)
+        # encoder stuff
+        encoder_dims = [self.in_channels + self.image_features_dim] + dims
+        print(f"encoder_dims = {encoder_dims}")
+
+        self.encoder_fc = get_fc_layers(
+            dims=encoder_dims, name="encoder_fc", dropout_alpha=self.dropout_alpha
+        )
+        self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
+        self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
+
+        # conditional cnn stuff
+        n = self.cond_channels
+        dims = [n, 2 * n, 4 * n, 4 * n]
+        self.cond_cnn = get_conv_layers(
+            dims=dims, kernel_sizes=[5, 3, 3], name="conv_encoder"
+        )
+        m = self.cond_cnn(torch.zeros(1, n, 32, 32))
+        self.cond_fc = get_fc_layers(
+            dims=[m.numel(), self.image_features_dim],
+            name="encoder_fc",
+            dropout_alpha=self.dropout_alpha,
+        )
 
         # decoder stuff
-        dims = get_dims(self.in_channels)
-        decoder_dims = [self.latent_dim] + list(reversed(dims))
+        decoder_dims = [self.latent_dim + self.image_features_dim] + list(
+            reversed(dims)
+        )
         print(f"decoder_dims = {decoder_dims}")
         self.decoder_fc = get_fc_layers(
             dims=decoder_dims, name="decoder_fc", dropout_alpha=self.dropout_alpha
@@ -84,9 +101,13 @@ class VAE(pl.LightningModule):
             torch.logit(torch.Tensor([0.001] * self.in_channels))
         )
 
-    def encoder(self, x):
-        x = self.conv_encoder(x)
+    def image_features_extractor(self, x):
+        x = self.cond_cnn(x)
         x = torch.flatten(x, start_dim=1)
+        x = self.cond_fc(x)
+        return x
+
+    def encoder(self, x):
         x = self.encoder_fc(x)
         mu = self.encoder_mean(x)
         log_var = self.encoder_log_var(x)
@@ -246,12 +267,13 @@ class VAE(pl.LightningModule):
             elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
-    def forward(self, x):
+    def forward(self, expression, image):
         cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
             # x_encoded = self.encoder(x)
             # mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
-            mu, log_var = self.encoder(x)
+            image_features = self.image_features_extractor(image)
+            mu, log_var = self.encoder(torch.cat((expression, image_features), dim=1))
 
             # sample z from q
             eps = 1e-7
@@ -271,7 +293,7 @@ class VAE(pl.LightningModule):
             z = q.rsample()
 
             # decoded
-            a, b = self.decoder(z)
+            a, b = self.decoder(torch.cat((z, image_features), dim=1))
             if (
                 torch.isnan(a).any()
                 or torch.isnan(mu).any()
@@ -285,9 +307,14 @@ class VAE(pl.LightningModule):
             return a, b, mu, std, z
 
     def unfold_batch(self, batch):
-        raster, mask, expression, is_corrupted = batch
+        if len(batch) == 4:
+            raster, mask, expression, is_corrupted = batch
+            image_input = torch.cat((raster, mask), dim=-1)
+        elif len(batch) == 3:
+            image_input, expression, is_corrupted = batch
+        else:
+            assert False
         assert len(expression.shape) == 2
-        image_input = torch.cat((raster, mask), dim=-1)
         image_input = image_input.permute((0, 3, 1, 2))
         return image_input, expression, is_corrupted
 
@@ -295,7 +322,7 @@ class VAE(pl.LightningModule):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
         image_input, expression, is_corrupted = self.unfold_batch(batch)
 
-        a, b, mu, std, z = self.forward(image_input)
+        a, b, mu, std, z = self.forward(expression, image_input)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
@@ -320,7 +347,7 @@ class VAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx):
         image_input, expression, is_corrupted = self.unfold_batch(batch)
 
-        a, b, mu, std, z = self.forward(image_input)
+        a, b, mu, std, z = self.forward(expression, image_input)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )

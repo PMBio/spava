@@ -35,7 +35,7 @@ def test_train_expression_vae():
 
 def test_analyze_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=expression_vae"
     import analyses.imc.expression_vae_analysis
 
     del os.environ["SPATIALMUON_FLAGS"]
@@ -43,12 +43,35 @@ def test_analyze_expression_vae():
 
 def test_train_image_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/image_expression_vae_runner.py"
+    os.environ["SPATIALMUON_FLAGS"] = "PCA=False"
     import analyses.imc.image_expression_vae_runner
+
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
 def test_analyze_image_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "image_expression_vae"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_vae"
+    import analyses.imc.expression_vae_analysis
+
+    importlib.reload(analyses.imc.expression_vae_analysis)
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_train_image_expression_pca_vae():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/image_expression_vae_runner.py"
+    os.environ["SPATIALMUON_FLAGS"] = "PCA=True"
+    import analyses.imc.image_expression_vae_runner
+
+    importlib.reload(analyses.imc.image_expression_vae_runner)
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_analyze_image_expression_pca_vae():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_pca_vae"
     import analyses.imc.expression_vae_analysis
 
     importlib.reload(analyses.imc.expression_vae_analysis)
@@ -63,7 +86,7 @@ def test_train_image_expression_conv_vae():
 
 def test_analyze_image_expression_conv_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_conv_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "image_expression_conv_vae"
+    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_conv_vae"
     import analyses.imc.expression_vae_analysis
 
     importlib.reload(analyses.imc.expression_vae_analysis)
@@ -72,9 +95,11 @@ def test_analyze_image_expression_conv_vae():
 
 
 if __name__ == "__main__":
+    # test_train_image_expression_pca_vae()
+    test_analyze_image_expression_pca_vae()
     # test_preprocess_imc_tiler()
     # test_train_image_expression_conv_vae()
-    test_analyze_image_expression_conv_vae()
+    # test_analyze_image_expression_conv_vae()
     # test_imc_loaders()
 # if is_debug():
 # pass

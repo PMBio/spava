@@ -10,13 +10,20 @@ from analyses.torch_boilerplate import (
     ZeroInflatedNormal,
 )
 
-from models.image_expression_vae import VAE
 
-from utils import file_path, get_execute_function
+from utils import file_path, get_execute_function, parse_flags
 from datasets.imc import get_smu_file
+from models.image_expression_vae import VAE
 
 e_ = get_execute_function()
 # os.environ['SPATIALMUON_TEST'] = 'analyses/imc/image_expression_vae_runner.py'
+
+flags = parse_flags(default={'PCA': False})
+if not flags['PCA']:
+    model_variant = 'image_expression_vae'
+else:
+    model_variant = 'image_expression_pca_vae'
+print(f'{colorama.Fore.MAGENTA}model_variant = {model_variant}{colorama.Fore.RESET}')
 
 class Ppp:
     pass
@@ -28,7 +35,7 @@ ppp.LOG_PER_CHANNEL_VALUES = False
 if "SPATIALMUON_TEST" not in os.environ:
     ppp.MAX_EPOCHS = 15
 else:
-    ppp.MAX_EPOCHS = 2
+    ppp.MAX_EPOCHS = 1
 ppp.BATCH_SIZE = 1024
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
@@ -86,9 +93,10 @@ def get_loaders(
     perturb: bool = False,
     shuffle_train=False,
 ):
-    train_ds = CellsDataset("train")
-    train_ds_validation = CellsDataset("train")
-    val_ds = CellsDataset("validation")
+    train_ds = CellsDataset("train", pca_tiles=flags['PCA'])
+    train_ds_validation = CellsDataset("train", pca_tiles=flags['PCA'])
+    val_ds = CellsDataset("validation", pca_tiles=flags['PCA'])
+
     print(f"len(train_ds) = {len(train_ds)}")
     if perturb:
         train_ds = train_ds.perturb()
@@ -180,7 +188,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         max_epochs=ppp.MAX_EPOCHS,
         log_every_n_steps=30 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
-        model_name="imc_image_expression_vae",
+        model_name=f"imc_{model_variant}",
     )
 
     # hyperparameters
@@ -212,10 +220,17 @@ def objective(trial: optuna.trial.Trial) -> float:
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)
 
+    if not ppp.DEBUG:
+        n_image_channels = train_loader.dataset.n_image_channels
+        n_expression_channels = train_loader.dataset.n_expression_channels
+    else:
+        n_image_channels = train_loader.dataset.dataset.n_image_channels
+        n_expression_channels = train_loader.dataset.dataset.n_expression_channels
+
     vae = VAE(
         optuna_parameters=optuna_parameters,
-        in_channels=len(scaling_factors),
-        out_channels=len(scaling_factors),
+        in_channels=n_image_channels + 1,  # + 1 because of the masks
+        out_channels=n_expression_channels,
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
     )
@@ -244,15 +259,16 @@ def objective(trial: optuna.trial.Trial) -> float:
 if e_() or __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "imc_image_expression_vae"
-    if study_name == "imc_image_expression_vae_perturbed":
+    study_name = f"imc_{model_variant}"
+    if study_name == f"imc_{model_variant}_perturbed":
         ppp.PERTURB = True
-    elif study_name == "imc_image_expression_vae":
+    elif study_name == f"imc_{model_variant}":
         ppp.PERTURB = False
     else:
         raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
-    storage = "sqlite:///" + file_path("optuna_imc_image_expression_vae.sqlite")
+    debug_string = '_debug' if ppp.DEBUG else ''
+    storage = "sqlite:///" + file_path(f"optuna_imc_{model_variant}{debug_string}.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",

@@ -107,7 +107,7 @@ def get_cells_data_loader(split, batch_size, perturb=False, only_expression=Fals
     loader = DataLoader(
         ds,
         batch_size=batch_size,
-        num_workers=16,
+        num_workers=10,
     )
     return loader
 

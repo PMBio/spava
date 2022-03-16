@@ -15,57 +15,32 @@ from datasets.imc_transform_utils import IMCPrediction, Space
 import colorama
 
 import os
-from utils import reproducible_random_choice, get_execute_function
+from utils import reproducible_random_choice, get_execute_function, parse_flags
 
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
 # os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/imc/expression_vae_analysis.py"
 
-if "SPATIALMUON_FLAGS" in os.environ:
-    SPATIALMUON_FLAGS = os.environ["SPATIALMUON_FLAGS"]
-else:
-    # SPATIALMUON_FLAGS = "expression_vae"
-    # SPATIALMUON_FLAGS = "image_expression_vae"
-    SPATIALMUON_FLAGS = "image_expression_conv_vae"
-
-print(
-    f"{colorama.Fore.MAGENTA}SPATIALMUON_FLAGS = {SPATIALMUON_FLAGS}{colorama.Fore.RESET}"
-)
-
-
-def is_expression_vae():
-    return SPATIALMUON_FLAGS == "expression_vae"
-
-
-def is_image_expression_vae():
-    return SPATIALMUON_FLAGS == "image_expression_vae"
-
-
-def is_image_expression_conv_vae():
-    return SPATIALMUON_FLAGS == "image_expression_conv_vae"
-
-
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-
-assert (
-    np.sum(
-        [is_expression_vae(), is_image_expression_vae(), is_image_expression_conv_vae()]
-    )
-    == 1
-)
-
-MODEL_NAME = SPATIALMUON_FLAGS
+##
+flags = parse_flags(default={'MODEL_NAME': 'expression_vae'})
+MODEL_NAME = flags['MODEL_NAME']
+is_expression_vae = MODEL_NAME == 'expression_vae'
+is_image_expression_vae = MODEL_NAME == 'image_expression_vae'
+is_image_expression_pca_vae = MODEL_NAME == 'image_expression_pca_vae'
+is_image_expression_conv_vae = MODEL_NAME == 'image_expression_conv_vae'
 
 ##
-if is_expression_vae():
+if is_expression_vae:
     from models.expression_vae import VAE
-elif is_image_expression_vae():
+elif is_image_expression_vae or is_image_expression_pca_vae:
     from models.image_expression_vae import VAE
-elif is_image_expression_conv_vae():
+elif is_image_expression_conv_vae:
     from models.image_expression_conv_vae import VAE
 else:
     assert False
+
 ##
 if e_():
     from analyses.imc.expression_vae_runner import objective, ppp
@@ -90,11 +65,13 @@ if e_():
             sys.exit(0)
         else:
             # manually update version from the just trained perturbed model
-            if is_expression_vae():
+            if is_expression_vae:
                 pass
-            elif is_image_expression_vae():
+            elif is_image_expression_vae:
                 pass
-            elif is_image_expression_conv_vae():
+            elif is_image_expression_pca_vae:
+                pass
+            elif is_image_expression_conv_vae:
                 pass
             else:
                 assert False
@@ -105,16 +82,18 @@ if e_():
 ##
 if e_():
     SPLIT = "validation"
-    if is_expression_vae():
+    if is_expression_vae:
         batch_size = 1024
         num_workers = 10
-    elif is_image_expression_vae() or is_image_expression_conv_vae():
+    elif is_image_expression_vae or is_image_expression_pca_vae:
         batch_size = 128
         num_workers = 10
+    elif is_image_expression_conv_vae:
+        pass
     else:
         assert False
     kwargs = {}
-    if is_image_expression_conv_vae():
+    if is_image_expression_pca_vae:
         kwargs = {'pca_tiles': True}
     loader_non_perturbed = get_cells_data_loader(
         split=SPLIT, batch_size=batch_size, num_workers=num_workers, **kwargs
@@ -143,16 +122,18 @@ def precompute(loader, expression_model_checkpoint, random_indices):
     all_mu = []
     all_expression = []
     for data in tqdm(loader, "embedding"):
-        if is_expression_vae():
+        if is_expression_vae:
             raster, mask, expression, is_corrupted = data
             a, b, mu, std, z = expression_vae(expression)
-        elif is_image_expression_vae() or is_image_expression_conv_vae():
+        elif is_image_expression_vae or is_image_expression_pca_vae:
             image_input, expression, is_corrupted = expression_vae.unfold_batch(data)
             a, b, mu, std, z = expression_vae(image_input)
+        elif is_image_expression_conv_vae:
+            pass
         else:
             assert False
         all_mu.append(mu.detach())
-        all_expression.append(expression.detach())
+        all_expression.append(expression)
     mus = torch.cat(all_mu, dim=0)
     expressions = torch.cat(all_expression, dim=0)
     print("done")
@@ -212,16 +193,18 @@ if e_():
         desc="embedding expression",
         total=len(loader_perturbed),
     ):
-        if is_expression_vae():
+        if is_expression_vae:
             _, _, expression, is_perturbed = data
             _, _, expression_non_perturbed, _ = data_non_perturbed
             a, b, mu, std, z = expression_vae(expression)
-        elif is_image_expression_vae() or is_image_expression_conv_vae():
+        elif is_image_expression_vae or is_image_expression_pca_vae:
             image_input, expression, is_perturbed = expression_vae.unfold_batch(data)
             _, expression_non_perturbed, _ = expression_vae.unfold_batch(
                 data_non_perturbed
             )
             a, b, mu, std, z = expression_vae(image_input)
+        elif is_image_expression_conv_vae:
+            pass
         else:
             assert False
         all_mu.append(mu.detach().numpy())
@@ -269,7 +252,7 @@ if e_():
         corrupted_entries=are_perturbed,
         predictions_from_perturbed=reconstructed,
         space=Space.scaled_mean.value,
-        name=f"{MODEL_NAME} expression vae",
+        name=f"{study_name} transformed",
         split="validation",
     )
     vae_predictions = IMCPrediction(**kwargs)
@@ -284,7 +267,7 @@ if e_():
 if e_():
     # this seems to be broken
     p = vae_predictions.transform_to(Space.raw_sum)
-    p.name = f"{MODEL_NAME} expression vae raw"
+    p.name = f"{study_name} raw"
     p.plot_reconstruction()
     # p.plot_scores()
 
@@ -299,6 +282,6 @@ if e_():
     pickle.dump(
         d,
         open(
-            file_path(f"imc/imputation_scores/expression_vae_{MODEL_NAME}.pickle"), "wb"
+            file_path(f"{f}/{MODEL_NAME}.pickle"), "wb"
         ),
     )

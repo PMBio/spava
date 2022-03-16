@@ -5,6 +5,7 @@ import sys
 import pathlib
 import colorama
 import inspect
+from typing import Dict
 
 
 def reproducible_random_choice(n: int, k: int):
@@ -120,3 +121,62 @@ def get_bimap(names_length_map):
 def print_corrupted_entries_hash(corrupted_entries: np.ndarray, split: str):
     h = np.sum(np.concatenate(np.where(corrupted_entries == 1)))
     print(f"corrupted entries hash ({split}):", h)
+
+
+def validate_and_cast_flags(flags: Dict, cast: bool):
+    validate_type_functions = {
+        "MODEL_NAME": lambda s: True,
+        "TILE_SIZE": lambda s: s.isdigit,
+        "GRAPH_SIZE": lambda s: s.isdigit,
+        "PCA": lambda s: s in ["True", "False"],
+    }
+    cast_functions = {
+        "MODEL_NAME": lambda s: s,
+        "TILE_SIZE": int,
+        "GRAPH_SIZE": int,
+        "PCA": lambda s: s == 'True',
+    }
+    validation_functions = {
+        "MODEL_NAME": lambda s: s
+        in ["expression_vae", "image_expression_vae", "image_expression_pca_vae", "image_expression_conv_vae"],
+        "TILE_SIZE": lambda s: s.isdigit and 32 <= int(s) <= 256,
+        "GRAPH_SIZE": lambda s: s.isdigit and 3 <= int(s) <= 50,
+        "PCA": lambda s: True,
+    }
+    assert set(validate_type_functions.keys()) == set(cast_functions.keys())
+    assert set(cast_functions.keys()) == set(validation_functions.keys())
+    for flag in flags.keys():
+        assert flag in validation_functions
+
+    if cast:
+        for value in flags.values():
+            assert type(value) == str
+        for flag, value in flags.items():
+            validate_type_functions[flag](value)
+            flags[flag] = cast_functions[flag](value)
+
+    for flag, value in flags.items():
+        assert validation_functions[flag](value)
+
+
+def parse_flags(default: Dict):
+    if "SPATIALMUON_FLAGS" in os.environ:
+        flags = os.environ["SPATIALMUON_FLAGS"]
+    else:
+        validate_and_cast_flags(default, cast=False)
+        return default
+
+    d = {}
+    flags = flags.split(",")
+    for flag in flags:
+        assert flag.count("=") == 1
+        k, v = flag.split("=")
+        d[k] = v
+
+    # assert set(default.keys()).issuperset(set(d.keys()))
+    # for k_def, v_def in default.items():
+    #     if k_def not in d:
+    #         d[k_def] = v_def
+
+    validate_and_cast_flags(d, cast=True)
+    return d

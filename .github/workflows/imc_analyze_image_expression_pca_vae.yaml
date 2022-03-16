@@ -1,4 +1,4 @@
-name: IMC analyze expression VAE
+name: IMC analyze image expression PCA VAE
 on: 
   workflow_dispatch
 jobs:
@@ -8,6 +8,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          export SPATIALMUON_FLAGS="MODEL_NAME=expression_vae"
+          export SPATIALMUON_FLAGS="MODEL_NAME=image_expression_pca_vae"
           python notebook_exporter.py analyses/imc/expression_vae_analysis.py ci_env
           unset SPATIALMUON_FLAGS

@@ -25,7 +25,7 @@ ppp.LOG_PER_CHANNEL_VALUES = False
 if "SPATIALMUON_TEST" not in os.environ:
     ppp.MAX_EPOCHS = 15
 else:
-    ppp.MAX_EPOCHS = 2
+    ppp.MAX_EPOCHS = 1
 ppp.BATCH_SIZE = 1024
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
@@ -237,7 +237,8 @@ if e_() or __name__ == "__main__":
     else:
         raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
-    storage = "sqlite:///" + file_path("optuna_imc_expression_vae.sqlite")
+    debug_string = '_debug' if ppp.DEBUG else ''
+    storage = "sqlite:///" + file_path(f"optuna_imc_expression_vae{debug_string}.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",
