@@ -73,7 +73,9 @@ def test_analyze_image_expression_conv_vae():
 
 if __name__ == "__main__":
     # test_preprocess_imc_tiler()
-    test_imc_loaders()
+    # test_train_image_expression_conv_vae()
+    test_analyze_image_expression_conv_vae()
+    # test_imc_loaders()
 # if is_debug():
 # pass
 # test_analyze_expression_vae()

@@ -35,7 +35,7 @@ class VAE(pl.LightningModule):
         self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
-        self.out_channels = self.in_channels
+        self.out_channels = out_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
         self.dropout_alpha = self.optuna_parameters["dropout_alpha"]
@@ -78,7 +78,7 @@ class VAE(pl.LightningModule):
         self.sigmoid = nn.Sigmoid()
 
         self.log_c = nn.Parameter(
-            torch.Tensor([self.optuna_parameters["log_c"]] * self.in_channels)
+            torch.Tensor([self.optuna_parameters["log_c"]] * self.out_channels)
         )
         self.logit_d = nn.Parameter(
             torch.logit(torch.Tensor([0.001] * self.in_channels))

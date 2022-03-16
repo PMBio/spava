@@ -25,9 +25,12 @@ if "SPATIALMUON_FLAGS" in os.environ:
     SPATIALMUON_FLAGS = os.environ["SPATIALMUON_FLAGS"]
 else:
     # SPATIALMUON_FLAGS = "expression_vae"
-    SPATIALMUON_FLAGS = "image_expression_vae"
+    # SPATIALMUON_FLAGS = "image_expression_vae"
+    SPATIALMUON_FLAGS = "image_expression_conv_vae"
 
-print(f'{colorama.Fore.MAGENTA}SPATIALMUON_FLAGS = {SPATIALMUON_FLAGS}{colorama.Fore.RESET}')
+print(
+    f"{colorama.Fore.MAGENTA}SPATIALMUON_FLAGS = {SPATIALMUON_FLAGS}{colorama.Fore.RESET}"
+)
 
 
 def is_expression_vae():
@@ -37,21 +40,30 @@ def is_expression_vae():
 def is_image_expression_vae():
     return SPATIALMUON_FLAGS == "image_expression_vae"
 
-torch.multiprocessing.set_sharing_strategy('file_system')
+
+def is_image_expression_conv_vae():
+    return SPATIALMUON_FLAGS == "image_expression_conv_vae"
 
 
-assert np.sum([is_expression_vae(), is_image_expression_vae()]) == 1
-if is_expression_vae():
-    MODEL_NAME = 'expression_vae'
-elif is_image_expression_vae():
-    MODEL_NAME = 'image_expression_vae'
-else:
-    assert False
+torch.multiprocessing.set_sharing_strategy("file_system")
+
+
+assert (
+    np.sum(
+        [is_expression_vae(), is_image_expression_vae(), is_image_expression_conv_vae()]
+    )
+    == 1
+)
+
+MODEL_NAME = SPATIALMUON_FLAGS
+
 ##
 if is_expression_vae():
     from models.expression_vae import VAE
 elif is_image_expression_vae():
     from models.image_expression_vae import VAE
+elif is_image_expression_conv_vae():
+    from models.image_expression_conv_vae import VAE
 else:
     assert False
 ##
@@ -82,6 +94,8 @@ if e_():
                 pass
             elif is_image_expression_vae():
                 pass
+            elif is_image_expression_conv_vae():
+                pass
             else:
                 assert False
             version = -1
@@ -94,13 +108,20 @@ if e_():
     if is_expression_vae():
         batch_size = 1024
         num_workers = 10
-    elif is_image_expression_vae():
+    elif is_image_expression_vae() or is_image_expression_conv_vae():
         batch_size = 128
         num_workers = 10
     else:
         assert False
-    loader_non_perturbed = get_cells_data_loader(split=SPLIT, batch_size=batch_size, num_workers=num_workers)
-    loader_perturbed = get_cells_data_loader(split=SPLIT, batch_size=batch_size, perturb=True, num_workers=num_workers)
+    kwargs = {}
+    if is_image_expression_conv_vae():
+        kwargs = {'pca_tiles': True}
+    loader_non_perturbed = get_cells_data_loader(
+        split=SPLIT, batch_size=batch_size, num_workers=num_workers, **kwargs
+    )
+    loader_perturbed = get_cells_data_loader(
+        split=SPLIT, batch_size=batch_size, perturb=True, num_workers=num_workers, **kwargs
+    )
 
 ##
 if e_():
@@ -121,11 +142,11 @@ def precompute(loader, expression_model_checkpoint, random_indices):
     print("merging expressions and computing embeddings... ", end="")
     all_mu = []
     all_expression = []
-    for data in tqdm(loader, 'embedding'):
+    for data in tqdm(loader, "embedding"):
         if is_expression_vae():
             raster, mask, expression, is_corrupted = data
             a, b, mu, std, z = expression_vae(expression)
-        elif is_image_expression_vae():
+        elif is_image_expression_vae() or is_image_expression_conv_vae():
             image_input, expression, is_corrupted = expression_vae.unfold_batch(data)
             a, b, mu, std, z = expression_vae(image_input)
         else:
@@ -195,9 +216,11 @@ if e_():
             _, _, expression, is_perturbed = data
             _, _, expression_non_perturbed, _ = data_non_perturbed
             a, b, mu, std, z = expression_vae(expression)
-        elif is_image_expression_vae():
+        elif is_image_expression_vae() or is_image_expression_conv_vae():
             image_input, expression, is_perturbed = expression_vae.unfold_batch(data)
-            _, expression_non_perturbed, _ = expression_vae.unfold_batch(data_non_perturbed)
+            _, expression_non_perturbed, _ = expression_vae.unfold_batch(
+                data_non_perturbed
+            )
             a, b, mu, std, z = expression_vae(image_input)
         else:
             assert False
@@ -222,7 +245,9 @@ if e_():
     a_s = np.concatenate(all_a, axis=0)
     b_s = np.concatenate(all_b, axis=0)
     are_perturbed = np.concatenate(all_is_perturbed, axis=0)
-    reconstructed = expression_vae.expected_value(torch.tensor(a_s), torch.tensor(b_s)).numpy()
+    reconstructed = expression_vae.expected_value(
+        torch.tensor(a_s), torch.tensor(b_s)
+    ).numpy()
 
 ##
 # if m:
@@ -271,4 +296,9 @@ if e_():
     os.makedirs(f, exist_ok=True)
 
     d = {"vanilla VAE": kwargs}
-    pickle.dump(d, open(file_path(f"imc/imputation_scores/expression_vae_{MODEL_NAME}.pickle"), "wb"))
+    pickle.dump(
+        d,
+        open(
+            file_path(f"imc/imputation_scores/expression_vae_{MODEL_NAME}.pickle"), "wb"
+        ),
+    )
