@@ -1,9 +1,13 @@
 ##
 
 import os
+import shutil
+import tempfile
+
 import anndata as ad
 import matplotlib.pyplot as plt
 import optuna
+import spatialmuon
 import torch
 from tqdm.auto import tqdm
 
@@ -89,8 +93,7 @@ def get_latent_representation(loader, model):
             a, b, mu, std, z = model(expression)
         elif is_image_expression_conv_vae:
             image_input, expression, is_corrupted = model.unfold_batch(data)
-            raise NotImplementedError()
-            # a, b, mu, std, z = model()
+            a, b, mu, std, z = model(expression, image_input)
         else:
             assert False
         all_mu.append(mu.detach())
@@ -119,19 +122,25 @@ if e_():
     else:
         assert False
 
+    if is_expression_vae:
+        only_expression = True
+    elif is_image_expression_conv_vae:
+        only_expression = False
+    else:
+        assert False
     train_loader_non_perturbed = get_cells_data_loader(
-        split="train", batch_size=batch_size, only_expression=True
+        split="train", batch_size=batch_size, only_expression=only_expression
     )
 
     val_loader_non_perturbed = get_cells_data_loader(
-        split="validation", batch_size=batch_size, only_expression=True
+        split="validation", batch_size=batch_size, only_expression=only_expression
     )
     val_loader_perturbed = get_cells_data_loader(
-        split="validation", batch_size=batch_size, perturb=True, only_expression=True
+        split="validation", batch_size=batch_size, perturb=True, only_expression=only_expression
     )
 
     test_loader_non_perturbed = get_cells_data_loader(
-        split="test", batch_size=batch_size, only_expression=True
+        split="test", batch_size=batch_size, only_expression=only_expression
     )
 
     (
@@ -221,21 +230,23 @@ if e_():
     ordered_lou = ordered_lou.remove_categories("Nein")
     lou_for_smu = ordered_lou.astype("category")
 
-    s = get_smu_file(read_only=False)
-    s["visium"]["processed"].obs["vae"] = lou_for_smu
-    s["visium"]["processed"].masks.obj_has_changed("obs")
-    s.commit_changes_on_disk()
-    s.backing.close()
+    # .clone() does not currently work in read_only=True, so let's go for a workaround
+    with tempfile.TemporaryDirectory() as td:
+        des = os.path.join(td, 'temp.h5smu')
+        s = get_smu_file(read_only=True)
+        src = s.backing.filename
+        s.backing.close()
+        shutil.copyfile(src, des)
+        s = spatialmuon.SpatialMuData(des)
+        s["visium"]["processed"].obs["vae"] = lou_for_smu
+        s["visium"]["processed"].masks.obj_has_changed("obs")
 
-##
-if e_():
-    s = get_smu_file(read_only=False)
-    _, ax = plt.subplots(1)
-    s["visium"]["image"].plot(ax=ax)
-    s["visium"]["processed"].masks.plot("vae", ax=ax)
-    plt.title("latent space from VAE model")
-    plt.show()
-    s.backing.close()
+    ##
+        _, ax = plt.subplots(1)
+        s["visium"]["image"].plot(ax=ax)
+        s["visium"]["processed"].masks.plot("vae", ax=ax)
+        plt.title("latent space from VAE model")
+        plt.show()
 
 ##
 if e_():

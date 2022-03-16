@@ -85,7 +85,7 @@ def test_train_image_expression_conv_vae():
 
 
 def test_analyze_image_expression_conv_vae():
-    os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_conv_vae_analysis.py"
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
     os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_conv_vae"
     import analyses.imc.expression_vae_analysis
 

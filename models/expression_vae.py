@@ -137,13 +137,14 @@ class VAE(pl.LightningModule):
             decoded_a = self.softplus(decoded_a) + eps  # + 2
         elif self._hparams["NOISE_MODEL"] in ["zinb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
-            decoded_b = self.sigmoid(decoded_b)
         elif self._hparams["NOISE_MODEL"] == "zip":
             decoded_a = self.softplus(decoded_a)
         if self._hparams["NOISE_MODEL"] in ["zip", "zig", "zi_gamma"]:
             decoded_b = self.sigmoid(
                 decoded_b / (self.optuna_parameters["learning_rate"] * 10)
             )
+        elif self._hparams['NOISE_MODEL'] == 'zinb':
+            decoded_b = self.sigmoid(decoded_b)
         return decoded_a, decoded_b
 
     def configure_optimizers(self):

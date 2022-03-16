@@ -86,6 +86,7 @@ class CellsDataset(Dataset):
         expression = expression * np.logical_not(is_corrupted)
         if not self.only_expression:
             image = self.f5[item][...]
+            image = image.astype(np.float32) / 255.
             return image, expression, is_corrupted
         else:
             return expression, is_corrupted

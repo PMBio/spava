@@ -20,11 +20,12 @@ from utils import reproducible_random_choice, get_execute_function, parse_flags
 e_ = get_execute_function()
 # os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
 # os.environ["SPATIALMUON_NOTEBOOK"] = "analyses/imc/expression_vae_analysis.py"
+print(f'{colorama.Fore.MAGENTA}e_() = {e_()}{colorama.Fore.RESET}')
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 ##
-flags = parse_flags(default={'MODEL_NAME': 'expression_vae'})
+flags = parse_flags(default={'MODEL_NAME': 'image_expression_conv_vae'})
 MODEL_NAME = flags['MODEL_NAME']
 is_expression_vae = MODEL_NAME == 'expression_vae'
 is_image_expression_vae = MODEL_NAME == 'image_expression_vae'
@@ -85,15 +86,13 @@ if e_():
     if is_expression_vae:
         batch_size = 1024
         num_workers = 10
-    elif is_image_expression_vae or is_image_expression_pca_vae:
+    elif is_image_expression_vae or is_image_expression_pca_vae or is_image_expression_conv_vae:
         batch_size = 128
         num_workers = 10
-    elif is_image_expression_conv_vae:
-        pass
     else:
         assert False
     kwargs = {}
-    if is_image_expression_pca_vae:
+    if is_image_expression_conv_vae or is_image_expression_pca_vae:
         kwargs = {'pca_tiles': True}
     loader_non_perturbed = get_cells_data_loader(
         split=SPLIT, batch_size=batch_size, num_workers=num_workers, **kwargs
@@ -129,7 +128,8 @@ def precompute(loader, expression_model_checkpoint, random_indices):
             image_input, expression, is_corrupted = expression_vae.unfold_batch(data)
             a, b, mu, std, z = expression_vae(image_input)
         elif is_image_expression_conv_vae:
-            pass
+            image_input, expression, is_corrupted = expression_vae.unfold_batch(data)
+            a, b, mu, std, z = expression_vae(expression, image_input)
         else:
             assert False
         all_mu.append(mu.detach())
@@ -204,7 +204,11 @@ if e_():
             )
             a, b, mu, std, z = expression_vae(image_input)
         elif is_image_expression_conv_vae:
-            pass
+            image_input, expression, is_perturbed = expression_vae.unfold_batch(data)
+            _, expression_non_perturbed, _ = expression_vae.unfold_batch(
+                data_non_perturbed
+            )
+            a, b, mu, std, z = expression_vae(expression, image_input)
         else:
             assert False
         all_mu.append(mu.detach().numpy())

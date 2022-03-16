@@ -77,6 +77,7 @@ def optuna_nan_workaround(loss):
     return loss
 
 
+import pyro.distributions
 from pyro.distributions.zero_inflated import ZeroInflatedDistribution
 from pyro.distributions import Gamma
 from torch.distributions import constraints
@@ -108,11 +109,11 @@ class ZeroInflatedNormal(ZeroInflatedDistribution):
         )
 
     @property
-    def location(self):
+    def loc(self):
         return self.base_dist.mean
 
     @property
-    def stddev(self):
+    def scale(self):
         return self.base_dist.stddev
 
 
@@ -177,24 +178,31 @@ def get_fc_layers(dims: List[int], name: str, dropout_alpha: float):
         )
     )
 
+
 def get_conv_layers(dims: List[int], kernel_sizes: List[int], name: str):
     assert len(dims) == len(kernel_sizes) + 1
     return nn.Sequential(
         OrderedDict(
             [
                 (
-                    f'{name}_layer{i}',
+                    f"{name}_layer{i}",
                     nn.Sequential(
                         nn.Conv2d(n_in, n_out, kernel_size=ks),
                         nn.BatchNorm2d(n_out),
                         nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=3, stride=2)
-                    )
+                        nn.MaxPool2d(kernel_size=3, stride=2),
+                    ),
                 )
-                for i, (n_in, n_out, ks) in enumerate(zip(dims[:-1], dims[1:], kernel_sizes))
+                for i, (n_in, n_out, ks) in enumerate(
+                    zip(dims[:-1], dims[1:], kernel_sizes)
+                )
             ]
         )
     )
+
+
+def has_nan_or_inf(x: torch.Tensor):
+    return torch.isnan(x).any() or torch.isnan(x).any()
 
 
 # dist = Gamma(10, 10)

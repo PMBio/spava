@@ -16,7 +16,7 @@ from analyses.torch_boilerplate import (
 pl.seed_everything(1234)
 
 from utils import get_execute_function
-from analyses.torch_boilerplate import get_detect_anomaly_cm
+from analyses.torch_boilerplate import get_detect_anomaly_cm, has_nan_or_inf
 
 e_ = get_execute_function()
 
@@ -122,13 +122,14 @@ class VAE(pl.LightningModule):
             decoded_a = self.softplus(decoded_a) + eps  # + 2
         elif self._hparams["NOISE_MODEL"] in ["zinb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
-            decoded_b = self.sigmoid(decoded_b)
         elif self._hparams["NOISE_MODEL"] == "zip":
             decoded_a = self.softplus(decoded_a)
         if self._hparams["NOISE_MODEL"] in ["zip", "zig", "zi_gamma"]:
             decoded_b = self.sigmoid(
                 decoded_b / (self.optuna_parameters["learning_rate"] * 10)
             )
+        elif self._hparams['NOISE_MODEL'] == 'zinb':
+            decoded_b = self.sigmoid(decoded_b)
         return decoded_a, decoded_b
 
     def configure_optimizers(self):
@@ -162,6 +163,7 @@ class VAE(pl.LightningModule):
         if self._hparams["NOISE_MODEL"] == "gaussian":
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
         elif self._hparams["NOISE_MODEL"] == "zin":
+            # not sure here the std is used and not the precision
             dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
         elif self._hparams["NOISE_MODEL"] == "gamma":
             dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
@@ -186,11 +188,8 @@ class VAE(pl.LightningModule):
         # measure prob of seeing image under p(x|z)
         # bad variable naming :P
         zero = torch.tensor([2.0]).to(a.device)
-        if torch.any(dist.log_prob(zero).isinf()):
-            print("infinite value detected")
-            raise RuntimeError("manual abort")
-        if torch.any(dist.log_prob(zero).isnan()):
-            print("nan value detected")
+        if has_nan_or_inf(dist.log_prob(zero)):
+            print("infinite or nan value detected in likelihood")
             raise RuntimeError("manual abort")
         if self._hparams["NOISE_MODEL"] in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
@@ -238,21 +237,10 @@ class VAE(pl.LightningModule):
         cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
             if self._hparams["MONTE_CARLO"]:
-                if (
-                    torch.isnan(a).any()
-                    or torch.isnan(b).any()
-                    or torch.isinf(a).any()
-                    or torch.isinf(b).any()
-                ):
+                if has_nan_or_inf(a) or has_nan_or_inf(b):
                     print("nan or inf in (a, b) detected!")
-                    # this recon_loss will contain a NaN and NaN will be propagated to elbo, which will trigger a
-                    # print and optuna_nan_workaround()
-                    recon_loss = torch.sum(a, dim=1) + torch.sum(b, dim=1)
                     raise RuntimeError("manual abort")
-                else:
-                    recon_loss = self.reconstruction_likelihood(
-                        a, b, x, corrupted_entries
-                    )
+                recon_loss = self.reconstruction_likelihood(a, b, x, corrupted_entries)
                 # kl
                 kl = self.kl_divergence(z, mu, std)
             else:
@@ -261,7 +249,7 @@ class VAE(pl.LightningModule):
                 kl = self.kld_loss(mu, log_var)
             elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
-            if torch.isinf(elbo).any() or torch.isnan(elbo).any():
+            if has_nan_or_inf(elbo):
                 print("nan or inf in loss detected!")
                 raise RuntimeError("manual abort")
             elbo = optuna_nan_workaround(elbo)
@@ -278,12 +266,7 @@ class VAE(pl.LightningModule):
             # sample z from q
             eps = 1e-7
             std = torch.exp(log_var / 2) + eps
-            if (
-                torch.isnan(mu).any()
-                or torch.isnan(std).any()
-                or torch.isinf(mu).any()
-                or torch.isinf(std).any()
-            ):
+            if has_nan_or_inf(mu) or has_nan_or_inf(std):
                 print("nan or inf in (mu, std) detected!")
                 raise RuntimeError("manual abort")
             try:
@@ -295,10 +278,11 @@ class VAE(pl.LightningModule):
             # decoded
             a, b = self.decoder(torch.cat((z, image_features), dim=1))
             if (
-                torch.isnan(a).any()
-                or torch.isnan(mu).any()
-                or torch.isnan(std).any()
-                or torch.isnan(z).any()
+                has_nan_or_inf(a)
+                or has_nan_or_inf(b)
+                or has_nan_or_inf(z)
+                or has_nan_or_inf(mu)
+                or has_nan_or_inf(std)
             ):
                 print("nan in forward detected!")
                 raise RuntimeError("manual abort")

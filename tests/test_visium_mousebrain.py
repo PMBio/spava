@@ -43,7 +43,7 @@ def test_analyze_expression_vae():
 def test_train_image_expression_conv_vae():
     os.environ[
         "SPATIALMUON_TEST"
-    ] = "analyses/visium_mousebrain/expression_vae_runner.py"
+    ] = "analyses/visium_mousebrain/image_expression_conv_vae_runner.py"
     import analyses.visium_mousebrain.image_expression_conv_vae_runner
 
 
