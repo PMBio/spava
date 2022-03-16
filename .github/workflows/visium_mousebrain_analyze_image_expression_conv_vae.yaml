@@ -1,4 +1,4 @@
-name: Visium mousebrain analyze expression VAE
+name: Visium mousebrain analyze image expression conv VAE
 on: 
   workflow_dispatch
 jobs:
@@ -8,6 +8,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          export SPATIALMUON_FLAGS="expression_vae"
+          export SPATIALMUON_FLAGS="image_expression_conv_vae"
           python notebook_exporter.py analyses/visium_mousebrain/expression_vae_analysis.py ci_env
           unset SPATIALMUON_FLAGS

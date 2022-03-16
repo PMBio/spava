@@ -33,7 +33,7 @@ def test_train_expression_vae():
     import analyses.imc.expression_vae_runner
 
 
-def test_analyze_vae_expression_vae_model():
+def test_analyze_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
     os.environ["SPATIALMUON_FLAGS"] = "expression_vae"
     import analyses.imc.expression_vae_analysis
@@ -46,9 +46,24 @@ def test_train_image_expression_vae():
     import analyses.imc.image_expression_vae_runner
 
 
-def test_analyze_image_expression_vae_model():
+def test_analyze_image_expression_vae():
     os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_vae_analysis.py"
     os.environ["SPATIALMUON_FLAGS"] = "image_expression_vae"
+    import analyses.imc.expression_vae_analysis
+
+    importlib.reload(analyses.imc.expression_vae_analysis)
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_train_image_expression_conv_vae():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/image_expression_conv_vae_runner.py"
+    import analyses.imc.image_expression_conv_vae_runner
+
+
+def test_analyze_image_expression_conv_vae():
+    os.environ["SPATIALMUON_TEST"] = "analyses/imc/expression_conv_vae_analysis.py"
+    os.environ["SPATIALMUON_FLAGS"] = "image_expression_conv_vae"
     import analyses.imc.expression_vae_analysis
 
     importlib.reload(analyses.imc.expression_vae_analysis)
@@ -61,5 +76,5 @@ if __name__ == "__main__":
     test_imc_loaders()
 # if is_debug():
 # pass
-# test_analyze_vae_expression_vae_model()
-# test_analyze_image_expression_vae_model()
+# test_analyze_expression_vae()
+# test_analyze_image_expression_vae()
