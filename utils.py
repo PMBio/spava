@@ -126,8 +126,8 @@ def print_corrupted_entries_hash(corrupted_entries: np.ndarray, split: str):
 def validate_and_cast_flags(flags: Dict, cast: bool):
     validate_type_functions = {
         "MODEL_NAME": lambda s: True,
-        "TILE_SIZE": lambda s: s.isdigit,
-        "GRAPH_SIZE": lambda s: s.isdigit,
+        "TILE_SIZE": lambda s: s.isdigit(),
+        "GRAPH_SIZE": lambda s: s.isdigit(),
         "PCA": lambda s: s in ["True", "False"],
     }
     cast_functions = {
@@ -139,8 +139,8 @@ def validate_and_cast_flags(flags: Dict, cast: bool):
     validation_functions = {
         "MODEL_NAME": lambda s: s
         in ["expression_vae", "image_expression_vae", "image_expression_pca_vae", "image_expression_conv_vae"],
-        "TILE_SIZE": lambda s: s.isdigit and 32 <= int(s) <= 256,
-        "GRAPH_SIZE": lambda s: s.isdigit and 3 <= int(s) <= 50,
+        "TILE_SIZE": lambda s: 32 <= int(s) <= 256,
+        "GRAPH_SIZE": lambda s: 3 <= int(s) <= 50,
         "PCA": lambda s: True,
     }
     assert set(validate_type_functions.keys()) == set(cast_functions.keys())

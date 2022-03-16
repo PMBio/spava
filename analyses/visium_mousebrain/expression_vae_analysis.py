@@ -30,6 +30,15 @@ is_image_expression_conv_vae = MODEL_NAME == "image_expression_conv_vae"
 
 ##
 if is_expression_vae:
+    MODEL_FULLNAME = f'visium_mousebrain_{MODEL_NAME}'
+elif is_image_expression_conv_vae:
+    TILE_SIZE = flags['TILE_SIZE']
+    MODEL_FULLNAME = f'visium_mousebrain_{MODEL_NAME}_{TILE_SIZE}'
+else:
+    assert False
+
+##
+if is_expression_vae:
     from models.expression_vae import VAE
 elif is_image_expression_conv_vae:
     from models.image_expression_conv_vae import VAE
@@ -41,10 +50,9 @@ if e_():
     from utils import file_path
 
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = f"visium_mousebrain_{MODEL_NAME}"
     study = optuna.load_study(
-        study_name=study_name,
-        storage="sqlite:///" + file_path(f"optuna_{study_name}.sqlite"),
+        study_name=MODEL_FULLNAME,
+        storage="sqlite:///" + file_path(f"optuna_{MODEL_FULLNAME}.sqlite"),
     )
     print("best trial:")
     print(study.best_trial)
@@ -75,7 +83,7 @@ if e_():
 ##
 if e_():
     MODEL_CHECKPOINT = file_path(
-        f"checkpoints/{study_name}/version_{version}/checkpoints/last.ckpt"
+        f"checkpoints/{MODEL_FULLNAME}/version_{version}/checkpoints/last.ckpt"
     )
     expression_vae = VAE.load_from_checkpoint(MODEL_CHECKPOINT)
 
@@ -255,7 +263,7 @@ if e_():
         original=expression_val_non_perturbed.X,
         corrupted_entries=val_are_perturbed.detach().cpu().numpy(),
         predictions_from_perturbed=val_perturbed_reconstructed.detach().cpu().numpy(),
-        name=f"{study_name} (val)",
+        name=f"{MODEL_FULLNAME} (val)",
     )
     vae_predictions = Prediction(**kwargs)
 
@@ -274,4 +282,4 @@ if e_():
     os.makedirs(f, exist_ok=True)
 
     d = {"vanilla VAE": kwargs}
-    pickle.dump(d, open(file_path(f"{f}/{MODEL_NAME}.pickle"), "wb"))
+    pickle.dump(d, open(file_path(f"{f}/{MODEL_FULLNAME}.pickle"), "wb"))

@@ -8,9 +8,11 @@ from analyses.torch_boilerplate import (
     optuna_nan_workaround,
 )
 from models.image_expression_conv_vae import VAE
-from utils import file_path, get_execute_function
+from utils import file_path, get_execute_function, parse_flags
 
 e_ = get_execute_function()
+flags = parse_flags(default={'TILE_SIZE': 32})
+MODEL_FULLNAME = f"visium_mousebrain_image_expression_conv_vae_{flags['TILE_SIZE']}"
 
 
 class Ppp:
@@ -146,7 +148,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         max_epochs=ppp.MAX_EPOCHS,
         log_every_n_steps=10 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
-        model_name="visium_mousebrain_image_expression_conv_vae",
+        model_name=MODEL_FULLNAME,
     )
 
     # hyperparameters
@@ -211,23 +213,16 @@ def objective(trial: optuna.trial.Trial) -> float:
 
 if e_() or __name__ == "__main__":
     pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "visium_mousebrain_image_expression_conv_vae"
-    if study_name == "visium_mousebrain_image_expression_conv_vae_perturbed":
-        ppp.PERTURB = True
-    elif study_name == "visium_mousebrain_image_expression_conv_vae":
-        ppp.PERTURB = False
-    else:
-        raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
     debug_string = '_debug' if ppp.DEBUG else ''
-    storage = "sqlite:///" + file_path(f"optuna_visium_mousebrain_image_expression_conv_vae{debug_string}.sqlite")
+    storage = "sqlite:///" + file_path(f"optuna_{MODEL_FULLNAME}{debug_string}.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",
         pruner=pruner,
         storage=storage,
         load_if_exists=True,
-        study_name=study_name,
+        study_name=MODEL_FULLNAME,
     )
     OPTIMIZE = True
     # OPTIMIZE = False

@@ -86,7 +86,7 @@ class CellsDataset(Dataset):
         expression = expression * np.logical_not(is_corrupted)
         if not self.only_expression:
             image = self.f5[item][...]
-            image = image.astype(np.float32) / 255.
+            image = image.astype(np.float32) / 255.0
             return image, expression, is_corrupted
         else:
             return expression, is_corrupted
@@ -97,12 +97,14 @@ if e_():
     ds = CellsDataset(split="test")
     ds.perturb()
     print(ds[0])
-    print(f'ds.tile_dim = {ds.tile_dim}')
-    print(f'ds.n_expression_channels = {ds.n_expression_channels}, ds.n_image_channels = {ds.n_image_channels}')
+    print(f"ds.tile_dim = {ds.tile_dim}")
+    print(
+        f"ds.n_expression_channels = {ds.n_expression_channels}, ds.n_image_channels = {ds.n_image_channels}"
+    )
 
 ##
-def get_cells_data_loader(split, batch_size, perturb=False, only_expression=False):
-    ds = CellsDataset(split, only_expression=only_expression)
+def get_cells_data_loader(split, batch_size, perturb=False, only_expression=False, tile_dim: int = 32):
+    ds = CellsDataset(split, only_expression=only_expression, tile_dim=tile_dim)
     if perturb:
         ds.perturb()
     loader = DataLoader(

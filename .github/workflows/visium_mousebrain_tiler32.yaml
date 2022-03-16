@@ -1,4 +1,4 @@
-name: Visium mousebrain tiler
+name: Visium mousebrain tiler 64
 on:
   workflow_dispatch
 jobs:
@@ -8,4 +8,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
+          export SPATIALMUON_FLAGS="TILE_SIZE=64"
           python notebook_exporter.py datasets/tilers/visium_mousebrain_tiler.py ci_env
+          unset SPATIALMUON_FLAGS

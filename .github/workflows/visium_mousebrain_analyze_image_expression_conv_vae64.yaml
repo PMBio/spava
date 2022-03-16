@@ -1,0 +1,13 @@
+name: Visium mousebrain analyze image expression conv VAE 64
+on: 
+  workflow_dispatch
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          export SPATIALMUON_FLAGS="MODEL_NAME=image_expression_conv_vae,TILE_SIZE=64"
+          python notebook_exporter.py analyses/visium_mousebrain/expression_vae_analysis.py ci_env
+          unset SPATIALMUON_FLAGS

@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory() as tempdir:
     assert os.path.isfile(f)
     basename = os.path.basename(f)
     assert basename.endswith('.py')
-    basename = basename[:len('.py')]
+    basename = basename[:-len('.py')]
     if 'SPATIALMUON_FLAGS' in os.environ:
         basename += f'_{os.environ["SPATIALMUON_FLAGS"]}'
     basename += '.py'

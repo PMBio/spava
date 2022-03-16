@@ -8,9 +8,21 @@ def test_preprocess_visium_mousebrain():
     import datasets.visium_mousebrain
 
 
-def test_preprocess_visium_mousebrain_tiler():
+def test_preprocess_visium_mousebrain_tiler32():
     os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_mousebrain_tiler.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=32"
     import datasets.tilers.visium_mousebrain_tiler
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_preprocess_visium_mousebrain_tiler64():
+    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_mousebrain_tiler.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=64"
+    import datasets.tilers.visium_mousebrain_tiler
+
+    importlib.reload(datasets.tilers.visium_mousebrain_tiler)
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
 def test_preprocess_visium_mousebrain_graphs():
@@ -40,18 +52,51 @@ def test_analyze_expression_vae():
     del os.environ["SPATIALMUON_FLAGS"]
 
 
-def test_train_image_expression_conv_vae():
+def test_train_image_expression_conv_vae32():
     os.environ[
         "SPATIALMUON_TEST"
     ] = "analyses/visium_mousebrain/image_expression_conv_vae_runner.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=32"
+
     import analyses.visium_mousebrain.image_expression_conv_vae_runner
 
+    del os.environ["SPATIALMUON_FLAGS"]
 
-def test_analyze_image_expression_conv_vae():
+
+def test_analyze_image_expression_conv_vae32():
     os.environ[
         "SPATIALMUON_TEST"
     ] = "analyses/visium_mousebrain/expression_vae_analysis.py"
-    os.environ["SPATIALMUON_FLAGS"] = "MODEL_NAME=image_expression_conv_vae"
+    os.environ[
+        "SPATIALMUON_FLAGS"
+    ] = "MODEL_NAME=image_expression_conv_vae,TILE_SIZE=32"
+    import analyses.visium_mousebrain.expression_vae_analysis
+
+    importlib.reload(analyses.visium_mousebrain.expression_vae_analysis)
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_train_image_expression_conv_vae64():
+    os.environ[
+        "SPATIALMUON_TEST"
+    ] = "analyses/visium_mousebrain/image_expression_conv_vae_runner.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=64"
+
+    import analyses.visium_mousebrain.image_expression_conv_vae_runner
+
+    importlib.reload(analyses.visium_mousebrain.image_expression_conv_vae_runner)
+
+    del os.environ["SPATIALMUON_FLAGS"]
+
+
+def test_analyze_image_expression_conv_vae64():
+    os.environ[
+        "SPATIALMUON_TEST"
+    ] = "analyses/visium_mousebrain/expression_vae_analysis.py"
+    os.environ[
+        "SPATIALMUON_FLAGS"
+    ] = "MODEL_NAME=image_expression_conv_vae,TILE_SIZE=64"
     import analyses.visium_mousebrain.expression_vae_analysis
 
     importlib.reload(analyses.visium_mousebrain.expression_vae_analysis)
