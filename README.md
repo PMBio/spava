@@ -6,7 +6,8 @@
 # Tests
 | name | type |
 |-------------|---------|
-|[![Run tests](https://github.com/PMBio/a/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests.yaml)| on push |
+|[![Run tests short](https://github.com/PMBio/a/actions/workflows/run_tests_short.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests_short.yaml)| on demand |
+|[![Run tests](https://github.com/PMBio/a/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/run_tests.yaml)| on demand |
 
 # Analyses
 ## IMC Jackson-Fischer dataset
@@ -49,7 +50,7 @@
 | name                                                                                                                                                                                                                                                                                                                                                | type |
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
 | [![Preprocess](https://github.com/PMBio/a/actions/workflows/visium_endometrium_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_preprocess.yaml)                                                                                                                                                           | on demand |
-{% comment %}
+<!---
 | [![Tiler 32](https://github.com/PMBio/a/actions/workflows/visium_endometrium_tiler32.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_tiler32.yaml)                                                                                                                                                                          | on demand |
 | [![Tiler 64](https://github.com/PMBio/a/actions/workflows/visium_endometrium_tiler64.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_tiler64.yaml)                                                                                                                                                                          | on demand |
 | [![Graphs](https://github.com/PMBio/a/actions/workflows/visium_endometrium_graphs.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_graphs.yaml)                                                                                                                                                                       | on demand |
@@ -59,8 +60,7 @@
 | `Train image expression conv VAE 32`                                                                                                                                                                                                                                                                                                         | no workflow |
 | [![Analyze image expression conv VAE 32](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae32.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae32.yaml) | on demand |
 | `Train image expression conv VAE 64`                                                                                                                                                                                                                                                                                                         | no workflow |
-| [![Analyze image expression conv VAE 64](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae64.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae64.yaml) | on demand |
-{% endcomment %}
+| [![Analyze image expression conv VAE 64](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae64.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_analyze_image_expression_conv_vae64.yaml) | on demand | --->
 
 ### scvi
 | name                                                                                                                                                     | type |
