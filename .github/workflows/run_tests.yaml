@@ -8,8 +8,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           source ~/.bashrc
-          
-#          export SPATIALMUON_SELECT_TESTS="short"
 
           conda activate ci_env
           python -m tests.setup_test_data
@@ -24,5 +22,3 @@ jobs:
           conda activate scvi_env
           python -m pytest tests/test_scvi.py 
           conda deactivate
- 
-#          unset SPATIALMUON_SELECT_TESTS
