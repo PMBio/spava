@@ -46,7 +46,7 @@
 | `Train image expression conv VAE 64`                                                                                                                                                                                                                                                                                                         | no workflow |
 | [![Analyze image expression conv VAE 64](https://github.com/PMBio/a/actions/workflows/visium_mousebrain_analyze_image_expression_conv_vae64.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_mousebrain_analyze_image_expression_conv_vae64.yaml) | on demand |
 
-## Visium mouse brain dataset
+## Visium endometrium dataset
 | name                                                                                                                                                                                                                                                                                                                                                | type |
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
 | [![Preprocess](https://github.com/PMBio/a/actions/workflows/visium_endometrium_preprocess.yaml/badge.svg)](https://github.com/PMBio/a/actions/workflows/visium_endometrium_preprocess.yaml)                                                                                                                                                           | on demand |
