@@ -128,7 +128,9 @@ if e_():
     # https://stackoverflow.com/questions/71106940/cannot-import-name-centered-from-scipy-signal-signaltools
     # sc.pp.regress_out(adata, ["total_counts"])
     adata_non_scaled = adata.copy()
-    sc.pp.scale(adata, max_value=10)
+    sc.pp.log1p(adata)
+    sc.pp.scale(adata)
+    # sc.pp.scale(adata, max_value=10)
 
 ##
 # if I use this I get a segfault from protobuf for some reasons, let us make neighbors call implicitly a version of
@@ -158,8 +160,8 @@ if e_():
 
 ##
 if False:
-    # to understand that the data has not been log(1 + x) transformed
-    x = np.asarray(adata.X.todense())
+    # to understand if the data has been log(1 + x) transformed
+    x = np.asarray(adata.X)
     x = np.log1p(x)
     mu = np.mean(x, axis=0)
     std = np.std(x, axis=0)

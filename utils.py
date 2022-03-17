@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import math
 import matplotlib
 import sys
 import pathlib
@@ -180,3 +181,22 @@ def parse_flags(default: Dict):
 
     validate_and_cast_flags(d, cast=True)
     return d
+
+def get_splits_indices(n, ratios):
+    ns = [math.floor(n * ratios[0]), math.ceil(n * ratios[1])]
+    ns.append(n - np.sum(ns))
+    train_indices = sorted(reproducible_random_choice(n, ns[0]))
+    remaining = list(set(range(n)).difference(train_indices))
+    validation_indices = sorted(
+        np.array(remaining)[
+            np.array(reproducible_random_choice(len(remaining), ns[1]))
+        ].tolist()
+    )
+    test_indices = sorted(list(set(remaining).difference(validation_indices)))
+    assert len(set(train_indices) | set(validation_indices) | set(test_indices)) == n
+    indices = {
+        "train": train_indices,
+        "validation": validation_indices,
+        "test": test_indices,
+    }
+    return indices

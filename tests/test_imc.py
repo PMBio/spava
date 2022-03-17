@@ -95,8 +95,9 @@ def test_analyze_image_expression_conv_vae():
 
 
 if __name__ == "__main__":
+    test_preprocess_imc_graphs()
     # test_train_image_expression_pca_vae()
-    test_analyze_image_expression_pca_vae()
+    # test_analyze_image_expression_pca_vae()
     # test_preprocess_imc_tiler()
     # test_train_image_expression_conv_vae()
     # test_analyze_image_expression_conv_vae()

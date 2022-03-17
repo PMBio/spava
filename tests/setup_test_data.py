@@ -1,9 +1,14 @@
 ##
 import os
 import shutil
+import time
+
+import matplotlib.pyplot as plt
 import spatialmuon as smu
 import numpy as np
+import pandas as pd
 from utils import file_path
+from tqdm.auto import tqdm
 
 # the folder is called 'a'
 a_folder = file_path(".")
@@ -21,10 +26,14 @@ smu_des_imc_folder = os.path.join(a_test_folder, "spatialmuon/imc")
 smu_des_visium_mousebrain_folder = os.path.join(
     a_test_folder, "spatialmuon/visium_mousebrain"
 )
+smu_des_visium_endometrium_folder = os.path.join(
+    a_test_folder, "spatialmuon/visium_endometrium"
+)
 os.makedirs(smu_des_imc_folder, exist_ok=True)
 os.makedirs(smu_des_visium_mousebrain_folder, exist_ok=True)
+os.makedirs(smu_des_visium_endometrium_folder, exist_ok=True)
 ##
-
+print("generating imc pytest data")
 imc_files = [
     "BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_107_114_X13Y4_219_a0_full.tiff",
     "BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_106_18_X13Y5_248_a0_full.tiff",
@@ -55,10 +64,23 @@ for imc in imc_files:
     s.backing.close()
 
 ##
+print("generating visium mousebrain pytest data")
 visium_mousebrain_src = "/data/l989o/deployed/spatialmuon/tests/data/small_visium.h5smu"
 visium_mousebrain_des = os.path.join(smu_des_visium_mousebrain_folder, "visium.h5smu")
 shutil.copy(visium_mousebrain_src, visium_mousebrain_des)
 # s = smu.SpatialMuData(visium_mousebrain_des)
 # s
+
+##
+print("generating visium endometrium pytest data")
+visium_endrometrium_samples = ["152806", "152807"]  #, "152810", "152811"]
+for sample in tqdm(visium_endrometrium_samples):
+    visium_endometrium_src = os.path.join(
+        f'/data/spatialmuon/datasets/visium_endometrium/smu/subsampled/{sample}.h5smu'
+    )
+    visium_endometrium_des = os.path.join(
+        smu_des_visium_endometrium_folder, f"{sample}.h5smu"
+    )
+    shutil.copy(visium_endometrium_src, visium_endometrium_des)
 ##
 print("done")

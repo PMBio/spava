@@ -1,0 +1,11 @@
+name: Visium endometrium preprocess data
+on: 
+  workflow_dispatch
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          python notebook_exporter.py datasets/visium_endometrium.py ci_env

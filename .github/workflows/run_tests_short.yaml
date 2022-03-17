@@ -1,6 +1,6 @@
-name: Run tests
+name: Run tests short
 on:
-  workflow_dispatch
+  [push, workflow_dispatch]
 jobs:
   test-data:
     runs-on: self-hosted
@@ -9,8 +9,8 @@ jobs:
       - run: |
           source ~/.bashrc
           
-#          export SPATIALMUON_SELECT_TESTS="short"
-
+          export SPATIALMUON_SELECT_TESTS="short"
+          
           conda activate ci_env
           python -m tests.setup_test_data
           conda deactivate
@@ -25,4 +25,4 @@ jobs:
           python -m pytest tests/test_scvi.py 
           conda deactivate
  
-#          unset SPATIALMUON_SELECT_TESTS
+          unset SPATIALMUON_SELECT_TESTS
