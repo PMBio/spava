@@ -8,53 +8,45 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from typing import Union, Literal
 
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
-from datasets.visium_endometrium import get_smu_file, get_split_bimap, visium_endrometrium_samples
+from datasets.visium_mousebrain import get_smu_file, get_split_indices
 from utils import (
     get_execute_function,
     file_path,
+    get_bimap,
     print_corrupted_entries_hash,
 )
 
 e_ = get_execute_function()
+# os.environ['SPATIALMUON_TEST'] = 'datasets/loaders/visium_mousebrain_loaders.py'
 
 plt.style.use("dark_background")
 
 ##
 class CellsDataset(Dataset):
     def __init__(
-        self, split, only_expression=False, raw_counts=False, tile_dim: Union[int, Literal['large']] = 32
+        self, split, only_expression=False, raw_counts=False, tile_dim: int = 32
     ):
         self.split = split
         self.only_expression = only_expression
-        self.map_left, self.map_right = get_split_bimap(self.split)
+        self.indices = get_split_indices(self.split)
         self.raw_counts = raw_counts
         if not self.only_expression:
-            self.tiles_file = file_path(f"visium_endometrium/tiles_{tile_dim}.hdf5")
-            self.f5 = h5py.File(self.tiles_file, "r")
-            assert len(self.map_left) == len(self.f5[self.split])
-        self.expressions = []
-        for sample in visium_endrometrium_samples:
-            ##
-            indices = []
-            for kk, vv in self.map_left.values():
-                if kk == sample:
-                    indices.append(vv)
-            indices = np.array(indices)
+            self.tiles_file = file_path(f"visium_mousebrain/tiles_{tile_dim}.hdf5")
+            self.f5 = h5py.File(self.tiles_file, "r")[self.split]
+            assert len(self.indices) == len(self.f5)
+        s = get_smu_file(read_only=True)
+        if not self.raw_counts:
+            self.expressions = s["visium"]["processed"].X[self.indices, :]
+        else:
+            self.expressions = s["visium"]["non_scaled"].X[self.indices, :].todense().A
+        s.backing.close()
 
-            s = get_smu_file(sample=sample, read_only=True)
-            if not self.raw_counts:
-                expressions = s["visium"]["processed"].X[indices, :]
-            else:
-                expressions = s["visium"]["non_scaled"].X[indices, :].todense().A
-            self.expressions.append(expressions)
-            s.backing.close()
-        self.expressions = np.concatenate(self.expressions, axis=0)
-        assert len(self.expressions) == len(self.map_left)
+        if not self.only_expression:
+            assert self.tile_dim == tile_dim
 
         self.seed = None
         self.corrupted_entries = np.zeros(
@@ -63,7 +55,7 @@ class CellsDataset(Dataset):
 
     @property
     def n_image_channels(self):
-        return self.f5[self.split].shape[-1]
+        return self.f5[0].shape[-1]
 
     @property
     def n_expression_channels(self):
@@ -71,7 +63,7 @@ class CellsDataset(Dataset):
 
     @property
     def tile_dim(self):
-        return self.f5[self.split].shape[1]
+        return self.f5[0].shape[0]
 
     def perturb(self, seed=0):
         self.seed = seed
@@ -86,18 +78,19 @@ class CellsDataset(Dataset):
         print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
     def __len__(self):
-        return len(self.map_left)
+        return len(self.indices)
 
     def __getitem__(self, item):
         expression = self.expressions[item]
         is_corrupted = self.corrupted_entries[item]
         expression = expression * np.logical_not(is_corrupted)
         if not self.only_expression:
-            image = self.f5[self.split][item][...]
-            image = image.astype(np.float32)
+            image = self.f5[item][...]
+            image = image.astype(np.float32) / 255.0
             return image, expression, is_corrupted
         else:
             return expression, is_corrupted
+
 
 ##
 if e_():

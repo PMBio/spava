@@ -8,31 +8,31 @@ def test_preprocess_visium_endometrium():
     import datasets.visium_endometrium
 
 
-# def test_preprocess_visium_endometrium_tiler32():
-#     os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_endometrium_tiler.py"
-#     os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=32"
-#     import datasets.tilers.visium_endometrium_tiler
-#
-#     del os.environ["SPATIALMUON_FLAGS"]
+def test_preprocess_visium_endometrium_tiler32():
+    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_endometrium_tiler.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=32"
+    import datasets.tilers.visium_endometrium_tiler
+
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
-# def test_preprocess_visium_endometrium_tiler64():
-#     os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_endometrium_tiler.py"
-#     os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=64"
-#     import datasets.tilers.visium_endometrium_tiler
-#
-#     importlib.reload(datasets.tilers.visium_endometrium_tiler)
-#     del os.environ["SPATIALMUON_FLAGS"]
+def test_preprocess_visium_endometrium_tiler_large():
+    os.environ["SPATIALMUON_TEST"] = "datasets/tilers/visium_endometrium_tiler.py"
+    os.environ["SPATIALMUON_FLAGS"] = "TILE_SIZE=large"
+    import datasets.tilers.visium_endometrium_tiler
+
+    importlib.reload(datasets.tilers.visium_endometrium_tiler)
+    del os.environ["SPATIALMUON_FLAGS"]
 
 
 # def test_preprocess_visium_endometrium_graphs():
 #     os.environ["SPATIALMUON_TEST"] = "datasets/visium_endometrium_graphs.py"
 #     import datasets.graphs.visium_endometrium_graphs
-#
-#
-# def test_visium_endometrium_loaders():
-#     os.environ["SPATIALMUON_TEST"] = "datasets/loaders/visium_endometrium_loaders.py"
-#     import datasets.loaders.visium_endometrium_loaders
+
+
+def test_visium_endometrium_loaders():
+    os.environ["SPATIALMUON_TEST"] = "datasets/loaders/visium_endometrium_loaders.py"
+    import datasets.loaders.visium_endometrium_loaders
 
 
 # def test_train_expression_vae():

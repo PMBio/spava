@@ -127,20 +127,20 @@ def print_corrupted_entries_hash(corrupted_entries: np.ndarray, split: str):
 def validate_and_cast_flags(flags: Dict, cast: bool):
     validate_type_functions = {
         "MODEL_NAME": lambda s: True,
-        "TILE_SIZE": lambda s: s.isdigit(),
+        "TILE_SIZE": lambda s: s.isdigit() or s == 'large',
         "GRAPH_SIZE": lambda s: s.isdigit(),
         "PCA": lambda s: s in ["True", "False"],
     }
     cast_functions = {
         "MODEL_NAME": lambda s: s,
-        "TILE_SIZE": int,
+        "TILE_SIZE": lambda s: int(s) if s.isdigit() else s,
         "GRAPH_SIZE": int,
         "PCA": lambda s: s == 'True',
     }
     validation_functions = {
         "MODEL_NAME": lambda s: s
         in ["expression_vae", "image_expression_vae", "image_expression_pca_vae", "image_expression_conv_vae"],
-        "TILE_SIZE": lambda s: 32 <= int(s) <= 256,
+        "TILE_SIZE": lambda s: s == 'large' or 32 <= int(s) <= 256,
         "GRAPH_SIZE": lambda s: 3 <= int(s) <= 50,
         "PCA": lambda s: True,
     }

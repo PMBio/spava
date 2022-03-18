@@ -37,8 +37,7 @@ else:
 
 
 ##
-def get_smu_file(index: int, read_only: bool, initialize: bool = False):
-    sample = visium_endrometrium_samples[index]
+def get_smu_file(sample: str, read_only: bool, initialize: bool = False):
 
     src_f = file_path(f"spatialmuon/visium_endometrium/{sample}.h5smu")
     des_f = file_path(f"spatialmuon_processed/visium_endometrium/{sample}.h5smu")
@@ -53,19 +52,19 @@ def get_smu_file(index: int, read_only: bool, initialize: bool = False):
 
 
 if e_():
-    for i in tqdm(range(len(visium_endrometrium_samples)), "copying smu files"):
-        s = get_smu_file(i, read_only=True, initialize=True)
+    for sample in tqdm(visium_endrometrium_samples, "copying smu files"):
+        s = get_smu_file(sample, read_only=True, initialize=True)
         print(s)
         s.backing.close()
 
 
 def get_all_splits_bimaps():
     names_length_map = {}
-    for i in range(len(visium_endrometrium_samples)):
-        s = get_smu_file(i, read_only=True)
+    for sample in visium_endrometrium_samples:
+        s = get_smu_file(sample, read_only=True)
         n = len(s["visium"]["expression"].obs)
         s.backing.close()
-        names_length_map[visium_endrometrium_samples[i]] = n
+        names_length_map[sample] = n
     map_left, map_right = get_bimap(names_length_map)
 
     n = len(map_left)
@@ -73,12 +72,12 @@ def get_all_splits_bimaps():
     indices = get_splits_indices(n=n, ratios=ratios)
     map_left_per_split = {}
     map_right_per_split = {}
-    for split, ii in tqdm(indices.items()):
+    for split, ii in indices.items():
         ii = set(ii)
         ml = {}
         mr = {}
         j = 0
-        for i, (k, v) in enumerate(tqdm(map_left.items())):
+        for i, (k, v) in enumerate(map_left.items()):
             if i in ii:
                 ml[j] = v
                 mr[v] = j
@@ -171,19 +170,49 @@ def preprocess(s):
     return s
 
 
-for i in range(len(visium_endrometrium_samples)):
-    s = get_smu_file(i, read_only=False)
-    preprocess(s)
-    s.backing.close()
 ##
 if e_():
-    for i in range(len(visium_endrometrium_samples)):
-        s = get_smu_file(i, read_only=False)
+    for sample in visium_endrometrium_samples:
+        s = get_smu_file(sample, read_only=False)
+        preprocess(s)
+        s.backing.close()
+
+##
+if e_():
+    common = {}
+    for sample in visium_endrometrium_samples:
+        s = get_smu_file(sample, read_only=False)
+        genes = set(s['visium']['processed'].var['channel_name'].to_list())
+        if len(common) == 0:
+            common = genes
+        else:
+            common.intersection_update(genes)
+        s.backing.close()
+
+    for sample in visium_endrometrium_samples:
+        s = get_smu_file(sample, read_only=False)
+
+        def filter_var(regions, channel_names):
+            ii = regions.var['channel_name'].isin(channel_names)
+            new_var = regions.var[ii]
+            new_x = regions.X[:, np.where(ii.to_numpy())[0]]
+            regions.var = new_var
+            regions.X = new_x
+
+        filter_var(s['visium']['non_scaled'], common)
+        filter_var(s['visium']['processed'], common)
+        s.commit_changes_on_disk()
+        s.backing.close()
+
+##
+if e_():
+    for sample in visium_endrometrium_samples:
+        s = get_smu_file(sample, read_only=False)
         processed_regions = s["visium"]["processed"]
         # raster = s["visium"]["image"]
         raster = s["visium"]["medium_res"]
         # raster = s["visium"]["hires_image"]
-        if 'SPATIALMUON_TEST' not in os.environ:
+        if "SPATIALMUON_TEST" not in os.environ:
             bb = smu.BoundingBox(x0=3500, x1=5000, y0=3000, y1=4800)
         else:
             bb = None
@@ -198,4 +227,5 @@ if e_():
         plt.show()
         s.backing.close()
 ##
-print("done")
+if e_():
+    print("done")

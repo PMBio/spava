@@ -1,0 +1,13 @@
+name: Visium endometrium tiler 32
+on:
+  workflow_dispatch
+jobs:
+  test-data:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          source ~/.bashrc
+          export SPATIALMUON_FLAGS="TILE_SIZE=large"
+          python notebook_exporter.py datasets/tilers/visium_endometrium_tiler.py ci_env
+          unset SPATIALMUON_FLAGS
