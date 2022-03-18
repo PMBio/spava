@@ -1,4 +1,4 @@
-name: Visium endometrium tiler 32
+name: Visium endometrium tiler large
 on:
   workflow_dispatch
 jobs:

@@ -1,6 +1,7 @@
 ##
 import math
 
+import os
 import pyro
 import pyro.distributions
 import pytorch_lightning as pl
@@ -69,12 +70,29 @@ class VAE(pl.LightningModule):
         self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
 
         # conditional cnn stuff
+        # here the first layer is made of random weights when n != 3, probably I should pretrain an image model with
+        # input n and output 3, and put it before the pretrained resnet
+        # the case n == 3 is fine
+        import torchvision.models as models
+        # proxy for DKFZ
+        os.environ["HTTP_PROXY"] = "http://193.174.53.86:80"
+        os.environ["HTTPS_PROXY"] = "https://193.174.53.86:80"
+
+        # self.resnet
         n = self.cond_channels
-        dims = [n, 2 * n, 4 * n, 4 * n]
-        self.cond_cnn = get_conv_layers(
-            dims=dims, kernel_sizes=[5, 3, 3], name="conv_encoder"
-        )
-        m = self.cond_cnn(torch.zeros(1, n, 32, 32))
+        RESNET = True
+        # RESNET = False
+        if not RESNET:
+            dims = [n, 64, 64, 64]
+            # dims = [n, 2 * n, 4 * n, 4 * n]
+            # dims
+            self.cond_cnn = get_conv_layers(
+                dims=dims, kernel_sizes=[5, 3, 3], name="conv_encoder"
+            )
+            m = self.cond_cnn(torch.zeros(1, n, 32, 32))
+        else:
+            self.cond_nn = models.resnet18(pretrained=True)
+            m = 1000
         self.cond_fc = get_fc_layers(
             dims=[m.numel(), self.image_features_dim],
             name="encoder_fc",

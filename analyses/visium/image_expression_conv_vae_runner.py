@@ -11,27 +11,34 @@ from models.image_expression_conv_vae import VAE
 from utils import file_path, get_execute_function, parse_flags
 
 e_ = get_execute_function()
-flags = parse_flags(default={'TILE_SIZE': 32})
-MODEL_FULLNAME = f"visium_mousebrain_image_expression_conv_vae_{flags['TILE_SIZE']}"
+flags = parse_flags(default={'TILE_SIZE': 32, 'DATASET_NAME': 'visium_mousebrain'})
+DATASET_NAME = flags['DATASET_NAME']
+MODEL_FULLNAME = f"{DATASET_NAME}_image_expression_conv_vae_{flags['TILE_SIZE']}"
 
+is_visium_mousebrain = DATASET_NAME == 'visium_mousebrain'
+is_visium_endometrium = DATASET_NAME == 'visium_endometrium'
 
+##
 class Ppp:
     pass
 
 
 ppp = Ppp()
 
+ppp.DATASET_NAME = DATASET_NAME
+
 ppp.LOG_PER_CHANNEL_VALUES = False
 if "SPATIALMUON_TEST" not in os.environ:
     ppp.MAX_EPOCHS = 15
 else:
-    ppp.MAX_EPOCHS = 2
-ppp.BATCH_SIZE = 256
+    ppp.MAX_EPOCHS = 1
+ppp.BATCH_SIZE = 255
 ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
 ppp.PERTURB = None
-# ppp.DEBUG = True
-ppp.DEBUG = False
+ppp.RAW_COUNTS = False
+ppp.DEBUG = True
+# ppp.DEBUG = False
 
 ppp.SUBSET_FRACTION_FOR_VALIDATION = 0.08
 ppp.FRACTION_FOR_VALIDATION_CHECK = 0.6
@@ -46,14 +53,14 @@ else:
     ppp.NUM_WORKERS = 10
     # ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = False
-# ppp.NOISE_MODEL = "gaussian"
-# ppp.NOISE_MODEL = 'gamma'
-# ppp.NOISE_MODEL = 'zip'
+ppp.NOISE_MODEL = "gaussian"
 # ppp.NOISE_MODEL = 'zin'
-# ppp.NOISE_MODEL = 'log_normal'
+# ppp.NOISE_MODEL = 'gamma'
 # ppp.NOISE_MODEL = 'zi_gamma'
 # ppp.NOISE_MODEL = 'nb'
-ppp.NOISE_MODEL = 'zinb'
+# ppp.NOISE_MODEL = 'zip'
+# ppp.NOISE_MODEL = 'log_normal'
+# ppp.NOISE_MODEL = 'zinb'
 
 from pprint import pprint
 
@@ -63,7 +70,14 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Subset
 
-from datasets.loaders.visium_mousebrain_loaders import CellsDataset
+
+if is_visium_mousebrain:
+    from datasets.loaders.visium_mousebrain_loaders import CellsDataset
+elif is_visium_endometrium:
+    from datasets.loaders.visium_endometrium_loaders import CellsDataset
+else:
+    assert False
+
 
 pl.seed_everything(1234)
 
@@ -72,9 +86,9 @@ def get_loaders(
     perturb: bool = False,
     shuffle_train=False,
 ):
-    train_ds = CellsDataset("train", raw_counts=True)
-    train_ds_validation = CellsDataset("train", raw_counts=True)
-    val_ds = CellsDataset("validation", raw_counts=True)
+    train_ds = CellsDataset("train", raw_counts=ppp.RAW_COUNTS)
+    train_ds_validation = CellsDataset("train", raw_counts=ppp.RAW_COUNTS)
+    val_ds = CellsDataset("validation", raw_counts=ppp.RAW_COUNTS)
     print(f"len(train_ds) = {len(train_ds)}")
     if perturb:
         train_ds = train_ds.perturb()
@@ -149,6 +163,8 @@ def objective(trial: optuna.trial.Trial) -> float:
         log_every_n_steps=10 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
         model_name=MODEL_FULLNAME,
+        early_stopping_patience=4,
+        early_stopping_min_delta=1e-5,
     )
 
     # hyperparameters

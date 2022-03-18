@@ -4,23 +4,22 @@ import os
 import shutil
 import tempfile
 
+import colorama
 import anndata as ad
 import matplotlib.pyplot as plt
 import optuna
 import spatialmuon
 import torch
+import pandas as pd
+import numpy as np
 from tqdm.auto import tqdm
 
 from analyses.analisys_utils import louvain_plot, scanpy_compute
 from analyses.imputation_score import Prediction
-from datasets.loaders.visium_mousebrain_loaders import get_cells_data_loader
+from datasets.loaders.visium_endometrium_loaders import get_cells_data_loader
 from utils import get_execute_function, parse_flags
 
 e_ = get_execute_function()
-# os.environ["SPATIALMUON_TEST"] = "analyses/vae_expression/vae_expression_analysis.py"
-# os.environ[
-#     "SPATIALMUON_NOTEBOOK"
-# ] = "analyses/visium_mousebrain/visium_mousebrain_analysis.py"
 
 ##
 flags = parse_flags(default={"MODEL_NAME": "expression_vae"})
@@ -30,10 +29,10 @@ is_image_expression_conv_vae = MODEL_NAME == "image_expression_conv_vae"
 
 ##
 if is_expression_vae:
-    MODEL_FULLNAME = f'visium_mousebrain_{MODEL_NAME}'
+    MODEL_FULLNAME = f'visium_endometrium_{MODEL_NAME}'
 elif is_image_expression_conv_vae:
     TILE_SIZE = flags['TILE_SIZE']
-    MODEL_FULLNAME = f'visium_mousebrain_{MODEL_NAME}_{TILE_SIZE}'
+    MODEL_FULLNAME = f'visium_endometrium_{MODEL_NAME}_{TILE_SIZE}'
 else:
     assert False
 
@@ -124,9 +123,9 @@ def get_latent_representation(loader, model):
 
 if e_():
     if is_expression_vae:
-        batch_size = 1024
+        batch_size = 1023
     elif is_image_expression_conv_vae:
-        batch_size = 128
+        batch_size = 127
     else:
         assert False
 
@@ -136,19 +135,24 @@ if e_():
         only_expression = False
     else:
         assert False
+
+    nw = 10
+    # nw = 0
+    print(f'{colorama.Fore.MAGENTA}nw = {nw}{colorama.Fore.RESET}')
+
     train_loader_non_perturbed = get_cells_data_loader(
-        split="train", batch_size=batch_size, only_expression=only_expression
+        split="train", batch_size=batch_size, only_expression=only_expression, num_workers=nw
     )
 
     val_loader_non_perturbed = get_cells_data_loader(
-        split="validation", batch_size=batch_size, only_expression=only_expression
+        split="validation", batch_size=batch_size, only_expression=only_expression, num_workers=nw
     )
     val_loader_perturbed = get_cells_data_loader(
-        split="validation", batch_size=batch_size, perturb=True, only_expression=only_expression
+        split="validation", batch_size=batch_size, perturb=True, only_expression=only_expression, num_workers=nw
     )
 
     test_loader_non_perturbed = get_cells_data_loader(
-        split="test", batch_size=batch_size, only_expression=only_expression
+        split="test", batch_size=batch_size, only_expression=only_expression, num_workers=nw
     )
 
     (
@@ -195,8 +199,21 @@ if e_():
     scanpy_compute(expression_val_non_perturbed)
     scanpy_compute(mus_val_non_perturbed)
 
-    louvain_plot(expression_val_non_perturbed, "expression val (non perturbed)")
-    louvain_plot(mus_val_non_perturbed, "latent val (non perturbed)")
+    try:
+        louvain_plot(expression_val_non_perturbed, f"expression val (non perturbed)\n{MODEL_FULLNAME}")
+    except KeyError as e:
+        if "SPATIALMUON_TEST" in os.environ and str(e) == "'X_umap'":
+            print("not plotting UMAP for edge case in test")
+        else:
+            raise e
+
+    try:
+        louvain_plot(mus_val_non_perturbed, f"latent val (non perturbed)\n{MODEL_FULLNAME}")
+    except KeyError as e:
+        if "SPATIALMUON_TEST" in os.environ and str(e) == "'X_umap'":
+            print("not plotting UMAP for edge case in test")
+        else:
+            raise e
 
 ##
 if e_():
@@ -209,15 +226,15 @@ if e_():
     scanpy_compute(merged)
     lou = merged.obs["louvain"]
 
-    from datasets.visium_mousebrain import get_split_indices, get_smu_file
+    from datasets.visium_endometrium import get_split_bimap, get_smu_file
 
-    train_indices = get_split_indices("train")
-    val_indices = get_split_indices("validation")
-    test_indices = get_split_indices("test")
+    train_map_left, _ = get_split_bimap('train')
+    val_map_left, _ = get_split_bimap('validation')
+    test_map_left, _ = get_split_bimap('test')
 
-    louvain_train = lou.iloc[: len(train_indices)]
-    louvain_val = lou.iloc[len(train_indices) : len(lou) - len(test_indices)]
-    louvain_test = lou.iloc[len(lou) - len(test_indices) :]
+    louvain_train = lou.iloc[: len(train_map_left)]
+    louvain_val = lou.iloc[len(train_map_left) : len(lou) - len(test_map_left)]
+    louvain_test = lou.iloc[len(lou) - len(test_map_left) :]
 
     categories = lou.cat.categories.tolist() + ["Nein"]
 
@@ -226,35 +243,44 @@ if e_():
     assert all([s.endswith("-validation") for s in louvain_val.index.tolist()])
     assert all([s.endswith("-test") for s in louvain_test.index.tolist()])
 
-    import pandas as pd
+    from datasets.visium_endometrium import visium_endrometrium_samples
+    for sample in visium_endrometrium_samples:
+        louvain_train_indices = np.array([k for k, (kk, _) in train_map_left.items() if kk == sample])
+        louvain_val_indices = np.array([k for k, (kk, _) in val_map_left.items() if kk == sample])
+        louvain_test_indices = np.array([k for k, (kk, _) in test_map_left.items() if kk == sample])
 
-    ordered_lou = pd.Categorical(["Nein"] * len(lou), categories=categories)
+        train_indices = np.array([vv for kk, vv in train_map_left.values() if kk == sample])
+        val_indices = np.array([vv for kk, vv in val_map_left.values() if kk == sample])
+        test_indices = np.array([vv for kk, vv in test_map_left.values() if kk == sample])
+        n = len(train_indices) + len(val_indices) + len(test_indices)
 
-    ordered_lou[train_indices] = louvain_train.to_numpy()
-    ordered_lou[val_indices] = louvain_val.to_numpy()
-    ordered_lou[test_indices] = louvain_test.to_numpy()
+        ordered_lou = pd.Categorical(["Nein"] * n, categories=categories)
 
-    assert ordered_lou.value_counts()["Nein"] == 0
-    ordered_lou = ordered_lou.remove_categories("Nein")
-    lou_for_smu = ordered_lou.astype("category")
+        ordered_lou[train_indices] = louvain_train[louvain_train_indices].to_numpy()
+        ordered_lou[val_indices] = louvain_val[louvain_val_indices].to_numpy()
+        ordered_lou[test_indices] = louvain_test[louvain_test_indices].to_numpy()
 
-    # .clone() does not currently work in read_only=True, so let's go for a workaround
-    with tempfile.TemporaryDirectory() as td:
-        des = os.path.join(td, 'temp.h5smu')
-        s = get_smu_file(read_only=True)
-        src = s.backing.filename
-        s.backing.close()
-        shutil.copyfile(src, des)
-        s = spatialmuon.SpatialMuData(des)
-        s["visium"]["processed"].obs["vae"] = lou_for_smu
-        s["visium"]["processed"].masks.obj_has_changed("obs")
+        assert ordered_lou.value_counts()["Nein"] == 0
+        ordered_lou = ordered_lou.remove_categories("Nein")
+        lou_for_smu = ordered_lou.astype("category")
 
-    ##
-        _, ax = plt.subplots(1)
-        s["visium"]["image"].plot(ax=ax)
-        s["visium"]["processed"].masks.plot("vae", ax=ax)
-        plt.title("latent space from VAE model")
-        plt.show()
+        # .clone() does not currently work in read_only=True, so let's go for a workaround
+        with tempfile.TemporaryDirectory() as td:
+            des = os.path.join(td, 'temp.h5smu')
+            s = get_smu_file(sample=sample, read_only=True)
+            src = s.backing.filename
+            s.backing.close()
+            shutil.copyfile(src, des)
+            s = spatialmuon.SpatialMuData(des)
+            s["visium"]["processed"].obs["vae"] = lou_for_smu
+            s["visium"]["processed"].masks.obj_has_changed("obs")
+
+        ##
+            _, ax = plt.subplots(1)
+            s["visium"]["image"].plot(ax=ax)
+            s["visium"]["processed"].masks.plot("vae", ax=ax)
+            plt.title(f"latent space from VAE model\n{MODEL_FULLNAME}")
+            plt.show()
 
 ##
 if e_():
@@ -273,12 +299,21 @@ if e_():
     vae_predictions.plot_summary()
 
 
+# ##
+# if e_():
+#     import scanpy as sc
+#     adata = expression_train_non_perturbed
+#     sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
+#     sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts'], jitter=0.4, multi_panel=True)
+#     print(f'np.mean(adata.X, axis=0) = {np.mean(adata.X, axis=0)}')
+#     print(f'np.std(adata.X, axis=0) = {np.std(adata.X, axis=0)}')
+
 ##
 import pickle
 
 #
 if e_():
-    f = file_path("visium_mousebrain/imputation_scores")
+    f = file_path("visium_endometrium/imputation_scores")
     os.makedirs(f, exist_ok=True)
 
     d = {"vanilla VAE": kwargs}

@@ -70,7 +70,7 @@ class VAE(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
         self.out_channels = self.in_channels
@@ -133,18 +133,29 @@ class VAE(pl.LightningModule):
         decoded_a = self.decoder_a(z)
         decoded_b = self.decoder_b(z)
         eps = 1e-4
+
         if self._hparams["NOISE_MODEL"] in ["gamma", "zi_gamma", "nb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
         elif self._hparams["NOISE_MODEL"] in ["zinb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
-        elif self._hparams["NOISE_MODEL"] == "zip":
+        elif self._hparams["NOISE_MODEL"] in ["zip", "log_normal"]:
             decoded_a = self.softplus(decoded_a)
-        if self._hparams["NOISE_MODEL"] in ["zip", "zig", "zi_gamma"]:
+        elif self._hparams["NOISE_MODEL"] in ["gaussian", "zin"]:
+            pass
+        else:
+            assert False
+
+        if self._hparams["NOISE_MODEL"] in ["zip", "zin", "zi_gamma", 'zinb']:
             decoded_b = self.sigmoid(
                 decoded_b / (self.optuna_parameters["learning_rate"] * 10)
             )
-        elif self._hparams['NOISE_MODEL'] == 'zinb':
-            decoded_b = self.sigmoid(decoded_b)
+        elif self._hparams["NOISE_MODEL"] in ["gaussian", "log_normal"]:
+            pass
+        elif self._hparams["NOISE_MODEL"] in ['gamma', 'nb']:
+            raise NotImplementedError()
+        else:
+            assert False
+
         return decoded_a, decoded_b
 
     def configure_optimizers(self):

@@ -8,45 +8,69 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
+from typing import Union, Literal
 
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
 
-from datasets.visium_mousebrain import get_smu_file, get_split_indices
+from datasets.visium_endometrium import (
+    get_smu_file,
+    get_split_bimap,
+    visium_endrometrium_samples,
+)
 from utils import (
     get_execute_function,
     file_path,
-    get_bimap,
     print_corrupted_entries_hash,
 )
 
 e_ = get_execute_function()
-# os.environ['SPATIALMUON_TEST'] = 'datasets/loaders/visium_mousebrain_loaders.py'
 
 plt.style.use("dark_background")
 
 ##
 class CellsDataset(Dataset):
     def __init__(
-        self, split, only_expression=False, raw_counts=False, tile_dim: int = 32
+        self,
+        split,
+        only_expression=False,
+        raw_counts=False,
+        tile_dim: Union[int, Literal["large"]] = 32,
     ):
         self.split = split
         self.only_expression = only_expression
-        self.indices = get_split_indices(self.split)
+        self.map_left, self.map_right = get_split_bimap(self.split)
         self.raw_counts = raw_counts
         if not self.only_expression:
-            self.tiles_file = file_path(f"visium_mousebrain/tiles_{tile_dim}.hdf5")
-            self.f5 = h5py.File(self.tiles_file, "r")[self.split]
-            assert len(self.indices) == len(self.f5)
-        s = get_smu_file(read_only=True)
-        if not self.raw_counts:
-            self.expressions = s["visium"]["processed"].X[self.indices, :]
-        else:
-            self.expressions = s["visium"]["non_scaled"].X[self.indices, :].todense().A
-        s.backing.close()
+            self.tiles_file = file_path(f"visium_endometrium/tiles_{tile_dim}.hdf5")
+            self.f5 = h5py.File(self.tiles_file, "r")
+            assert len(self.map_left) == len(self.f5[self.split])
+        self.expressions = []
+        for sample in visium_endrometrium_samples:
+            ##
+            indices = []
+            for kk, vv in self.map_left.values():
+                if kk == sample:
+                    indices.append(vv)
+            indices = np.array(indices)
 
-        if not self.only_expression:
-            assert self.tile_dim == tile_dim
+            s = get_smu_file(sample=sample, read_only=True)
+            if not self.raw_counts:
+                e = s["visium"]["processed"].X[indices, :]
+                if type(e) != np.ndarray:
+                    expressions = e.todense().A
+                else:
+                    expressions = e
+            else:
+                e = s["visium"]["non_scaled"].X[indices, :]
+                if type(e) != np.ndarray:
+                    expressions = e.todense().A
+                else:
+                    expressions = e
+            self.expressions.append(expressions)
+            s.backing.close()
+        self.expressions = np.concatenate(self.expressions, axis=0)
+        assert len(self.expressions) == len(self.map_left)
 
         self.seed = None
         self.corrupted_entries = np.zeros(
@@ -55,7 +79,7 @@ class CellsDataset(Dataset):
 
     @property
     def n_image_channels(self):
-        return self.f5[0].shape[-1]
+        return self.f5[self.split].shape[-1]
 
     @property
     def n_expression_channels(self):
@@ -63,7 +87,7 @@ class CellsDataset(Dataset):
 
     @property
     def tile_dim(self):
-        return self.f5[0].shape[0]
+        return self.f5[self.split].shape[1]
 
     def perturb(self, seed=0):
         self.seed = seed
@@ -78,15 +102,15 @@ class CellsDataset(Dataset):
         print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
     def __len__(self):
-        return len(self.indices)
+        return len(self.map_left)
 
     def __getitem__(self, item):
         expression = self.expressions[item]
         is_corrupted = self.corrupted_entries[item]
         expression = expression * np.logical_not(is_corrupted)
         if not self.only_expression:
-            image = self.f5[item][...]
-            image = image.astype(np.float32) / 255.0
+            image = self.f5[self.split][item][...]
+            image = image.astype(np.float32)
             return image, expression, is_corrupted
         else:
             return expression, is_corrupted
@@ -94,23 +118,32 @@ class CellsDataset(Dataset):
 
 ##
 if e_():
-    ds = CellsDataset(split="test")
-    ds.perturb()
-    print(ds[0])
-    print(f"ds.tile_dim = {ds.tile_dim}")
+    ds0 = CellsDataset(split="test")
+    ds0.perturb()
+    print(ds0[0])
+    print(f"ds0.tile_dim = {ds0.tile_dim}")
     print(
-        f"ds.n_expression_channels = {ds.n_expression_channels}, ds.n_image_channels = {ds.n_image_channels}"
+        f"ds0.n_expression_channels = {ds0.n_expression_channels}, ds0.n_image_channels = {ds0.n_image_channels}"
     )
+    ds1 = CellsDataset(split="train", only_expression=True, raw_counts=True)
+    print(ds1[1])
 
 ##
-def get_cells_data_loader(split, batch_size, perturb=False, only_expression=False, tile_dim: int = 32):
+def get_cells_data_loader(
+    split,
+    batch_size,
+    perturb=False,
+    only_expression=False,
+    tile_dim: int = 32,
+    num_workers: int = 10,
+):
     ds = CellsDataset(split, only_expression=only_expression, tile_dim=tile_dim)
     if perturb:
         ds.perturb()
     loader = DataLoader(
         ds,
         batch_size=batch_size,
-        num_workers=10,
+        num_workers=num_workers,
     )
     return loader
 

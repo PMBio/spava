@@ -11,7 +11,7 @@ import matplotlib
 
 import os
 
-from utils import get_execute_function, file_path, reproducible_random_choice
+from utils import get_execute_function, file_path, reproducible_random_choice, get_splits_indices
 import colorama
 import scanpy as sc
 import h5py
@@ -54,23 +54,9 @@ def get_split_indices(split):
     s = get_smu_file(read_only=True)
     n = len(s["visium"]["processed"].obs)
     s.backing.close()
+
     ratios = [0.7, 0.15]
-    ns = [math.floor(n * ratios[0]), math.ceil(n * ratios[1])]
-    ns.append(n - np.sum(ns))
-    train_indices = sorted(reproducible_random_choice(n, ns[0]))
-    remaining = list(set(range(n)).difference(train_indices))
-    validation_indices = sorted(
-        np.array(remaining)[
-            np.array(reproducible_random_choice(len(remaining), ns[1]))
-        ].tolist()
-    )
-    test_indices = sorted(list(set(remaining).difference(validation_indices)))
-    assert len(set(train_indices) | set(validation_indices) | set(test_indices)) == n
-    indices = {
-        "train": train_indices,
-        "validation": validation_indices,
-        "test": test_indices,
-    }
+    indices = get_splits_indices(n, ratios)
     return indices[split]
 
 

@@ -193,9 +193,15 @@ if e_():
         s = get_smu_file(sample, read_only=False)
 
         def filter_var(regions, channel_names):
-            ii = regions.var['channel_name'].isin(channel_names)
-            new_var = regions.var[ii]
-            new_x = regions.X[:, np.where(ii.to_numpy())[0]]
+            if 'SPATIALMUON_TEST' not in os.environ:
+                ii = regions.var['channel_name'].isin(channel_names)
+                new_var = regions.var[ii]
+                new_x = regions.X[:, np.where(ii.to_numpy())[0]]
+            else:
+                # notice that in this way different samples have different genes, but if we take the intersection we
+                # have to few
+                new_var = regions.var[:10]
+                new_x = regions.X[:, :10]
             regions.var = new_var
             regions.X = new_x
 
