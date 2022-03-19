@@ -276,7 +276,7 @@ if e_():
             s["visium"]["processed"].masks.obj_has_changed("obs")
 
         ##
-            _, ax = plt.subplots(1)
+            _, ax = plt.subplots(1, figsize=(15, 15))
             s["visium"]["image"].plot(ax=ax)
             s["visium"]["processed"].masks.plot("vae", ax=ax)
             plt.title(f"latent space from VAE model\n{MODEL_FULLNAME}")

@@ -37,8 +37,8 @@ ppp.MONTE_CARLO = True
 ppp.MASK_LOSS = True
 ppp.PERTURB = None
 ppp.RAW_COUNTS = False
-ppp.DEBUG = True
-# ppp.DEBUG = False
+# ppp.DEBUG = True
+ppp.DEBUG = False
 
 ppp.SUBSET_FRACTION_FOR_VALIDATION = 0.08
 ppp.FRACTION_FOR_VALIDATION_CHECK = 0.6
@@ -164,7 +164,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         val_check_interval=val_check_internal,
         model_name=MODEL_FULLNAME,
         early_stopping_patience=4,
-        early_stopping_min_delta=1e-5,
+        early_stopping_min_delta=0.1,
     )
 
     # hyperparameters
@@ -228,7 +228,7 @@ def objective(trial: optuna.trial.Trial) -> float:
 
 
 if e_() or __name__ == "__main__":
-    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner(n_warmup_steps=6)
     # storage = 'mysql://l989o@optuna'
     debug_string = '_debug' if ppp.DEBUG else ''
     storage = "sqlite:///" + file_path(f"optuna_{MODEL_FULLNAME}{debug_string}.sqlite")

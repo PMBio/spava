@@ -25,7 +25,8 @@ print(f'{colorama.Fore.MAGENTA}e_() = {e_()}{colorama.Fore.RESET}')
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 ##
-flags = parse_flags(default={'MODEL_NAME': 'image_expression_conv_vae'})
+flags = parse_flags(default={'MODEL_NAME': 'expression_vae'})
+# flags = parse_flags(default={'MODEL_NAME': 'image_expression_conv_vae'})
 MODEL_NAME = flags['MODEL_NAME']
 is_expression_vae = MODEL_NAME == 'expression_vae'
 is_image_expression_vae = MODEL_NAME == 'image_expression_vae'
@@ -107,7 +108,7 @@ if e_():
     if "SPATIALMUON_TEST" in os.environ:
         random_indices = reproducible_random_choice(n, n - 1)
     else:
-        random_indices = reproducible_random_choice(n, 10000)
+        random_indices = reproducible_random_choice(n, 5000)
 
 ##
 if e_():

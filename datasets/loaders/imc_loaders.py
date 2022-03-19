@@ -204,6 +204,10 @@ class CellsDatasetOnlyExpression(Dataset):
         torch.set_rng_state(state)
         print_corrupted_entries_hash(self.corrupted_entries, self.split)
 
+    @property
+    def n_expression_channels(self):
+        return self.expressions.shape[1]
+
     def __getitem__(self, item):
         expression = self.expressions[item]
         is_corrupted = self.corrupted_entries[item]

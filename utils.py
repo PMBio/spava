@@ -143,7 +143,7 @@ def validate_and_cast_flags(flags: Dict, cast: bool):
     }
     validation_functions = {
         "MODEL_NAME": lambda s: s in ["expression_vae", "image_expression_vae", "image_expression_pca_vae",
-                                      "image_expression_conv_vae"],
+                                      "image_expression_conv_vae", "expression_gnn_vae"],
         "DATASET_NAME": lambda s: s
                                   in ['visium_mousebrain', 'visium_endometrium'],
         "TILE_SIZE": lambda s: s == 'large' or 32 <= int(s) <= 256,
@@ -171,6 +171,8 @@ def parse_flags(default: Dict):
         flags = os.environ["SPATIALMUON_FLAGS"]
     else:
         validate_and_cast_flags(default, cast=False)
+        flags = ','.join(f'{k}={v}' for k, v in default.items())
+        os.environ['SPATIALMUON_FLAGS'] = flags
         return default
 
     d = {}

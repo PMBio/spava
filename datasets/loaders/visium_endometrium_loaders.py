@@ -111,6 +111,9 @@ class CellsDataset(Dataset):
         if not self.only_expression:
             image = self.f5[self.split][item][...]
             image = image.astype(np.float32)
+            m = np.max(image)
+            if m > 1:
+                image /= m
             return image, expression, is_corrupted
         else:
             return expression, is_corrupted
@@ -153,3 +156,52 @@ if e_():
         split="train", batch_size=128, perturb=True, only_expression=True
     )
     loader.__iter__().__next__()
+
+##
+def get_data_per_sample(
+    sample: str, only_expression=False, raw_counts=False, tile_dim=32
+):
+    dss = [
+        CellsDataset(
+            split=split,
+            only_expression=only_expression,
+            raw_counts=raw_counts,
+            tile_dim=tile_dim,
+        )
+        for split in ["train", "validation", "test"]
+    ]
+    s = get_smu_file(sample, read_only=True)
+    length = len(s["visium"]["processed"].X)
+    s.backing.close()
+    expressions = []
+    images = []
+    are_perturbed = []
+    for i in tqdm(range(length)):
+        in_split = []
+        for j, ds in enumerate(dss):
+            mr = ds.map_right
+            if (sample, i) in mr:
+                in_split.append(j)
+        assert len(in_split) == 1
+        in_split = in_split[0]
+        index = dss[in_split].map_right[(sample, i)]
+        data = dss[in_split][index]
+        if only_expression:
+            expression, is_perturbed = data
+        else:
+            image, expression, is_perturbed = data
+            images.append(image)
+        expressions.append(expression)
+        are_perturbed.append(is_perturbed)
+    expressions = np.stack(expressions)
+    are_perturbed = np.stack(are_perturbed)
+    if not only_expression:
+        images = np.stack(images)
+        return images, expressions, are_perturbed
+    else:
+        return expressions, are_perturbed
+
+
+if e_():
+    get_data_per_sample(visium_endrometrium_samples[0])
+##

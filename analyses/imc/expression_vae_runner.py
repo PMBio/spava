@@ -1,5 +1,10 @@
 ##
 import os
+import math
+
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:1024"
+import colorama
 
 from analyses.torch_boilerplate import (
     optuna_nan_workaround,
@@ -8,12 +13,15 @@ from analyses.torch_boilerplate import (
 )
 
 from models.expression_vae import VAE
-from utils import file_path, get_execute_function
-from datasets.imc import get_smu_file
-
+from utils import file_path, get_execute_function, parse_flags
+from torch_geometric.data import DataLoader as GeometricDataLoader
+from datasets.graphs.imc_graphs import CellGraphsDataset
 e_ = get_execute_function()
-# os.environ['SPATIALMUON_TEST'] = 'analyses/imc/expression_vae_runner.py'
 
+flags = parse_flags({'MODEL_NAME': 'expression_vae'})
+# flags = parse_flags({'MODEL_NAME': 'expression_gnn_vae'})
+
+MODEL_NAME = flags['MODEL_NAME']
 
 class Ppp:
     pass
@@ -32,6 +40,12 @@ ppp.MASK_LOSS = True
 ppp.PERTURB = None
 # ppp.DEBUG = True
 ppp.DEBUG = False
+
+ppp.SUBSET_FRACTION_FOR_VALIDATION = 0.08
+ppp.FRACTION_FOR_VALIDATION_CHECK = 0.6
+u, v = ppp.SUBSET_FRACTION_FOR_VALIDATION, ppp.FRACTION_FOR_VALIDATION_CHECK
+print(f"{colorama.Fore.MAGENTA}{1 / v:.01f} validation checks per epoch ->")
+print(f"+{round(100 * 2 * u * 1 / v)}% penality in training time{colorama.Fore.RESET}")
 if ppp.DEBUG:
     ppp.NUM_WORKERS = 0
     ppp.DETECT_ANOMALY = True
@@ -68,22 +82,25 @@ from datasets.loaders.imc_loaders import CellsDatasetOnlyExpression
 pl.seed_everything(1234)
 
 
-s = get_smu_file(split="train", index=0, read_only=True)
-scaling_factors = s["imc"]["transformed_mean"].uns["scaling_factors"][...]
-s.backing.close()
-
-
 def get_loaders(
     perturb: bool = False,
     shuffle_train=False,
 ):
-    train_ds = CellsDatasetOnlyExpression("train")
-    train_ds_validation = CellsDatasetOnlyExpression("train")
-    val_ds = CellsDatasetOnlyExpression("validation")
-    if perturb:
-        train_ds = train_ds.perturb()
-        train_ds_validation = train_ds_validation.perturb()
-        val_ds = val_ds.perturb()
+    if MODEL_NAME == 'expression_vae':
+        train_ds = CellsDatasetOnlyExpression("train")
+        train_ds_validation = CellsDatasetOnlyExpression("train")
+        val_ds = CellsDatasetOnlyExpression("validation")
+        if perturb:
+            train_ds = train_ds.perturb()
+            train_ds_validation = train_ds_validation.perturb()
+            val_ds = val_ds.perturb()
+    elif MODEL_NAME == 'expression_gnn_vae':
+        assert not perturb
+        train_ds = CellGraphsDataset("train", name='knn_10_max_distance_in_units_50')
+        train_ds_validation = CellGraphsDataset("train", name='knn_10_max_distance_in_units_50')
+        val_ds = CellGraphsDataset("validation", name='knn_10_max_distance_in_units_50')
+    else:
+        assert False
 
     # print(
     #     f"len(train_ds) = {len(train_ds[0])}, train_ds[0] = {train_ds[0][0]}, train_ds[0].shape ="
@@ -93,7 +110,7 @@ def get_loaders(
     if ppp.DEBUG:
         n = ppp.BATCH_SIZE * 2
     else:
-        n = ppp.BATCH_SIZE * 20
+        n = math.ceil(len(train_ds) * ppp.SUBSET_FRACTION_FOR_VALIDATION)
     # when testing we otherwise have n > len(train_ds)
     n = min(n, len(train_ds))
     indices = np.random.choice(len(train_ds), n, replace=False)
@@ -103,24 +120,33 @@ def get_loaders(
         d = train_subset
     else:
         d = train_ds
-    train_loader = DataLoader(
+
+    if MODEL_NAME == 'expression_vae':
+        DL = DataLoader
+    elif MODEL_NAME == 'expression_gnn_vae':
+        DL = GeometricDataLoader
+    else:
+        assert False
+
+    train_loader = DL(
         d,
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
         shuffle=shuffle_train,
     )
-    train_loader_batch = DataLoader(
+    train_loader_batch = DL(
         train_subset,
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
         pin_memory=True,
     )
 
-    # indices = np.random.choice(len(val_ds), n, replace=False)
-    # val_subset = Subset(val_ds, indices)
-    val_subset = val_ds
-    val_loader = DataLoader(
+    n = min(n, len(val_ds))
+    indices = np.random.choice(len(val_ds), n, replace=False)
+    val_subset = Subset(val_ds, indices)
+    # val_subset = val_ds
+    val_loader = DL(
         val_subset,
         batch_size=ppp.BATCH_SIZE,
         num_workers=ppp.NUM_WORKERS,
@@ -153,18 +179,38 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     from models.expression_vae import ImageSampler, LogComputationalGraph
 
-    val_check_internal = 1 if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ else 300
+    ppp.PERTURB = ppp.PERTURB or False
+    print(f"ppp.PERTURB = {ppp.PERTURB}")
+    train_loader, val_loader, train_loader_batch = get_loaders(
+        shuffle_train=True,
+    )
+    val_check_internal = (
+        1
+        if ppp.DEBUG or "SPATIALMUON_TEST" in os.environ
+        else math.ceil(len(train_loader) * ppp.FRACTION_FOR_VALIDATION_CHECK)
+    )
+    if "MAX_EPOCHS" in trial.user_attrs:
+        ppp.MAX_EPOCHS = trial.user_attrs["MAX_EPOCHS"]
+        print(
+            f"{colorama.Fore.MAGENTA}found attribute in trial.user_attrs{colorama.Fore.RESET}"
+        )
+    print(f"ppp.MAX_EPOCHS = {ppp.MAX_EPOCHS}")
+    gpus = 0
+    print(f'{colorama.Fore.MAGENTA}gpus = {gpus}{colorama.Fore.RESET}')
     trainer, logger = training_boilerplate(
         trial=trial,
         extra_callbacks=[ImageSampler(), LogComputationalGraph()],
         max_epochs=ppp.MAX_EPOCHS,
-        log_every_n_steps=30 if not ppp.DEBUG else 1,
+        log_every_n_steps=10 if not ppp.DEBUG else 1,
         val_check_interval=val_check_internal,
-        model_name="imc_expression_vae",
+        model_name=f'imc_{MODEL_NAME}',
+        early_stopping_patience=4,
+        early_stopping_min_delta=0.1,
+        gpus=gpus
     )
 
     # hyperparameters
-    if 'SPATIALMUON_TEST' not in os.environ:
+    if "SPATIALMUON_TEST" not in os.environ:
         vae_latent_dims = trial.suggest_int("vae_latent_dims", 5, 10)
         vae_beta = trial.suggest_float("vae_beta", 1e-8, 1e-1, log=True)
         log_c = trial.suggest_float("log_c", -3, 3)
@@ -193,9 +239,14 @@ def objective(trial: optuna.trial.Trial) -> float:
     pprint(optuna_parameters)
     trainer.logger.log_hyperparams(optuna_parameters)
 
+    if not ppp.DEBUG:
+        n_expression_channels = train_loader.dataset.n_expression_channels
+    else:
+        n_expression_channels = train_loader.dataset.dataset.n_expression_channels
+
     vae = VAE(
         optuna_parameters=optuna_parameters,
-        in_channels=len(scaling_factors),
+        in_channels=n_expression_channels,
         mask_loss=ppp.MASK_LOSS,
         **ppp.__dict__,
     )
@@ -228,17 +279,11 @@ def objective(trial: optuna.trial.Trial) -> float:
 
 if e_() or __name__ == "__main__":
     # alternative: optuna.pruners.NopPruner()
-    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
-    study_name = "imc_expression_vae"
-    if study_name == "imc_expression_vae_perturbed":
-        ppp.PERTURB = True
-    elif study_name == "imc_expression_vae":
-        ppp.PERTURB = False
-    else:
-        raise NotImplementedError()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner(n_warmup_steps=6)
+    study_name = f"imc_{MODEL_NAME}"
     # storage = 'mysql://l989o@optuna'
     debug_string = '_debug' if ppp.DEBUG else ''
-    storage = "sqlite:///" + file_path(f"optuna_imc_expression_vae{debug_string}.sqlite")
+    storage = "sqlite:///" + file_path(f"optuna_imc_{MODEL_NAME}{debug_string}.sqlite")
     # optuna.delete_study(study_name, storage)
     study = optuna.create_study(
         direction="minimize",

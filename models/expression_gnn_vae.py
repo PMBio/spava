@@ -1,12 +1,15 @@
 ##
+import contextlib
 import math
-import colorama
-import os
+
 import pyro
 import pyro.distributions
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
+from torch import autograd
 from torch import nn
+from torch_geometric.nn.conv import GINEConv
 
 from analyses.torch_boilerplate import (
     optuna_nan_workaround,
@@ -17,31 +20,127 @@ from analyses.torch_boilerplate import (
 pl.seed_everything(1234)
 
 from utils import get_execute_function
-from analyses.torch_boilerplate import get_detect_anomaly_cm, has_nan_or_inf
+from datasets.imc import get_smu_file
 
 e_ = get_execute_function()
 
 
-class VAE(pl.LightningModule):
-    def __init__(
-        self,
-        optuna_parameters,
-        in_channels,
-        cond_channels,
-        mask_loss: bool = None,
-        **kwargs,
-    ):
+class ImageSampler(pl.Callback):
+    def __init__(self):
+        super().__init__()
+        self.img_size = None
+        self.num_preds = 16
+
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module):
+        if pl_module._hparams["LOG_PER_CHANNEL_VALUES"]:
+            # this does not make sense for zinb since we should take sigmoid(log_c)
+            trainer.logger.experiment.add_scalars(
+                "c",
+                {
+                    f"channel{i}": torch.exp(pl_module.log_c[i])
+                    for i in range(len(pl_module.log_c))
+                },
+                trainer.global_step,
+            )
+        # trainer.logger.experiment.add_scalars('d', {f'channel{i}': torch.sigmoid(pl_module.logit_d[i]) for i in range(
+        #     len(
+        #         pl_module.logit_d))}, trainer.global_step)
+
+        # for dataloader_idx in [0, 1]:
+        # loader = trainer.val_dataloaders[dataloader_idx]
+        # dataloader_label = 'training' if dataloader_idx == 0 else 'validation'
+        # trainer.logger.experiment.add_image(f'reconstruction/{dataloader_label}', img,
+        #                                     trainer.global_step)
+
+        # trainer.logger.experiment.add_histogram(f'histograms/{dataloader_label}/image{i}/channel'
+        #                                         f'{c}/original', original_masked_c[0].flatten(),
+        #                                         trainer.global_step)
+
+
+def get_detect_anomaly_cm(DETECT_ANOMALY):
+    if DETECT_ANOMALY:
+        cm = autograd.detect_anomaly()
+    else:
+        cm = contextlib.nullcontext()
+    return cm
+
+
+class GnnEncoder(nn.Module):
+    def __init__(self, in_channels, optuna_parameters=None):
+        super().__init__()
+        self.in_channels = in_channels
+        if optuna_parameters is not None:
+            self.p_dropout = output["p_dropout"]
+        else:
+            self.p_dropout = 0.1
+        gine0_nn = nn.Sequential(
+            nn.Linear(self.in_channels + 1, self.in_channels + 1),
+            nn.BatchNorm1d(self.in_channels + 1),
+            nn.ReLU(),
+            nn.Dropout(p=self.p_dropout),
+            nn.Linear(self.in_channels + 1, self.in_channels),
+        )
+        gine1_nn = nn.Sequential(
+            nn.Linear(self.in_channels + 1, self.in_channels + 1),
+            nn.BatchNorm1d(self.in_channels + 1),
+            nn.ReLU(),
+            nn.Dropout(p=self.p_dropout),
+            nn.Linear(self.in_channels + 1, self.in_channels),
+        )
+        self.gcn0 = GINEConv(gine0_nn)
+        self.gcn1 = GINEConv(gine1_nn)
+        self.linear0 = nn.Linear(1, self.in_channels + 1)
+        self.linear1 = nn.Linear(self.in_channels + 1, self.in_channels + 1)
+        self.batch_norm0 = nn.BatchNorm1d(self.in_channels)
+        self.dropout0 = nn.Dropout(p=self.p_dropout)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, edge_index, edge_attr, is_center):
+        original_x = x
+        e = self.linear1(self.relu(self.linear0(edge_attr)))
+        x_with_center_info = torch.cat((x, is_center.view(-1, 1)), dim=1)
+        x = self.gcn0(x_with_center_info, edge_index, e) + original_x
+        x = self.batch_norm0(x)
+        x = self.relu(x)
+        x = self.dropout0(x)
+        x_with_center_info = torch.cat((x, is_center.view(-1, 1)), dim=1)
+        x = self.gcn1(x_with_center_info, edge_index, e) + original_x
+        (indices_is_center,) = torch.where(is_center == 1)
+        x = x[indices_is_center, :]
+        # x = is_center @ x
+        # n = torch.argmax(is_center, dim=0)
+        # x = x[n, :]
+        return x
+
+
+##
+##
+from datasets.graphs.imc_graphs import CellGraphsDataset
+from torch_geometric.data import DataLoader as GeometricDataLoader
+ds = CellGraphsDataset("train", name='knn_10_max_distance_in_units_50')
+loader = GeometricDataLoader(ds, batch_size=32, shuffle=True, num_workers=0)
+##
+model = GnnEncoder(in_channels=39)
+data = loader.__iter__().__next__()
+output = model(data.x, data.edge_index, data.edge_attr, data.is_center)
+##
+import sys
+
+sys.exit(0)
+
+
+##
+class GnnVae(pl.LightningModule):
+    def __init__(self, optuna_parameters, n_channels, **kwargs):
         super().__init__()
         self.save_hyperparameters(kwargs)
         self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
         self.out_channels = self.in_channels
-        self.cond_channels = cond_channels
         self.latent_dim = self.optuna_parameters["vae_latent_dims"]
         self.mask_loss = mask_loss
         self.dropout_alpha = self.optuna_parameters["dropout_alpha"]
-        self.image_features_dim = 50
 
         ##
         def get_dims(n):
@@ -55,88 +154,22 @@ class VAE(pl.LightningModule):
                 dims.append(min(d, max_d))
             return dims
 
-        from analyses.torch_boilerplate import get_fc_layers, get_conv_layers
-
         dims = get_dims(self.in_channels)
+        ##
 
         # encoder stuff
-        encoder_dims = [self.in_channels + self.image_features_dim] + dims
-        print(f"encoder_dims = {encoder_dims}")
+        encoder_dims = [self.in_channels, 20]
+        from analyses.torch_boilerplate import get_fc_layers
 
+        self.gnn_encoder = GnnEncoder(in_channels=self.in_channels)
         self.encoder_fc = get_fc_layers(
             dims=encoder_dims, name="encoder_fc", dropout_alpha=self.dropout_alpha
         )
         self.encoder_mean = nn.Linear(dims[-1], self.latent_dim)
         self.encoder_log_var = nn.Linear(dims[-1], self.latent_dim)
 
-        # conditional cnn stuff
-        # here the first layer is made of random weights when n != 3, probably I should pretrain an image model with
-        # input n and output 3, and put it before the pretrained resnet
-        # the case n == 3 is fine
-        import torchvision.models as models
-
-        # proxy for DKFZ
-        os.environ["HTTP_PROXY"] = "http://193.174.53.86:80"
-        os.environ["HTTPS_PROXY"] = "https://193.174.53.86:80"
-
-        # self.resnet
-        n = self.cond_channels
-        RESNET = True
-        # self.resnet = models.resnet18(pretrained=True)
-        # RESNET = False
-        print(f"{colorama.Fore.MAGENTA}RESNET = {RESNET}{colorama.Fore.RESET}")
-        if not RESNET:
-            dims = [n, 64, 64, 128]
-            # dims = [n, 2 * n, 4 * n, 4 * n]
-            # dims
-            self.cond_cnn = get_conv_layers(
-                dims=dims, kernel_sizes=[5, 3, 3], name="conv_encoder"
-            )
-            m = self.cond_cnn(torch.zeros(1, n, 32, 32)).numel()
-        else:
-            PRINT_NN = False
-            # PRINT_NN = True
-            ##
-            self.cond_cnn = models.resnet18(pretrained=True)
-            kept_unfrozen = {
-                "layer4": ['1.conv1.weight', '1.bn1.weight', '1.bn1.bias', '1.conv2.weight', '1.bn2.weight',
-                           '1.bn2.bias'],
-                "fc": "ALL",
-            }
-            i = 0
-            for layer_name, c in self.cond_cnn.named_children():
-                i += 1
-                if PRINT_NN:
-                    print(layer_name)
-                for param_name, param in c.named_parameters():
-                    if not (
-                        layer_name in kept_unfrozen
-                        and (
-                            kept_unfrozen[layer_name] == "ALL"
-                            or param_name in kept_unfrozen[layer_name]
-                        )
-                    ):
-                        param.requires_grad = False
-                    if PRINT_NN:
-                        print(f"{param_name}, requires_grad: {param.requires_grad}")
-                if PRINT_NN:
-                    print()
-                # print(f'{name}, requires_grad: {c.requires_grad}')
-            ##
-            # self.cond_cnn = nn.Sequential(*list(self.cond_cnn.children())[:-1])
-            # m = 512
-            m = 1000
-
-        self.cond_fc = get_fc_layers(
-            dims=[m, 256, self.image_features_dim],
-            name="encoder_fc",
-            dropout_alpha=self.dropout_alpha,
-        )
-
         # decoder stuff
-        decoder_dims = [self.latent_dim + self.image_features_dim] + list(
-            reversed(dims)
-        )
+        decoder_dims = [self.latent_dim] + list(reversed(dims))
         print(f"decoder_dims = {decoder_dims}")
         self.decoder_fc = get_fc_layers(
             dims=decoder_dims, name="decoder_fc", dropout_alpha=self.dropout_alpha
@@ -147,41 +180,47 @@ class VAE(pl.LightningModule):
         self.sigmoid = nn.Sigmoid()
 
         self.log_c = nn.Parameter(
-            torch.Tensor([self.optuna_parameters["log_c"]] * self.out_channels)
+            torch.Tensor([self.optuna_parameters["log_c"]] * self.in_channels)
         )
         self.logit_d = nn.Parameter(
             torch.logit(torch.Tensor([0.001] * self.in_channels))
         )
 
-    def image_features_extractor(self, x):
-        x = self.cond_cnn(x)
-        x = torch.flatten(x, start_dim=1)
-        x = self.cond_fc(x)
-        return x
-
     def encoder(self, x):
+        x = self.gnn_encoder(x)
         x = self.encoder_fc(x)
-        mu = self.encoder_mean(x)
+        mean = self.encoder_mean(x)
         log_var = self.encoder_log_var(x)
-        return mu, log_var
+        return mean, log_var
 
     def decoder(self, z):
         z = self.decoder_fc(z)
         decoded_a = self.decoder_a(z)
         decoded_b = self.decoder_b(z)
         eps = 1e-4
+
         if self._hparams["NOISE_MODEL"] in ["gamma", "zi_gamma", "nb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
         elif self._hparams["NOISE_MODEL"] in ["zinb"]:
             decoded_a = self.softplus(decoded_a) + eps  # + 2
-        elif self._hparams["NOISE_MODEL"] == "zip":
+        elif self._hparams["NOISE_MODEL"] in ["zip", "log_normal"]:
             decoded_a = self.softplus(decoded_a)
-        if self._hparams["NOISE_MODEL"] in ["zip", "zig", "zi_gamma"]:
+        elif self._hparams["NOISE_MODEL"] in ["gaussian", "zin"]:
+            pass
+        else:
+            assert False
+
+        if self._hparams["NOISE_MODEL"] in ["zip", "zin", "zi_gamma", 'zinb']:
             decoded_b = self.sigmoid(
                 decoded_b / (self.optuna_parameters["learning_rate"] * 10)
             )
-        elif self._hparams["NOISE_MODEL"] == "zinb":
-            decoded_b = self.sigmoid(decoded_b)
+        elif self._hparams["NOISE_MODEL"] in ["gaussian", "log_normal"]:
+            pass
+        elif self._hparams["NOISE_MODEL"] in ['gamma', 'nb']:
+            raise NotImplementedError()
+        else:
+            assert False
+
         return decoded_a, decoded_b
 
     def configure_optimizers(self):
@@ -215,7 +254,6 @@ class VAE(pl.LightningModule):
         if self._hparams["NOISE_MODEL"] == "gaussian":
             dist = pyro.distributions.Normal(a, torch.exp(self.log_c))
         elif self._hparams["NOISE_MODEL"] == "zin":
-            # not sure here the std is used and not the precision
             dist = ZeroInflatedNormal(a, torch.exp(self.log_c), gate=b)
         elif self._hparams["NOISE_MODEL"] == "gamma":
             dist = pyro.distributions.Gamma(a, torch.exp(self.log_c))
@@ -240,8 +278,11 @@ class VAE(pl.LightningModule):
         # measure prob of seeing image under p(x|z)
         # bad variable naming :P
         zero = torch.tensor([2.0]).to(a.device)
-        if has_nan_or_inf(dist.log_prob(zero)):
-            print("infinite or nan value detected in likelihood")
+        if torch.any(dist.log_prob(zero).isinf()):
+            print("infinite value detected")
+            raise RuntimeError("manual abort")
+        if torch.any(dist.log_prob(zero).isnan()):
+            print("nan value detected")
             raise RuntimeError("manual abort")
         if self._hparams["NOISE_MODEL"] in ["gamma, zi_gamma", "log_normal"]:
             offset = 1e-4
@@ -289,10 +330,21 @@ class VAE(pl.LightningModule):
         cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
             if self._hparams["MONTE_CARLO"]:
-                if has_nan_or_inf(a) or has_nan_or_inf(b):
+                if (
+                    torch.isnan(a).any()
+                    or torch.isnan(b).any()
+                    or torch.isinf(a).any()
+                    or torch.isinf(b).any()
+                ):
                     print("nan or inf in (a, b) detected!")
+                    # this recon_loss will contain a NaN and NaN will be propagated to elbo, which will trigger a
+                    # print and optuna_nan_workaround()
+                    recon_loss = torch.sum(a, dim=1) + torch.sum(b, dim=1)
                     raise RuntimeError("manual abort")
-                recon_loss = self.reconstruction_likelihood(a, b, x, corrupted_entries)
+                else:
+                    recon_loss = self.reconstruction_likelihood(
+                        a, b, x, corrupted_entries
+                    )
                 # kl
                 kl = self.kl_divergence(z, mu, std)
             else:
@@ -302,24 +354,28 @@ class VAE(pl.LightningModule):
             elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
             elbo *= 1000
-            if has_nan_or_inf(elbo):
+            if torch.isinf(elbo).any() or torch.isnan(elbo).any():
                 print("nan or inf in loss detected!")
                 raise RuntimeError("manual abort")
             elbo = optuna_nan_workaround(elbo)
             return elbo, kl, recon_loss
 
-    def forward(self, expression, image):
+    def forward(self, x):
         cm = get_detect_anomaly_cm(self._hparams["DETECT_ANOMALY"])
         with cm:
             # x_encoded = self.encoder(x)
             # mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
-            image_features = self.image_features_extractor(image)
-            mu, log_var = self.encoder(torch.cat((expression, image_features), dim=1))
+            mu, log_var = self.encoder(x)
 
             # sample z from q
             eps = 1e-7
             std = torch.exp(log_var / 2) + eps
-            if has_nan_or_inf(mu) or has_nan_or_inf(std):
+            if (
+                torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isinf(mu).any()
+                or torch.isinf(std).any()
+            ):
                 print("nan or inf in (mu, std) detected!")
                 raise RuntimeError("manual abort")
             try:
@@ -329,13 +385,12 @@ class VAE(pl.LightningModule):
             z = q.rsample()
 
             # decoded
-            a, b = self.decoder(torch.cat((z, image_features), dim=1))
+            a, b = self.decoder(z)
             if (
-                has_nan_or_inf(a)
-                or has_nan_or_inf(b)
-                or has_nan_or_inf(z)
-                or has_nan_or_inf(mu)
-                or has_nan_or_inf(std)
+                torch.isnan(a).any()
+                or torch.isnan(mu).any()
+                or torch.isnan(std).any()
+                or torch.isnan(z).any()
             ):
                 print("nan in forward detected!")
                 raise RuntimeError("manual abort")
@@ -344,22 +399,32 @@ class VAE(pl.LightningModule):
             return a, b, mu, std, z
 
     def unfold_batch(self, batch):
-        if len(batch) == 4:
-            raster, mask, expression, is_corrupted = batch
-            image_input = torch.cat((raster, mask), dim=-1)
-        elif len(batch) == 3:
-            image_input, expression, is_corrupted = batch
-        else:
-            assert False
-        assert len(expression.shape) == 2
-        image_input = image_input.permute((0, 3, 1, 2))
-        return image_input, expression, is_corrupted
+        # Batch(batch=[2862], edge_attr=[49886, 1], edge_index=[2, 49886], is_center=[2862], is_perturbed=[2862, 39],
+        #       ptr=[33], x=[2862, 39])
+        x = batch.x
+        edge_index = batch.edge_index
+        edge_attr = batch.edge_attr
+        is_center = batch.is_center
+        # the scalar product will not introduce numbers not in {0., 1.}
+        # corrupted_entries = (is_center @ batch.is_perturbed.float()).bool()
+        corrupted_entries = batch.is_perturbed[torch.where(is_center == 1.0)[0], :]
+        expression = x[torch.where(is_center == 1.0)[0], :]
+        # expression = is_center @ x
+        return x, edge_index, edge_attr, is_center, corrupted_entries, expression
 
     def training_step(self, batch, batch_idx):
         # print('min, max:', batch.min().cpu().detach(), batch.max().cpu().detach())
-        image_input, expression, is_corrupted = self.unfold_batch(batch)
-
-        a, b, mu, std, z = self.forward(expression, image_input)
+        (
+            x,
+            edge_index,
+            edge_attr,
+            is_center,
+            is_corrupted,
+            expression,
+        ) = self.unfold_batch(batch)
+        assert len(expression.shape) == 2
+        # encode x to get the mu and variance parameters
+        a, b, mu, std, z = self.forward(x, edge_index, edge_attr, is_center)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )
@@ -382,9 +447,16 @@ class VAE(pl.LightningModule):
         return elbo
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
-        image_input, expression, is_corrupted = self.unfold_batch(batch)
-
-        a, b, mu, std, z = self.forward(expression, image_input)
+        (
+            x,
+            edge_index,
+            edge_attr,
+            is_center,
+            is_corrupted,
+            expression,
+        ) = self.unfold_batch(batch)
+        assert len(expression.shape) == 2
+        a, b, mu, std, z = self.forward(x, edge_index, edge_attr, is_center)
         elbo, kl, recon_loss = self.loss_function(
             expression, a, b, mu, std, z, is_corrupted
         )

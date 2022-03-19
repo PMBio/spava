@@ -74,9 +74,11 @@ def louvain_plot(an: ad.AnnData, title: str):
 
 
 ##
-def compare_clusters(an0: ad.AnnData, an1: ad.AnnData, description: str):
-    c0 = np.array(list(map(int, an0.obs["louvain"].tolist())))
-    c1 = np.array(list(map(int, an1.obs["louvain"].tolist())))
+def compare_clusters(
+    an0: ad.AnnData, an1: ad.AnnData, description: str, key0="louvain", key1="louvain"
+):
+    c0 = np.array(list(map(int, an0.obs[key0].tolist())))
+    c1 = np.array(list(map(int, an1.obs[key1].tolist())))
     m = np.zeros((c0.max() + 1, c1.max() + 1))
     print(m.shape)
     import itertools

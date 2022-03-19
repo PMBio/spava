@@ -196,7 +196,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         val_check_interval=val_check_internal,
         model_name=f"{DATASET_NAME}_expression_vae",
         early_stopping_patience=4,
-        early_stopping_min_delta=1e-5,
+        early_stopping_min_delta=0.1,
     )
 
     # hyperparameters
@@ -257,14 +257,8 @@ def objective(trial: optuna.trial.Trial) -> float:
 
 
 if e_() or __name__ == "__main__":
-    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner(n_warmup_steps=6)
     study_name = f"{DATASET_NAME}_expression_vae"
-    if study_name == f"{DATASET_NAME}_expression_vae_perturbed":
-        ppp.PERTURB = True
-    elif study_name == f"{DATASET_NAME}_expression_vae":
-        ppp.PERTURB = False
-    else:
-        raise NotImplementedError()
     # storage = 'mysql://l989o@optuna'
     debug_string = '_debug' if ppp.DEBUG else ''
     storage = "sqlite:///" + file_path(f"optuna_{DATASET_NAME}_expression_vae{debug_string}.sqlite")

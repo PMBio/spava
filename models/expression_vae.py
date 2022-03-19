@@ -70,7 +70,7 @@ class VAE(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(kwargs)
-        # self.save_hyperparameters()
+        self.save_hyperparameters()
         self.optuna_parameters = optuna_parameters
         self.in_channels = in_channels
         self.out_channels = self.in_channels
@@ -288,6 +288,7 @@ class VAE(pl.LightningModule):
                 kl = self.kld_loss(mu, log_var)
             elbo = self.optuna_parameters["vae_beta"] * kl - recon_loss
             elbo = elbo.mean()
+            elbo *= 1000
             if torch.isinf(elbo).any() or torch.isnan(elbo).any():
                 print("nan or inf in loss detected!")
                 raise RuntimeError("manual abort")
